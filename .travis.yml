@@ -8,5 +8,5 @@ python:
   - "2.6"
 
 install: pip install -r requirements.txt coveralls
-script: python manage.py test --with-coverage
+script: python manage.py test --with-coverage --cover-package=webplatformcompat,drf_cached_reads
 after_success: coveralls
