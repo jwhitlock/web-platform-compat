@@ -5,8 +5,8 @@
     "keywords": ["python", "django", "mozilla"],
     "env": {
         "ALLOWED_HOSTS": {
-            "description": "Comma-separaed list of hostnames to allow",
-            "value": "*",
+            "description": "Comma-separated list of hostnames to allow",
+            "value": "*"
         },
         "DJANGO_DEBUG": {
             "description": "Setting to 1 enables debug features, such as tracebacks",
