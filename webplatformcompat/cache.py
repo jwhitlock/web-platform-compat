@@ -28,7 +28,6 @@ class Cache(BaseCache):
         return dict((
             ('id', obj.pk),
             ('slug', obj.slug),
-            ('icon', obj.icon),
             ('name', obj.name),
             ('note', obj.note),
             self.field_to_json(
@@ -236,7 +235,6 @@ class Cache(BaseCache):
             ('browsers', {
                 'id': obj.id,
                 'slug': obj.slug,
-                'icon': obj.icon,
                 'name': obj.name,
                 'note': obj.note,
                 'history_current': obj.history_id

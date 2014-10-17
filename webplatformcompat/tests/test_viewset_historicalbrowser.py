@@ -38,7 +38,6 @@ class TestHistoricalBrowserViewset(APITestCase):
             'browsers': {
                 'id': '1',
                 'slug': 'browser',
-                'icon': None,
                 'name': {'en': 'A Browser'},
                 'note': None,
                 'links': {'history_current': '1'}
@@ -53,7 +52,6 @@ class TestHistoricalBrowserViewset(APITestCase):
                 'browsers': {
                     'id': '1',
                     'slug': 'browser',
-                    'icon': None,
                     'name': {
                         'en': 'A Browser'
                     },
@@ -109,7 +107,6 @@ class TestHistoricalBrowserViewset(APITestCase):
                 'browsers': {
                     'id': str(browser.pk),
                     'slug': 'browser',
-                    'icon': None,
                     'name': {'en': 'A Browser'},
                     'note': None,
                     'links': {'history_current': str(bh.pk)}
@@ -141,7 +138,6 @@ class TestHistoricalBrowserViewset(APITestCase):
                 'browsers': {
                     'id': str(browser.pk),
                     'slug': 'browser',
-                    'icon': None,
                     'name': {'en': 'A Browser'},
                     'note': None,
                     'links': {'history_current': str(bh.pk)}

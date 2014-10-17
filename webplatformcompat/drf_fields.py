@@ -9,10 +9,9 @@ import json
 from django.core.exceptions import ValidationError
 from django.forms import Textarea
 from django.utils import six
-from rest_framework.serializers import (
-    CharField, PrimaryKeyRelatedField, URLField)
+from rest_framework.serializers import CharField, PrimaryKeyRelatedField
 
-from .validators import LanguageDictValidator, SecureURLValidator
+from .validators import LanguageDictValidator
 
 
 class CurrentHistoryField(PrimaryKeyRelatedField):
@@ -170,17 +169,6 @@ class OptionalCharField(CharField):
             return value
         else:
             return ''
-
-
-class SecureURLField(URLField):
-    """Field is a URL using secure HTTP (https) protocol"""
-    def __init__(self, *args, **kwargs):
-        validators = kwargs.pop('validators', [SecureURLValidator()])
-        super(SecureURLField, self).__init__(
-            validators=validators, *args, **kwargs)
-
-    def to_native(self, value):
-        return super(SecureURLField, self).to_native(value) or None
 
 
 class TranslatedTextField(CharField):

@@ -6,8 +6,7 @@ Tests for `web-platform-compat` validators module.
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from webplatformcompat.validators import (
-    LanguageDictValidator, SecureURLValidator)
+from webplatformcompat.validators import LanguageDictValidator
 
 
 class SharedLanguageDictValidatorTests(object):
@@ -51,13 +50,3 @@ class TestCanonicalDictValidator(SharedLanguageDictValidatorTests, TestCase):
 
     def test_zxx_success(self):
         self.validator({'zxx': 'display'})
-
-
-class TestSecureURLValidator(TestCase):
-
-    def test_success(self):
-        SecureURLValidator()('https://www.example.com')
-
-    def test_http_fails(self):
-        validator = SecureURLValidator()
-        self.assertRaises(ValidationError, validator, 'http://www.example.com')

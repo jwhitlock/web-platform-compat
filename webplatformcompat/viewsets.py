@@ -712,9 +712,6 @@ class ViewFeaturesViewSet(ViewSet):
                     OrderedDict((
                         ("id", "1"),
                         ("slug", "chrome"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/chrome.png")),
                         ("name", OrderedDict((
                             ("en", "Chrome"),
                         ))),
@@ -727,9 +724,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "2"),
                         ("slug", "firefox"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/firefox.png")),
                         ("name", OrderedDict((
                             ("en", "Firefox"),
                         ))),
@@ -744,9 +738,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "3"),
                         ("slug", "ie"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/ie.png")),
                         ("name", OrderedDict((
                             ("en", "Internet Explorer"),
                         ))),
@@ -759,9 +750,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "4"),
                         ("slug", "opera"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/opera.png")),
                         ("name", OrderedDict((
                             ("en", "Opera"),
                         ))),
@@ -774,9 +762,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "5"),
                         ("slug", "safari"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/safari.png")),
                         ("name", OrderedDict((
                             ("en", "Safari"),
                         ))),
@@ -791,9 +776,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "6"),
                         ("slug", "android"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/android.png")),
                         ("name", OrderedDict((
                             ("en", "Android"),
                         ))),
@@ -806,9 +788,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "7"),
                         ("slug", "firefox-mobile"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/firefox-mobile.png")),
                         ("name", OrderedDict((
                             ("en", "Firefox Mobile"),
                         ))),
@@ -823,9 +802,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "8"),
                         ("slug", "ie-phone"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/ie-phone.png")),
                         ("name", OrderedDict((
                             ("en", "IE Phone"),
                         ))),
@@ -838,9 +814,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "9"),
                         ("slug", "opera-mobile"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/opera-mobile.png")),
                         ("name", OrderedDict((
                             ("en", "Opera Mobile"),
                         ))),
@@ -853,9 +826,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "10"),
                         ("slug", "safari-mobile"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/safari-mobile.png")),
                         ("name", OrderedDict((
                             ("en", "Safari Mobile"),
                         ))),
@@ -868,9 +838,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "11"),
                         ("slug", "opera-mini"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/opera-mini.png")),
                         ("name", OrderedDict((
                             ("en", "Opera Mini"),
                         ))),

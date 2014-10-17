@@ -572,7 +572,6 @@ A sample response is:
                 {
                     "id": "1",
                     "slug": "chrome",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/chrome.png",
                     "name": {
                         "en": "Chrome"
                     },
@@ -585,7 +584,6 @@ A sample response is:
                 },{
                     "id": "2",
                     "slug": "firefox",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/firefox.png",
                     "name": {
                         "en": "Firefox"
                     },
@@ -600,7 +598,6 @@ A sample response is:
                 },{
                     "id": "3",
                     "slug": "ie",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/ie.png",
                     "name": {
                         "en": "Internet Explorer"
                     },
@@ -613,7 +610,6 @@ A sample response is:
                 },{
                     "id": "4",
                     "slug": "opera",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/opera.png",
                     "name": {
                         "en": "Opera"
                     },
@@ -626,7 +622,6 @@ A sample response is:
                 },{
                     "id": "5",
                     "slug": "safari",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/safari.png",
                     "name": {
                         "en": "Safari"
                     },
@@ -641,7 +636,6 @@ A sample response is:
                 },{
                     "id": "6",
                     "slug": "android",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/android.png",
                     "name": {
                         "en": "Android"
                     },
@@ -654,7 +648,6 @@ A sample response is:
                 },{
                     "id": "7",
                     "slug": "firefox-mobile",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/firefox-mobile.png",
                     "name": {
                         "en": "Firefox Mobile"
                     },
@@ -669,7 +662,6 @@ A sample response is:
                 },{
                     "id": "8",
                     "slug": "ie-phone",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/ie-phone.png",
                     "name": {
                         "en": "IE Phone"
                     },
@@ -682,7 +674,6 @@ A sample response is:
                 },{
                     "id": "9",
                     "slug": "opera-mobile",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/opera-mobile.png",
                     "name": {
                         "en": "Opera Mobile"
                     },
@@ -695,7 +686,6 @@ A sample response is:
                 },{
                     "id": "10",
                     "slug": "safari-mobile",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/safari-mobile.png",
                     "name": {
                         "en": "Safari Mobile"
                     },
@@ -708,7 +698,6 @@ A sample response is:
                 },{
                     "id": "11",
                     "slug": "opera-mini",
-                    "icon": "https://cdn.browsersupports.org/media/img/browsers/opera-mini.png",
                     "name": {
                         "en": "Opera Mini"
                     },

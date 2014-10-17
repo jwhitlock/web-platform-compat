@@ -1,5 +1,4 @@
 from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
 from django.utils.translation import ugettext_lazy as _
 from django.utils.six import string_types
 
@@ -29,12 +28,3 @@ class LanguageDictValidator(object):
                     _('For language "%(lang)s, text "%(text)s" is not a'
                       ' string.'),
                     params={'lang': language_code, 'text': text})
-
-
-class SecureURLValidator(URLValidator):
-    '''URLValidator, but protocol must be https'''
-
-    def __call__(self, value):
-        super(SecureURLValidator, self).__call__(value)
-        if not value.lower().startswith('https://'):
-            raise ValidationError(_("URI must use the 'https' protocol."))

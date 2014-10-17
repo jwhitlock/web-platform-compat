@@ -12,7 +12,7 @@ from rest_framework.serializers import (
 from . import fields
 from .drf_fields import (
     CurrentHistoryField, HistoricalObjectField, HistoryField,
-    MPTTRelationField, OptionalCharField, SecureURLField, TranslatedTextField)
+    MPTTRelationField, OptionalCharField, TranslatedTextField)
 from .models import Browser, Feature, Support, Version
 
 
@@ -52,7 +52,6 @@ class FieldMapMixin(object):
     """Automatically handle fields used by this project"""
     field_mapping = ModelSerializer.field_mapping
     field_mapping[fields.TranslatedField] = TranslatedTextField
-    field_mapping[fields.SecureURLField] = SecureURLField
     field_mapping[CharField] = OptionalCharField
 
     def get_field(self, model_field):
@@ -133,8 +132,8 @@ class BrowserSerializer(HistoricalModelSerializer):
     class Meta:
         model = Browser
         fields = (
-            'id', 'slug', 'icon', 'name', 'note', 'history',
-            'history_current', 'versions')
+            'id', 'slug', 'name', 'note', 'history', 'history_current',
+            'versions')
         update_only_fields = (
             'history', 'history_current', 'versions')
         write_once_fields = ('slug',)

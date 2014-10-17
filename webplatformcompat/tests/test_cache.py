@@ -24,7 +24,6 @@ class TestCache(TestCase):
         expected = {
             'id': browser.id,
             'slug': u'',
-            'icon': u'',
             'name': {},
             'note': {},
             'history:PKList': {
@@ -279,7 +278,6 @@ class TestCache(TestCase):
             },
             'browsers': {
                 'history_current': 1,
-                'icon': u'',
                 'id': 1,
                 'name': {},
                 'note': {},

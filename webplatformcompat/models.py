@@ -9,7 +9,7 @@ from mptt.models import MPTTModel, TreeForeignKey
 from simple_history import register
 from simple_history.models import HistoricalRecords
 
-from .fields import TranslatedField, SecureURLField
+from .fields import TranslatedField
 
 
 @python_2_unicode_compatible
@@ -18,9 +18,6 @@ class Browser(models.Model):
     slug = models.SlugField(
         help_text="Unique, human-friendly slug.",
         unique=True)
-    icon = SecureURLField(
-        help_text="Representative image for browser.",
-        blank=True)
     name = TranslatedField(
         help_text="Branding name of browser, client, or platform.")
     note = TranslatedField(
