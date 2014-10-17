@@ -166,6 +166,9 @@ class Support(models.Model):
         null=True, blank=True)
     history = HistoricalRecords()
 
+    class Meta:
+        unique_together = (('version', 'feature'),)
+
     def __str__(self):
         return (
             "%s support for feature %s is %s" %

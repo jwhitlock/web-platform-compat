@@ -251,3 +251,56 @@ class TestSupportViewSet(APITestCase):
             "version": ["This field is required."],
         }
         self.assertDataEqual(response.data, expected_data)
+
+    def test_post_minimal(self):
+        browser = self.create(Browser)
+        version = self.create(Version, browser=browser)
+        feature = self.create(Feature)
+        data = {"feature": feature.id, "version": version.id}
+        response = self.client.post(reverse('support-list'), data)
+        self.assertEqual(201, response.status_code, response.content)
+        support = Support.objects.get()
+        history_pk = support.history.all()[0].pk
+        expected_data = {
+            'id': support.id,
+            'support': 'yes',
+            'prefix': None,
+            'prefix_mandatory': False,
+            'alternate_name': None,
+            'alternate_mandatory': False,
+            'requires_config': None,
+            'default_config': None,
+            'protected': False,
+            'note': None,
+            'footnote': None,
+            'version': version.id,
+            'feature': feature.id,
+            'history': [history_pk],
+            'history_current': history_pk,
+        }
+        self.assertDataEqual(expected_data, response.data)
+
+    def test_post_duplicate(self):
+        # Only one version / feature combo allowed
+        browser = self.create(Browser)
+        version = self.create(Version, browser=browser)
+        feature = self.create(Feature)
+        self.create(Support, version=version, feature=feature)
+        data = {"feature": feature.id, "version": version.id}
+        response = self.client.post(reverse('support-list'), data)
+        self.assertEqual(400, response.status_code, response.content)
+        expected_data = {
+            "__all__": [
+                "Support with this Version and Feature already exists."],
+        }
+        self.assertDataEqual(response.data, expected_data)
+        expected_json = {
+            "errors": [{
+                "status": "400",
+                "detail": (
+                    "Support with this Version and Feature already exists."),
+                "path": "/-",
+            }]
+        }
+        actual_json = loads(response.content.decode('utf-8'))
+        self.assertDataEqual(expected_json, actual_json)

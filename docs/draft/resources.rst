@@ -1056,10 +1056,10 @@ The **support** representation includes:
     - **footnote** *(localized)* - Long note on support, designed for
       display after a compatibility table, MDN wiki format
 * **links**
-    - **version** *(one)* - The associated version_.  Can
-      be changed by the user.
-    - **feature** *(one)* - The associated feature_.  Can be changed by
-      the user.
+    - **version** *(one)* - The associated version_.  Cannot be changed by
+      the user after creation.
+    - **feature** *(one)* - The associated feature_.  Cannot be changed by
+      the user after creation.  The version and feature combo must be unique.
     - **history_current** *(one)* - Current
       historical_supports_.  Can be changed to a valid
       **history** to revert to that version.

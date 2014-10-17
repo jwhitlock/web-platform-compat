@@ -52,6 +52,16 @@ class JsonApiRenderer(BaseJsonApiRender):
             resource_type, self.dict_class()).update(pagination)
         return wrapper
 
+    def wrap_error(
+            self, data, renderer_context, keys_are_fields, issue_is_title):
+        # Fix bug about wrong name for non_field_error
+        wrapper = super(JsonApiRenderer, self).wrap_error(
+            data, renderer_context, keys_are_fields, issue_is_title)
+        for error in wrapper['errors']:
+            if error.get("path") == '/__all__':
+                error["path"] = '/-'
+        return wrapper
+
     def model_to_resource_type(self, model):
         if model:
             return snakecase(model._meta.verbose_name_plural)
