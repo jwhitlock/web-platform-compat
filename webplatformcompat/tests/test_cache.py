@@ -145,6 +145,7 @@ class TestCache(TestCase):
             "alternate_mandatory": False,
             "requires_config": u"",
             "default_config": u"",
+            "protected": False,
             "note": {},
             "footnote": {},
             'version:PK': {

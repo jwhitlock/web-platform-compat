@@ -301,6 +301,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -319,6 +320,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -337,6 +339,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -355,6 +358,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -373,6 +377,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -391,6 +396,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -409,6 +415,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -427,6 +434,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -445,6 +453,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -463,6 +472,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -481,6 +491,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -499,6 +510,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -517,6 +529,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((

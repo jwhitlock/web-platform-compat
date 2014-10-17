@@ -140,6 +140,7 @@ class Cache(BaseCache):
             ('alternate_mandatory', obj.alternate_mandatory),
             ('requires_config', obj.requires_config),
             ('default_config', obj.default_config),
+            ('protected', obj.protected),
             ('note', obj.note),
             ('footnote', obj.footnote),
             self.field_to_json(

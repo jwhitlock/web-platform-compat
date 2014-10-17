@@ -202,6 +202,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -219,6 +220,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -236,6 +238,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -253,6 +256,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -270,6 +274,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -287,6 +292,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -304,6 +310,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -321,6 +328,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -338,6 +346,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -355,6 +364,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -372,6 +382,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -389,6 +400,7 @@ A sample response is:
                     "alternate_name_mandatory": false,
                     "requires_config": null,
                     "default_config": null,
+                    "protected": false,
                     "note": null,
                     "footnote": null,
                     "links": {
@@ -1066,6 +1078,7 @@ A sample response is:
             "alternate_name_mandatory": false,
             "requires_config": null,
             "default_config": null,
+            "protected": false,
             "note": null,
             "footnote": null,
             "links": {

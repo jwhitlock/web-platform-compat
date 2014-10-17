@@ -162,8 +162,8 @@ class SupportSerializer(HistoricalModelSerializer):
         fields = (
             'id', 'version', 'feature', 'support', 'prefix',
             'prefix_mandatory', 'alternate_name', 'alternate_mandatory',
-            'requires_config', 'default_config', 'note', 'footnote',
-            'history_current', 'history')
+            'requires_config', 'default_config', 'protected', 'note',
+            'footnote', 'history_current', 'history')
 
 
 class VersionSerializer(HistoricalModelSerializer):

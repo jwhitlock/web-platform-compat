@@ -1048,6 +1048,9 @@ The **support** representation includes:
       ``"media.peerconnection.enabled=on"``
     - **default_config** - The configuration string in the shipping
       browser, such as ``"media.peerconnection.enabled=off"``
+    - **protected** - True if the feature requires additional steps to enable
+      in order to protect the user's security or privacy, such as geolocation
+      and the Bluetooth API.
     - **note** *(localized)* - Short note on support, designed for inline
       display, max 20 characters
     - **footnote** *(localized)* - Long note on support, designed for
@@ -1091,6 +1094,7 @@ A sample response is:
             "alternate_name_mandatory": false,
             "requires_config": null,
             "default_config": null,
+            "protected": false,
             "note": null,
             "footnote": null,
             "links": {

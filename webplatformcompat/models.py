@@ -151,6 +151,11 @@ class Support(models.Model):
     default_config = models.CharField(
         help_text="The configuration string in the shipping browser.",
         max_length=100, blank=True)
+    protected = models.BooleanField(
+        help_text=(
+            "True if feature requires additional steps to enable in order to"
+            " protect the user's security or privacy."),
+        default=False)
     note = TranslatedField(
         help_text="Short note on support, designed for inline display.",
         null=True, blank=True)

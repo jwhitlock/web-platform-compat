@@ -46,6 +46,7 @@ class TestHistoricalSupportViewset(APITestCase):
                 'alternate_mandatory': False,
                 'requires_config': None,
                 'default_config': None,
+                'protected': False,
                 'note': None,
                 'footnote': None,
                 'links': {
@@ -70,6 +71,7 @@ class TestHistoricalSupportViewset(APITestCase):
                     'alternate_mandatory': False,
                     'requires_config': None,
                     'default_config': None,
+                    'protected': False,
                     'note': None,
                     'footnote': None,
                     'links': {
@@ -132,6 +134,7 @@ class TestHistoricalSupportViewset(APITestCase):
                     'alternate_mandatory': False,
                     'requires_config': None,
                     'default_config': None,
+                    'protected': False,
                     'note': None,
                     'footnote': None,
                     'links': {
