@@ -180,7 +180,7 @@ class Support(models.Model):
 #
 
 cached_model_names = (
-    'Browser', 'Feature', 'Version', 'User', 'HistoricalBrowser')
+    'Browser', 'Feature', 'Support', 'Version', 'User', 'HistoricalBrowser')
 
 
 @receiver(post_save, dispatch_uid='post_save_update_cache')
