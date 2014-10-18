@@ -12,9 +12,11 @@ from rest_framework.urlpatterns import format_suffix_patterns
 from rest_framework.views import APIView
 
 from .viewsets import (
-    BrowserViewSet, FeatureViewSet, SupportViewSet, VersionViewSet,
+    BrowserViewSet, FeatureViewSet, MaturityViewSet, SupportViewSet,
+    VersionViewSet,
     HistoricalBrowserViewSet, HistoricalFeatureViewSet,
-    HistoricalSupportViewSet, HistoricalVersionViewSet,
+    HistoricalMaturityViewSet, HistoricalSupportViewSet,
+    HistoricalVersionViewSet,
     UserViewSet, ViewFeaturesViewSet)
 
 
@@ -91,6 +93,7 @@ router.register(r'browsers', BrowserViewSet, group='resources')
 router.register(r'versions', VersionViewSet, group='resources')
 router.register(r'features', FeatureViewSet, group='resources')
 router.register(r'supports', SupportViewSet, group='resources')
+router.register(r'maturities', MaturityViewSet, group='resources')
 router.register(r'users', UserViewSet, group='change-control')
 router.register(
     r'historical_browsers', HistoricalBrowserViewSet, group='history')
@@ -100,6 +103,8 @@ router.register(
     r'historical_features', HistoricalFeatureViewSet, group='history')
 router.register(
     r'historical_supports', HistoricalSupportViewSet, group='history')
+router.register(
+    r'historical_maturities', HistoricalMaturityViewSet, group='history')
 router.register(
     r'view_features', ViewFeaturesViewSet, base_name='viewfeatures',
     group='views')

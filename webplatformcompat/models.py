@@ -172,6 +172,32 @@ class Support(models.Model):
             (self.version, self.feature, self.support))
 
 
+class HistoricalMaturityRecords(HistoricalRecords):
+    def get_meta_options(self, model):
+        meta_fields = super(
+            HistoricalMaturityRecords, self).get_meta_options(model)
+        meta_fields['verbose_name_plural'] = 'historical_maturities'
+        return meta_fields
+
+
+@python_2_unicode_compatible
+class Maturity(models.Model):
+    '''Maturity of a specification document'''
+    key = models.SlugField(
+        help_text=(
+            "Unique, human-friendly key, sourced when possible from the"
+            " KumaScript macro Spec2"),
+        unique=True)
+    name = TranslatedField(
+        help_text="Name of maturity")
+    history = HistoricalMaturityRecords()
+
+    class Meta:
+        verbose_name_plural = 'maturities'
+
+    def __str__(self):
+        return self.key
+
 #
 # Cache invalidation signals
 #

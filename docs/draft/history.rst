@@ -95,9 +95,17 @@ historical_browsers_ and features_ for an idea of the represention.
 Historical Supports
 -------------------
 
-A **historical_supports** resource represents a state of a support_ at a point
+A **historical_supports** resource represents the state of a support_ at a point
 in time, and who is responsible for that representation.  See
 historical_browsers_ and supports_ for an idea of the represention.
+
+Historical Maturities
+---------------------
+
+A **historical_maturities** resource represents the state of a maturity_ at a point
+in time, and who is responsible for that representation.  See
+historical_browsers_ and maturities_ for an idea of the represention.
+
 
 .. _historical_browser: `Historical Browsers`_
 .. _historical_browsers: `Historical Browsers`_
@@ -109,6 +117,8 @@ historical_browsers_ and supports_ for an idea of the represention.
 .. _supports: resources.html#supports
 .. _feature: resources.html#features
 .. _features: resources.html#features
+.. _maturity: resources.html#maturities
+.. _maturities: resources.html#maturities
 
 .. _changeset: change-control#changesets
 

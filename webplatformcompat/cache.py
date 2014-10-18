@@ -3,7 +3,7 @@
 from django.contrib.auth.models import User
 
 from drf_cached_reads.cache import BaseCache
-from .models import Browser, Feature, Support, Version
+from .models import Browser, Feature, Maturity, Support, Version
 
 
 class Cache(BaseCache):
@@ -120,6 +120,41 @@ class Cache(BaseCache):
             list(obj.children.values_list('pk', flat=True)))
         pks += children_pks
         return [('Feature', pk, False) for pk in pks]
+
+    def maturity_v1_serializer(self, obj):
+        if not obj:
+            return None
+
+        history_pks = getattr(obj, '_history_pks', None)
+        if history_pks is None:
+            history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+
+        return dict((
+            ('id', obj.pk),
+            ('key', obj.key),
+            ('name', obj.name),
+            self.field_to_json(
+                'PKList', 'history', model=obj.history.model,
+                pks=history_pks),
+            self.field_to_json(
+                'PK', 'history_current', model=obj.history.model,
+                pk=history_pks[0]),
+        ))
+
+    def maturity_v1_loader(self, pk):
+        queryset = Maturity.objects
+        try:
+            obj = queryset.get(pk=pk)
+        except Maturity.DoesNotExist:
+            return None
+        else:
+            obj._history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+            return obj
+
+    def maturity_v1_invalidator(self, obj):
+        return []
 
     def support_v1_serializer(self, obj):
         if not obj:

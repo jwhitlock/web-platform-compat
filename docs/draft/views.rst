@@ -163,7 +163,7 @@ A sample response is:
             "maturities": [
                 {
                     "id": "23",
-                    "mdn_key": "Living",
+                    "key": "Living",
                     "name": {
                         "en": "Living Standard",
                     },
@@ -172,7 +172,7 @@ A sample response is:
                     }
                 }, {
                     "id": "49",
-                    "mdn_key": "REC",
+                    "key": "REC",
                     "name": {
                         "en": "Recommendation",
                         "jp": "勧告"
@@ -182,7 +182,7 @@ A sample response is:
                     }
                 }, {
                     "id": "52",
-                    "mdn_key": "CR",
+                    "key": "CR",
                     "name": {
                         "en": "Candidate Recommendation",
                         "ja": "勧告候補",

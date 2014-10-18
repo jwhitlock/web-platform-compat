@@ -1243,7 +1243,8 @@ The **maturity** representation includes:
 
 * **attributes**
     - **id** *(server selected)* - Database ID
-    - **mdn_key** - The value for this status in the KumaScript macro Spec2_
+    - **key** - A human-friendly identifier for this maturity.  When applicabile,
+      it match the key in the KumaScript macro Spec2_
     - **name** *(localized)* - Status name
 * **links**
     - **specifications** *(many)* - Associated specifications_.  In ID order,
@@ -1269,7 +1270,7 @@ A sample response is:
     {
         "maturities": {
             "id": "49",
-            "mdn_key": "REC",
+            "key": "REC",
             "name": {
                 "en": "Recommendation",
                 "jp": "勧告"

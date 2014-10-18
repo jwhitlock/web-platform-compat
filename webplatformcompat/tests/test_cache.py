@@ -8,7 +8,8 @@ from pytz import UTC
 
 from django.contrib.auth.models import User
 
-from webplatformcompat.models import Browser, Feature, Support, Version
+from webplatformcompat.models import (
+    Browser, Feature, Maturity, Support, Version)
 from webplatformcompat.cache import Cache
 
 from .base import TestCase
@@ -129,46 +130,45 @@ class TestCache(TestCase):
         expected = [('Feature', parent.id, False)]
         self.assertEqual(expected, self.cache.feature_v1_invalidator(feature))
 
-    def test_support_v1_serializer(self):
-        browser = self.create(Browser)
-        version = self.create(Version, browser=browser, version='1.0')
-        feature = self.create(Feature, slug='feature')
-        support = self.create(Support, version=version, feature=feature)
-        out = self.cache.support_v1_serializer(support)
+    def test_maturity_v1_serializer(self):
+        maturity = self.create(
+            Maturity, key='REC', name='{"en-US": "Recommendation"}')
+        out = self.cache.maturity_v1_serializer(maturity)
         expected = {
-            'id': support.id,
-            "support": u"yes",
-            "prefix": u"",
-            "prefix_mandatory": False,
-            "alternate_name": u"",
-            "alternate_mandatory": False,
-            "requires_config": u"",
-            "default_config": u"",
-            "protected": False,
-            "note": {},
-            "footnote": {},
-            'version:PK': {
-                'app': u'webplatformcompat',
-                'model': 'version',
-                'pk': version.id,
-            },
-            'feature:PK': {
-                'app': u'webplatformcompat',
-                'model': 'feature',
-                'pk': feature.id,
-            },
+            'id': maturity.id,
+            'key': 'REC',
+            'name': {"en-US": "Recommendation"},
             'history:PKList': {
                 'app': u'webplatformcompat',
-                'model': 'historicalsupport',
+                'model': 'historicalmaturity',
                 'pks': [1],
             },
             'history_current:PK': {
                 'app': u'webplatformcompat',
-                'model': 'historicalsupport',
+                'model': 'historicalmaturity',
                 'pk': 1,
             },
         }
         self.assertEqual(out, expected)
+
+    def test_maturity_v1_serializer_empty(self):
+        self.assertEqual(None, self.cache.maturity_v1_serializer(None))
+
+    def test_maturity_v1_loader(self):
+        maturity = self.create(Maturity)
+        with self.assertNumQueries(2):
+            obj = self.cache.maturity_v1_loader(maturity.pk)
+        with self.assertNumQueries(0):
+            serialized = self.cache.maturity_v1_serializer(obj)
+        self.assertTrue(serialized)
+
+    def test_maturity_v1_loader_not_exist(self):
+        self.assertFalse(Maturity.objects.filter(pk=666).exists())
+        self.assertIsNone(self.cache.maturity_v1_loader(666))
+
+    def test_maturity_v1_invalidator(self):
+        maturity = self.create(Maturity)
+        self.assertEqual([], self.cache.maturity_v1_invalidator(maturity))
 
     def test_support_v1_serializer_empty(self):
         self.assertEqual(None, self.cache.support_v1_serializer(None))

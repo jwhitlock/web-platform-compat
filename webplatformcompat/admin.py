@@ -1,7 +1,7 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Browser, Feature, Support, Version
+from .models import Browser, Feature, Maturity, Support, Version
 
 
 class BrowserAdmin(SimpleHistoryAdmin):
@@ -9,6 +9,10 @@ class BrowserAdmin(SimpleHistoryAdmin):
 
 
 class FeatureAdmin(SimpleHistoryAdmin):
+    pass
+
+
+class MaturityAdmin(SimpleHistoryAdmin):
     pass
 
 
@@ -22,5 +26,6 @@ class VersionAdmin(SimpleHistoryAdmin):
 
 admin.site.register(Browser, BrowserAdmin)
 admin.site.register(Feature, FeatureAdmin)
+admin.site.register(Maturity, MaturityAdmin)
 admin.site.register(Support, SupportAdmin)
 admin.site.register(Version, VersionAdmin)

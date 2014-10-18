@@ -13,7 +13,7 @@ from . import fields
 from .drf_fields import (
     CurrentHistoryField, HistoricalObjectField, HistoryField,
     MPTTRelationField, OptionalCharField, TranslatedTextField)
-from .models import Browser, Feature, Support, Version
+from .models import Browser, Feature, Maturity, Support, Version
 
 
 #
@@ -153,6 +153,15 @@ class FeatureSerializer(HistoricalModelSerializer):
         read_only_fields = ('supports',)
 
 
+class MaturitySerializer(HistoricalModelSerializer):
+    """Specification Maturity Serializer"""
+
+    class Meta:
+        model = Maturity
+        fields = (
+            'id', 'key', 'name', 'history_current', 'history')
+
+
 class SupportSerializer(HistoricalModelSerializer):
     """Support Serializer"""
 
@@ -265,6 +274,21 @@ class HistoricalFeatureSerializer(HistoricalObjectSerializer):
         fields = HistoricalObjectSerializer.Meta.fields + (
             'feature', 'features')
         archive_link_fields = ('parent',)
+
+
+class HistoricalMaturitySerializer(HistoricalObjectSerializer):
+
+    class ArchivedObject(MaturitySerializer):
+        class Meta(MaturitySerializer.Meta):
+            exclude = ('history_current', 'history')
+
+    maturity = HistoricalObjectField()
+    maturities = SerializerMethodField('get_archive')
+
+    class Meta(HistoricalObjectSerializer.Meta):
+        model = Maturity.history.model
+        fields = HistoricalObjectSerializer.Meta.fields + (
+            'maturity', 'maturities')
 
 
 class HistoricalSupportSerializer(HistoricalObjectSerializer):

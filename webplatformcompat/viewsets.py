@@ -21,13 +21,15 @@ from drf_cached_reads.mixins import CachedViewMixin as BaseCacheViewMixin
 
 from .cache import Cache
 from .mixins import PartialPutMixin
-from .models import Browser, Feature, Support, Version
+from .models import Browser, Feature, Maturity, Support, Version
 from .parsers import JsonApiParser
 from .renderers import JsonApiRenderer
 from .serializers import (
-    BrowserSerializer, FeatureSerializer, SupportSerializer, VersionSerializer,
+    BrowserSerializer, FeatureSerializer, MaturitySerializer,
+    SupportSerializer, VersionSerializer,
     HistoricalBrowserSerializer, HistoricalFeatureSerializer,
-    HistoricalSupportSerializer, HistoricalVersionSerializer,
+    HistoricalMaturitySerializer, HistoricalSupportSerializer,
+    HistoricalVersionSerializer,
     UserSerializer)
 
 
@@ -73,6 +75,12 @@ class FeatureViewSet(ModelViewSet):
         return qs
 
 
+class MaturityViewSet(ModelViewSet):
+    model = Maturity
+    serializer_class = MaturitySerializer
+    filter_fields = ('key',)
+
+
 class SupportViewSet(ModelViewSet):
     model = Support
     serializer_class = SupportSerializer
@@ -105,6 +113,12 @@ class HistoricalFeatureViewSet(ReadOnlyModelViewSet):
     model = Feature.history.model
     serializer_class = HistoricalFeatureSerializer
     filter_fields = ('id', 'slug')
+
+
+class HistoricalMaturityViewSet(ReadOnlyModelViewSet):
+    model = Maturity.history.model
+    serializer_class = HistoricalMaturitySerializer
+    filter_fields = ('id', 'key')
 
 
 class HistoricalSupportViewSet(ReadOnlyModelViewSet):
