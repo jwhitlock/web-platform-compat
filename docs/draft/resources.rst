@@ -1113,8 +1113,8 @@ The **specification** representation includes:
 
 * **attributes**
     - **id** *(server selected)* - Database ID
-    - **mdn_key** - The key for the KumaScript macros SpecName_ and Spec2_
-      used as a data source.
+    - **key** - Unique, human-friendly key, sourced when possible from the
+      KumaScript macros SpecName_ and Spec2_.
     - **name** *(localized)* - Specification name
     - **uri** *(localized)* - Specification URI, without subpath and anchor
 * **links**
@@ -1143,7 +1143,7 @@ A sample response is:
     {
         "specifications": {
             "id": "273",
-            "mdn_key": "CSS1",
+            "key": "CSS1",
             "name": {
                 "en": "Cascading Style Sheets, level 1",
                 "fr": "Les feuilles de style en cascade, niveau 1"

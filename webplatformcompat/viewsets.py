@@ -21,15 +21,15 @@ from drf_cached_reads.mixins import CachedViewMixin as BaseCacheViewMixin
 
 from .cache import Cache
 from .mixins import PartialPutMixin
-from .models import Browser, Feature, Maturity, Support, Version
+from .models import Browser, Feature, Maturity, Specification, Support, Version
 from .parsers import JsonApiParser
 from .renderers import JsonApiRenderer
 from .serializers import (
     BrowserSerializer, FeatureSerializer, MaturitySerializer,
-    SupportSerializer, VersionSerializer,
+    SpecificationSerializer, SupportSerializer, VersionSerializer,
     HistoricalBrowserSerializer, HistoricalFeatureSerializer,
-    HistoricalMaturitySerializer, HistoricalSupportSerializer,
-    HistoricalVersionSerializer,
+    HistoricalMaturitySerializer, HistoricalSpecificationSerializer,
+    HistoricalSupportSerializer, HistoricalVersionSerializer,
     UserSerializer)
 
 
@@ -81,6 +81,12 @@ class MaturityViewSet(ModelViewSet):
     filter_fields = ('key',)
 
 
+class SpecificationViewSet(ModelViewSet):
+    model = Specification
+    serializer_class = SpecificationSerializer
+    filter_fields = ('key',)
+
+
 class SupportViewSet(ModelViewSet):
     model = Support
     serializer_class = SupportSerializer
@@ -118,6 +124,12 @@ class HistoricalFeatureViewSet(ReadOnlyModelViewSet):
 class HistoricalMaturityViewSet(ReadOnlyModelViewSet):
     model = Maturity.history.model
     serializer_class = HistoricalMaturitySerializer
+    filter_fields = ('id', 'key')
+
+
+class HistoricalSpecificationViewSet(ReadOnlyModelViewSet):
+    model = Specification.history.model
+    serializer_class = HistoricalSpecificationSerializer
     filter_fields = ('id', 'key')
 
 
@@ -241,7 +253,7 @@ class ViewFeaturesViewSet(ViewSet):
                 ("specifications", [
                     OrderedDict((
                         ("id", "62"),
-                        ("kumu-key", "HTML WHATWG"),
+                        ("key", "HTML WHATWG"),
                         ("name", {"en": "WHATWG HTML Living Standard"}),
                         ("uri", {
                             "en": (
@@ -255,7 +267,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "114"),
-                        ("kumu-key", "HTML5 W3C"),
+                        ("key", "HTML5 W3C"),
                         ("name", {"en": "HTML5"}),
                         ("uri", {"en": "http://www.w3.org/TR/html5/"}),
                         ("links", OrderedDict((
@@ -265,7 +277,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "576"),
-                        ("kumu-key", "HTML4.01"),
+                        ("key", "HTML4.01"),
                         ("name", {"en": "HTML 4.01 Specification"}),
                         ("uri", {"en": "http://www.w3.org/TR/html401/"}),
                         ("links", OrderedDict((
@@ -277,13 +289,13 @@ class ViewFeaturesViewSet(ViewSet):
                 ("maturities", [
                     OrderedDict((
                         ("id", "23"),
-                        ("mdn_key", "Living"),
+                        ("key", "Living"),
                         ("name", {"en": "Living Standard"}),
                         ("links", {"specifications": ["62"]}),
                     )),
                     OrderedDict((
                         ("id", "49"),
-                        ("mdn_key", "REC"),
+                        ("key", "REC"),
                         ("name", OrderedDict((
                             ("en", "Recommendation"),
                             ("jp", "勧告"),
@@ -295,7 +307,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "52"),
-                        ("mdn_key", "CR"),
+                        ("key", "CR"),
                         ("name", OrderedDict((
                             ("en", "Candidate Recommendation"),
                             ("ja", "勧告候補"),

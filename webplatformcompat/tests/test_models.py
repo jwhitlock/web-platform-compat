@@ -11,7 +11,8 @@ import mock
 import unittest
 
 from webplatformcompat.models import (
-    Browser, Feature, Maturity, Support, Version, post_save_update_cache)
+    Browser, Feature, Maturity, Specification, Support, Version,
+    post_save_update_cache)
 
 
 class TestBrowser(unittest.TestCase):
@@ -32,6 +33,12 @@ class TestMaturity(unittest.TestCase):
     def test_str(self):
         maturity = Maturity(key="Draft")
         self.assertEqual('Draft', str(maturity))
+
+
+class TestSpecification(unittest.TestCase):
+    def test_str(self):
+        specification = Specification(key='Spec')
+        self.assertEqual('Spec', str(specification))
 
 
 class TestSupport(unittest.TestCase):

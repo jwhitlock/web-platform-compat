@@ -9,7 +9,7 @@ from pytz import UTC
 from django.contrib.auth.models import User
 
 from webplatformcompat.models import (
-    Browser, Feature, Maturity, Support, Version)
+    Browser, Feature, Maturity, Specification, Support, Version)
 from webplatformcompat.cache import Cache
 
 from .base import TestCase
@@ -169,6 +169,70 @@ class TestCache(TestCase):
     def test_maturity_v1_invalidator(self):
         maturity = self.create(Maturity)
         self.assertEqual([], self.cache.maturity_v1_invalidator(maturity))
+
+    def test_specification_v1_serializer(self):
+        maturity = self.create(
+            Maturity, key="REC", name={'en': 'Recommendation'})
+        spec = self.create(
+            Specification, key='MathML2', maturity=maturity,
+            name='{"en": "MathML 2.0"}',
+            uri='{"en": "http://www.w3.org/TR/MathML2/"}')
+        out = self.cache.specification_v1_serializer(spec)
+        expected = {
+            'id': spec.id,
+            'key': 'MathML2',
+            'name': {"en": "MathML 2.0"},
+            'uri': {"en": "http://www.w3.org/TR/MathML2/"},
+            'maturity:PK': {
+                'app': u'webplatformcompat',
+                'model': 'maturity',
+                'pk': maturity.pk,
+            },
+            'history:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'historicalspecification',
+                'pks': [1],
+            },
+            'history_current:PK': {
+                'app': u'webplatformcompat',
+                'model': 'historicalspecification',
+                'pk': 1,
+            },
+        }
+        self.assertEqual(out, expected)
+
+    def test_specification_v1_serializer_empty(self):
+        self.assertEqual(None, self.cache.specification_v1_serializer(None))
+
+    def test_specification_v1_loader(self):
+        maturity = self.create(
+            Maturity, key='WD', name={'en': 'Working Draft'})
+        spec = self.create(
+            Specification, key='Push API', maturity=maturity,
+            name={'en': 'Push API'},
+            uri={'en': (
+                'https://dvcs.w3.org/hg/push/raw-file/default/index.html')}
+        )
+        with self.assertNumQueries(2):
+            obj = self.cache.specification_v1_loader(spec.pk)
+        with self.assertNumQueries(0):
+            serialized = self.cache.specification_v1_serializer(obj)
+        self.assertTrue(serialized)
+
+    def test_specification_v1_loader_not_exist(self):
+        self.assertFalse(Specification.objects.filter(pk=666).exists())
+        self.assertIsNone(self.cache.specification_v1_loader(666))
+
+    def test_specification_v1_invalidator(self):
+        maturity = self.create(
+            Maturity, key='WD', name={'en': 'Working Draft'})
+        spec = self.create(
+            Specification, key='Spec', maturity=maturity,
+            name={'en': 'Spec'},
+            uri={'en': 'http://example.com/spec.html'})
+        self.assertEqual(
+            [('Maturity', 1, False)],
+            self.cache.specification_v1_invalidator(spec))
 
     def test_support_v1_serializer_empty(self):
         self.assertEqual(None, self.cache.support_v1_serializer(None))

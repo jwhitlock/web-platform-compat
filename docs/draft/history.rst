@@ -92,6 +92,13 @@ A **historical_features** resource represents the state of a feature_ at a point
 in time, and who is responsible for that representation.  See
 historical_browsers_ and features_ for an idea of the represention.
 
+Historical Specifications
+-------------------------
+
+A **historical_specifications** resource represents the state of a specification_ at a point
+in time, and who is responsible for that representation.  See
+historical_browsers_ and specifications_ for an idea of the represention.
+
 Historical Supports
 -------------------
 
@@ -119,6 +126,8 @@ historical_browsers_ and maturities_ for an idea of the represention.
 .. _features: resources.html#features
 .. _maturity: resources.html#maturities
 .. _maturities: resources.html#maturities
+.. _specification: resources.html#specifications
+.. _specifications: resources.html#specifications
 
 .. _changeset: change-control#changesets
 

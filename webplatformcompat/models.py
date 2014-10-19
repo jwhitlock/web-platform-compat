@@ -198,6 +198,26 @@ class Maturity(models.Model):
     def __str__(self):
         return self.key
 
+
+@python_2_unicode_compatible
+class Specification(models.Model):
+    '''A Specification document'''
+    maturity = models.ForeignKey('Maturity', related_name='specifications')
+    key = models.SlugField(
+        help_text=(
+            "Unique, human-friendly key, sourced when possible from the"
+            " KumaScript macro SpecName"),
+        unique=True)
+    name = TranslatedField(
+        help_text="Name of specification")
+    uri = TranslatedField(
+        help_text="Specification URI, without subpath and anchor")
+
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.key
+
 #
 # Cache invalidation signals
 #
