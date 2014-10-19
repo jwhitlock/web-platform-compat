@@ -12,11 +12,12 @@ from rest_framework.urlpatterns import format_suffix_patterns
 from rest_framework.views import APIView
 
 from .viewsets import (
-    BrowserViewSet, FeatureViewSet, MaturityViewSet, SpecificationViewSet,
-    SupportViewSet, VersionViewSet,
+    BrowserViewSet, FeatureViewSet, MaturityViewSet, SectionViewSet,
+    SpecificationViewSet, SupportViewSet, VersionViewSet,
     HistoricalBrowserViewSet, HistoricalFeatureViewSet,
-    HistoricalMaturityViewSet, HistoricalSpecificationViewSet,
-    HistoricalSupportViewSet, HistoricalVersionViewSet,
+    HistoricalMaturityViewSet, HistoricalSectionViewSet,
+    HistoricalSpecificationViewSet, HistoricalSupportViewSet,
+    HistoricalVersionViewSet,
     UserViewSet, ViewFeaturesViewSet)
 
 
@@ -95,7 +96,9 @@ router.register(r'features', FeatureViewSet, group='resources')
 router.register(r'supports', SupportViewSet, group='resources')
 router.register(r'specifications', SpecificationViewSet, group='resources')
 router.register(r'maturities', MaturityViewSet, group='resources')
+router.register(r'sections', SectionViewSet, group='resources')
 router.register(r'users', UserViewSet, group='change-control')
+
 router.register(
     r'historical_browsers', HistoricalBrowserViewSet, group='history')
 router.register(
@@ -109,6 +112,9 @@ router.register(
     r'historical_supports', HistoricalSupportViewSet, group='history')
 router.register(
     r'historical_maturities', HistoricalMaturityViewSet, group='history')
+router.register(
+    r'historical_sections', HistoricalSectionViewSet, group='history')
+
 router.register(
     r'view_features', ViewFeaturesViewSet, base_name='viewfeatures',
     group='views')

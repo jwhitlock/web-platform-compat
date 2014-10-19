@@ -21,15 +21,18 @@ from drf_cached_reads.mixins import CachedViewMixin as BaseCacheViewMixin
 
 from .cache import Cache
 from .mixins import PartialPutMixin
-from .models import Browser, Feature, Maturity, Specification, Support, Version
+from .models import (
+    Browser, Feature, Maturity, Section, Specification, Support, Version)
 from .parsers import JsonApiParser
 from .renderers import JsonApiRenderer
 from .serializers import (
     BrowserSerializer, FeatureSerializer, MaturitySerializer,
-    SpecificationSerializer, SupportSerializer, VersionSerializer,
+    SectionSerializer, SpecificationSerializer, SupportSerializer,
+    VersionSerializer,
     HistoricalBrowserSerializer, HistoricalFeatureSerializer,
-    HistoricalMaturitySerializer, HistoricalSpecificationSerializer,
-    HistoricalSupportSerializer, HistoricalVersionSerializer,
+    HistoricalMaturitySerializer, HistoricalSectionSerializer,
+    HistoricalSpecificationSerializer, HistoricalSupportSerializer,
+    HistoricalVersionSerializer,
     UserSerializer)
 
 
@@ -81,6 +84,11 @@ class MaturityViewSet(ModelViewSet):
     filter_fields = ('key',)
 
 
+class SectionViewSet(ModelViewSet):
+    model = Section
+    serializer_class = SectionSerializer
+
+
 class SpecificationViewSet(ModelViewSet):
     model = Specification
     serializer_class = SpecificationSerializer
@@ -125,6 +133,12 @@ class HistoricalMaturityViewSet(ReadOnlyModelViewSet):
     model = Maturity.history.model
     serializer_class = HistoricalMaturitySerializer
     filter_fields = ('id', 'key')
+
+
+class HistoricalSectionViewSet(ReadOnlyModelViewSet):
+    model = Section.history.model
+    serializer_class = HistoricalSectionSerializer
+    filter_fields = ('id',)
 
 
 class HistoricalSpecificationViewSet(ReadOnlyModelViewSet):

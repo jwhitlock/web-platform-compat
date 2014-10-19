@@ -11,7 +11,7 @@ import mock
 import unittest
 
 from webplatformcompat.models import (
-    Browser, Feature, Maturity, Specification, Support, Version,
+    Browser, Feature, Maturity, Section, Specification, Support, Version,
     post_save_update_cache)
 
 
@@ -33,6 +33,20 @@ class TestMaturity(unittest.TestCase):
     def test_str(self):
         maturity = Maturity(key="Draft")
         self.assertEqual('Draft', str(maturity))
+
+
+class TestSection(unittest.TestCase):
+    def test_str(self):
+        section = Section(name={'en': 'The Section'})
+        self.assertEqual('The Section', str(section))
+
+    def test_str_no_name(self):
+        section = Section()
+        self.assertEqual('<unnamed>', str(section))
+
+    def test_str_no_english(self):
+        section = Section(name={'es': 'En Section'})
+        self.assertEqual('<unnamed>', str(section))
 
 
 class TestSpecification(unittest.TestCase):

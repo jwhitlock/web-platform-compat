@@ -1179,9 +1179,9 @@ The **section** representation includes:
 * **attributes**
     - **id** *(server selected)* - Database ID
     - **name** *(localized)* - Section name
-    - **subpath** *(localized)* - A subpage (possibly with an #anchor) to get
-      to the subsection in the doc.  Can be empty string.
-    - **note** *(localized)* - Notes for this section
+    - **subpath** *(localized, optional)* - A subpage (possibly with an
+      #anchor) to get to the subsection in the doc.  Can be empty string.
+    - **note** *(localized, optional)* - Notes for this section
 * **links**
     - **specification** *(one)* - The specification_.  Can be changed by
       the user.

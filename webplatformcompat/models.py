@@ -218,6 +218,30 @@ class Specification(models.Model):
     def __str__(self):
         return self.key
 
+
+@python_2_unicode_compatible
+class Section(models.Model):
+    '''A section of a specification document'''
+    specification = models.ForeignKey('Specification', related_name='sections')
+    name = TranslatedField(
+        help_text="Name of section")
+    subpath = TranslatedField(
+        help_text=(
+            "A subpage (possible with an #anchor) to get to the subsection"
+            " in the specification."),
+        blank=True)
+    note = TranslatedField(
+        help_text="Notes for this section",
+        blank=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        if self.name and self.name.get('en'):
+            return self.name['en']
+        else:
+            return '<unnamed>'
+
+
 #
 # Cache invalidation signals
 #
