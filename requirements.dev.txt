@@ -20,7 +20,6 @@ flake8==2.2.2
 check-manifest==0.21
 
 # Package QA
-docutils==0.12
 pyroma==1.6
 
 # For ./manage.py runserver_plus
