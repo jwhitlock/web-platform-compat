@@ -138,10 +138,18 @@ class Cache(BaseCache):
             history_pks = list(
                 obj.history.all().values_list('history_id', flat=True))
 
+        specification_pks = getattr(obj, '_specification_pks', None)
+        if specification_pks is None:
+            specification_pks = list(
+                obj.specifications.values_list('pk', flat=True))
+
         return dict((
             ('id', obj.pk),
             ('key', obj.key),
             ('name', obj.name),
+            self.field_to_json(
+                'PKList', 'specifications', model=Specification,
+                pks=specification_pks),
             self.field_to_json(
                 'PKList', 'history', model=obj.history.model,
                 pks=history_pks),
@@ -157,6 +165,8 @@ class Cache(BaseCache):
         except Maturity.DoesNotExist:
             return None
         else:
+            obj._specification_pks = list(
+                obj.specifications.values_list('pk', flat=True))
             obj._history_pks = list(
                 obj.history.all().values_list('history_id', flat=True))
             return obj

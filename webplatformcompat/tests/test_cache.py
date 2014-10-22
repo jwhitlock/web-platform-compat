@@ -143,6 +143,11 @@ class TestCache(TestCase):
             'id': maturity.id,
             'key': 'REC',
             'name': {"en-US": "Recommendation"},
+            'specifications:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'specification',
+                'pks': [],
+            },
             'history:PKList': {
                 'app': u'webplatformcompat',
                 'model': 'historicalmaturity',
@@ -161,7 +166,7 @@ class TestCache(TestCase):
 
     def test_maturity_v1_loader(self):
         maturity = self.create(Maturity)
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(3):
             obj = self.cache.maturity_v1_loader(maturity.pk)
         with self.assertNumQueries(0):
             serialized = self.cache.maturity_v1_serializer(obj)

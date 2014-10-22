@@ -161,7 +161,8 @@ class MaturitySerializer(HistoricalModelSerializer):
     class Meta:
         model = Maturity
         fields = (
-            'id', 'key', 'name', 'history_current', 'history')
+            'id', 'key', 'name', 'specifications',
+            'history_current', 'history')
 
 
 class SectionSerializer(HistoricalModelSerializer):
@@ -315,7 +316,7 @@ class HistoricalMaturitySerializer(HistoricalObjectSerializer):
 
     class ArchivedObject(MaturitySerializer):
         class Meta(MaturitySerializer.Meta):
-            exclude = ('history_current', 'history')
+            exclude = ('specifications', 'history_current', 'history')
 
     maturity = HistoricalObjectField()
     maturities = SerializerMethodField('get_archive')
