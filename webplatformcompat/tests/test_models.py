@@ -121,3 +121,8 @@ class TestM2MChangedSignal(TestCase):
         self.section.features.add(self.feature)
         self.mocked_update_cache.assertCalledOnce(
             'Feature', self.feature.pk, self.feature)
+
+    def test_clear_features_from_section(self):
+        self.section.features.clear()
+        self.mocked_update_cache.assertCalledOnce(
+            'Feature', self.feature.pk, self.feature)

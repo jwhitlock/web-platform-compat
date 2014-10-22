@@ -208,12 +208,22 @@ def feature_sections_changed_update_order(
     if model == Section:
         assert type(instance) == Feature
         features = [instance]
+        if pk_set:
+            sections = list(Section.objects.filter(pk__in=pk_set))
+        else:
+            sections = []
     else:
-        features = list(Feature.objects.filter(pk__in=pk_set))
+        if pk_set:
+            features = list(Feature.objects.filter(pk__in=pk_set))
+        else:
+            features = []
+        sections = [instance]
 
     from .tasks import update_cache_for_instance
     for feature in features:
         update_cache_for_instance('Feature', feature.pk, feature)
+    for section in sections:
+        update_cache_for_instance('Section', section.pk, section)
 
 
 @python_2_unicode_compatible

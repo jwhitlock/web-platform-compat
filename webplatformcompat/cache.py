@@ -173,6 +173,11 @@ class Cache(BaseCache):
             history_pks = list(
                 obj.history.all().values_list('history_id', flat=True))
 
+        feature_pks = getattr(obj, '_feature_pks', None)
+        if feature_pks is None:
+            feature_pks = list(
+                obj.features.all().values_list('pk', flat=True))
+
         return dict((
             ('id', obj.pk),
             ('name', obj.name),
@@ -181,6 +186,8 @@ class Cache(BaseCache):
             self.field_to_json(
                 'PK', 'specification', model=Specification,
                 pk=obj.specification_id),
+            self.field_to_json(
+                'PKList', 'features', model=Feature, pks=feature_pks),
             self.field_to_json(
                 'PKList', 'history', model=obj.history.model,
                 pks=history_pks),
@@ -198,6 +205,8 @@ class Cache(BaseCache):
         else:
             obj._history_pks = list(
                 obj.history.all().values_list('history_id', flat=True))
+            obj._feature_pks = list(
+                obj.features.values_list('pk', flat=True))
             return obj
 
     def section_v1_invalidator(self, obj):
