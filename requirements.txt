@@ -60,3 +60,6 @@ celery==3.1.14
 
 # Modified Preorder Tree Traversal
 django-mptt==0.6.1
+
+# Sorted ManyToManyField
+django-sortedm2m==0.8.1

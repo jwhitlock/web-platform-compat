@@ -150,7 +150,8 @@ class FeatureSerializer(HistoricalModelSerializer):
         fields = (
             'id', 'slug', 'mdn_path', 'experimental', 'standardized',
             'stable', 'obsolete', 'name',
-            'parent', 'children', 'supports', 'history_current', 'history')
+            'sections', 'supports', 'parent', 'children',
+            'history_current', 'history')
         read_only_fields = ('supports',)
 
 
@@ -226,6 +227,8 @@ class HistoricalOptions(ModelSerializer._options_class):
     def __init__(self, meta):
         super(HistoricalOptions, self).__init__(meta)
         self.archive_link_fields = getattr(meta, 'archive_link_fields', [])
+        self.archive_cached_links_fields = getattr(
+            meta, 'archive_cached_links_fields', [])
 
 
 class HistoricalObjectSerializer(ModelSerializer):
@@ -252,11 +255,19 @@ class HistoricalObjectSerializer(ModelSerializer):
         data['id'] = str(data['id'])
 
         data['links'] = type(data)()  # Use dict-like type of serializer.data
+
+        # Archived link fields are to-one relations
         for field in self.opts.archive_link_fields:
             del data[field]
             value = getattr(obj, field + '_id')
             if value is not None:
                 value = str(value)
+            data['links'][field] = value
+
+        # Archived cached links fields are a list of primary keys
+        for field in self.opts.archive_cached_links_fields:
+            value = getattr(obj, field)
+            value = [str(x) for x in value]
             data['links'][field] = value
         data['links']['history_current'] = str(obj.history_id)
 
@@ -285,7 +296,9 @@ class HistoricalFeatureSerializer(HistoricalObjectSerializer):
 
     class ArchivedObject(FeatureSerializer):
         class Meta(FeatureSerializer.Meta):
-            exclude = ('history_current', 'history', 'supports', 'children')
+            exclude = (
+                'history_current', 'history', 'sections', 'supports',
+                'children')
 
     feature = HistoricalObjectField()
     features = SerializerMethodField('get_archive')
@@ -295,6 +308,7 @@ class HistoricalFeatureSerializer(HistoricalObjectSerializer):
         fields = HistoricalObjectSerializer.Meta.fields + (
             'feature', 'features')
         archive_link_fields = ('parent',)
+        archive_cached_links_fields = ('sections',)
 
 
 class HistoricalMaturitySerializer(HistoricalObjectSerializer):

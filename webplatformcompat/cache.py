@@ -74,6 +74,10 @@ class Cache(BaseCache):
         if support_pks is None:
             support_pks = list(obj.supports.values_list('pk', flat=True))
 
+        section_pks = getattr(obj, '_section_pks', None)
+        if section_pks is None:
+            section_pks = list(obj.sections.values_list('pk', flat=True))
+
         return dict((
             ('id', obj.pk),
             ('slug', obj.slug),
@@ -83,6 +87,8 @@ class Cache(BaseCache):
             ('stable', obj.stable),
             ('obsolete', obj.obsolete),
             ('name', obj.name),
+            self.field_to_json(
+                'PKList', 'sections', model=Section, pks=section_pks),
             self.field_to_json(
                 'PKList', 'supports', model=Support, pks=support_pks),
             self.field_to_json(
@@ -108,6 +114,7 @@ class Cache(BaseCache):
                 obj.history.all().values_list('history_id', flat=True))
             obj._children_pks = list(obj.children.values_list('pk', flat=True))
             obj._support_pks = list(obj.supports.values_list('pk', flat=True))
+            obj._section_pks = list(obj.sections.values_list('pk', flat=True))
             return obj
 
     def feature_v1_invalidator(self, obj):

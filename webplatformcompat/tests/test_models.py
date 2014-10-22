@@ -13,6 +13,7 @@ import unittest
 from webplatformcompat.models import (
     Browser, Feature, Maturity, Section, Specification, Support, Version,
     post_save_update_cache)
+from .base import TestCase
 
 
 class TestBrowser(unittest.TestCase):
@@ -91,3 +92,32 @@ class TestSaveSignal(unittest.TestCase):
     def test_create(self):
         post_save_update_cache(Browser, self.browser, created=True, raw=False)
         self.mocked_update_cache.assertCalledOnce('Browser', 666, self.browser)
+
+
+class TestM2MChangedSignal(TestCase):
+    def setUp(self):
+        self.patcher = mock.patch(
+            'webplatformcompat.tasks.update_cache_for_instance')
+        self.login_superuser()
+        self.mocked_update_cache = self.patcher.start()
+        self.maturity = self.create(Maturity, key='Foo')
+        self.specification = self.create(Specification, maturity=self.maturity)
+        self.section = self.create(Section, specification=self.specification)
+        self.feature = self.create(Feature)
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.section.delete()
+        self.specification.delete()
+        self.maturity.delete()
+        self.feature.delete()
+
+    def test_add_section_to_feature(self):
+        self.feature.sections.add(self.section)
+        self.mocked_update_cache.assertCalledOnce(
+            'Feature', self.feature.pk, self.feature)
+
+    def test_add_feature_to_section(self):
+        self.section.features.add(self.feature)
+        self.mocked_update_cache.assertCalledOnce(
+            'Feature', self.feature.pk, self.feature)
