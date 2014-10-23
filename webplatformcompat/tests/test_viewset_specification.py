@@ -4,11 +4,11 @@
 Tests for `web-platform-compat.viewsets.SpecificationViewSet` class.
 """
 from __future__ import unicode_literals
-from json import loads
+from json import dumps, loads
 
 from django.core.urlresolvers import reverse
 
-from webplatformcompat.models import Maturity, Specification
+from webplatformcompat.models import Maturity, Section, Specification
 
 from .base import APITestCase
 
@@ -32,6 +32,7 @@ class TestSpecificationViewSet(APITestCase):
             'name': {'en': 'CSS Level&nbsp;1'},
             'uri': {'en': 'http://www.w3.org/TR/CSS1/'},
             'maturity': maturity.pk,
+            'sections': [],
             'history': [history_pk],
             'history_current': history_pk,
         }
@@ -45,6 +46,7 @@ class TestSpecificationViewSet(APITestCase):
                 "uri": {"en": "http://www.w3.org/TR/CSS1/"},
                 "links": {
                     "maturity": str(maturity.pk),
+                    "sections": [],
                     "history_current": str(history_pk),
                     "history": [str(history_pk)],
                 },
@@ -55,6 +57,12 @@ class TestSpecificationViewSet(APITestCase):
                         "http://testserver/api/v1/maturities/"
                         "{specifications.maturity}"),
                     "type": "maturities"
+                },
+                "specifications.sections": {
+                    "href": (
+                        "http://testserver/api/v1/sections/"
+                        "{specifications.sections}"),
+                    "type": "sections"
                 },
                 "specifications.history_current": {
                     "href": (
@@ -72,6 +80,123 @@ class TestSpecificationViewSet(APITestCase):
         }
         actual_json = loads(response.content.decode('utf-8'))
         self.assertDataEqual(expected_json, actual_json)
+
+    def test_add_name(self):
+        maturity = self.create(
+            Maturity, key='REC', name={'en': 'Recommendation'})
+        spec = self.create(
+            Specification, maturity=maturity, key="css1",
+            name={'en': "Cascading Style Sheets, level 1"},
+            uri={'en': 'http://www.w3.org/TR/REC-CSS1/'})
+        url = reverse('specification-detail', kwargs={'pk': spec.pk})
+        data = {
+            "specifications": {
+                'name': {
+                    'en': 'Cascading Style Sheets, level 1',
+                    'fr': 'Les feuilles de style en cascade, niveau 1',
+                },
+                'uri': {
+                    'en': 'http://www.w3.org/TR/REC-CSS1/',
+                    'fr': 'http://www.yoyodesign.org/doc/w3c/css1/index.html',
+                }
+            }
+        }
+        response = self.client.put(
+            url, dumps(data), content_type='application/vnd.api+json')
+        self.assertEqual(200, response.status_code, response.data)
+        history_pk = spec.history.all()[0].pk
+
+        expected_data = {
+            'id': spec.id,
+            'key': 'css1',
+            'name': {
+                'en': "Cascading Style Sheets, level 1",
+                'fr': "Les feuilles de style en cascade, niveau 1"
+            },
+            'uri': {
+                'en': 'http://www.w3.org/TR/REC-CSS1/',
+                'fr': 'http://www.yoyodesign.org/doc/w3c/css1/index.html'
+            },
+            'maturity': maturity.pk,
+            'sections': [],
+            'history': [h.pk for h in spec.history.all()],
+            'history_current': history_pk,
+        }
+        self.assertDataEqual(expected_data, response.data)
+
+    def test_sections_are_ordered(self):
+        maturity = self.create(
+            Maturity, key='WD', name={'en': 'Working Draft'})
+        spec = self.create(
+            Specification, maturity=maturity, key="css3-animations",
+            name={'en': "CSS Animations"},
+            uri={'en': 'http://dev.w3.org/csswg/css-animations/'})
+        section46 = self.create(
+            Section, specification=spec,
+            name={'en': "The 'animation-direction' property"},
+            subpath={'en': "#animation-direction"})
+        section45 = self.create(
+            Section, specification=spec,
+            name={'en': "The 'animation-iteration-count' property"},
+            subpath={'en': "#animation-iteration-count"})
+
+        url = reverse('specification-detail', kwargs={'pk': spec.pk})
+        history_pk = spec.history.all()[0].pk
+        response = self.client.get(url, HTTP_ACCEPT="application/vnd.api+json")
+        self.assertEqual(200, response.status_code, response.data)
+
+        expected_data = {
+            'id': spec.id,
+            'key': 'css3-animations',
+            'name': {'en': "CSS Animations"},
+            'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
+            'maturity': maturity.pk,
+            'sections': [section46.pk, section45.pk],
+            'history': [history_pk],
+            'history_current': history_pk,
+        }
+        self.assertDataEqual(expected_data, response.data)
+
+        data = {
+            "specifications": {
+                "links": {
+                    "sections": [str(section45.pk), str(section46.pk)]
+                }
+            }
+        }
+        response = self.client.put(
+            url, dumps(data), content_type='application/vnd.api+json')
+        self.assertEqual(200, response.status_code, response.data)
+        history_pk = spec.history.all()[0].pk
+
+        expected_data = {
+            'id': spec.id,
+            'key': 'css3-animations',
+            'name': {'en': "CSS Animations"},
+            'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
+            'maturity': maturity.pk,
+            'sections': [section45.pk, section46.pk],
+            'history': [h.pk for h in spec.history.all()],
+            'history_current': history_pk,
+        }
+        self.assertDataEqual(expected_data, response.data)
+
+        response = self.client.put(
+            url, dumps(data), content_type='application/vnd.api+json')
+        self.assertEqual(200, response.status_code, response.data)
+        history_pk = spec.history.all()[0].pk
+
+        expected_data = {
+            'id': spec.id,
+            'key': 'css3-animations',
+            'name': {'en': "CSS Animations"},
+            'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
+            'maturity': maturity.pk,
+            'sections': [section45.pk, section46.pk],
+            'history': [h.pk for h in spec.history.all()],
+            'history_current': history_pk,
+        }
+        self.assertDataEqual(expected_data, response.data)
 
     def test_list(self):
         maturity = self.create(
@@ -95,6 +220,7 @@ class TestSpecificationViewSet(APITestCase):
                 'name': {'en': "CSS Animations"},
                 'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
                 'maturity': maturity.pk,
+                'sections': [],
                 'history': [history_pk],
                 'history_current': history_pk,
             }]}
@@ -108,6 +234,7 @@ class TestSpecificationViewSet(APITestCase):
                 "uri": {"en": "http://dev.w3.org/csswg/css-animations/"},
                 "links": {
                     "maturity": str(maturity.pk),
+                    "sections": [],
                     "history_current": str(history_pk),
                     "history": [str(history_pk)],
                 },
@@ -118,6 +245,12 @@ class TestSpecificationViewSet(APITestCase):
                         "http://testserver/api/v1/maturities/"
                         "{specifications.maturity}"),
                     "type": "maturities"
+                },
+                "specifications.sections": {
+                    "href": (
+                        "http://testserver/api/v1/sections/"
+                        "{specifications.sections}"),
+                    "type": "sections"
                 },
                 "specifications.history_current": {
                     "href": (
@@ -171,6 +304,7 @@ class TestSpecificationViewSet(APITestCase):
                 'name': {'en': 'Web Workers'},
                 'uri': {'en': 'http://dev.w3.org/html5/workers/'},
                 'maturity': maturity.pk,
+                'sections': [],
                 'history': [history_pk],
                 'history_current': history_pk,
             }]}

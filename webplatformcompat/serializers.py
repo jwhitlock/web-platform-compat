@@ -178,10 +178,24 @@ class SectionSerializer(HistoricalModelSerializer):
 class SpecificationSerializer(HistoricalModelSerializer):
     """Specification Serializer"""
 
+    def save_object(self, obj, **kwargs):
+        if 'sections' in getattr(obj, '_related_data', {}):
+            sections = obj._related_data.pop('sections')
+        else:
+            sections = None
+
+        super(SpecificationSerializer, self).save_object(obj, **kwargs)
+
+        if sections:
+            s_pks = [s.pk for s in sections]
+            current_order = obj.get_section_order()
+            if s_pks != current_order:
+                obj.set_section_order(s_pks)
+
     class Meta:
         model = Specification
         fields = (
-            'id', 'key', 'name', 'uri', 'maturity',
+            'id', 'key', 'name', 'uri', 'maturity', 'sections',
             'history_current', 'history')
 
 
@@ -347,7 +361,7 @@ class HistoricalSpecificationSerializer(HistoricalObjectSerializer):
 
     class ArchivedObject(SpecificationSerializer):
         class Meta(SpecificationSerializer.Meta):
-            exclude = ('history_current', 'history')
+            exclude = ('sections', 'history_current', 'history')
 
     specification = HistoricalObjectField()
     specifications = SerializerMethodField('get_archive')

@@ -346,6 +346,9 @@ class Section(models.Model):
         blank=True)
     history = HistoricalRecords()
 
+    class Meta:
+        order_with_respect_to = 'specification'
+
     def __str__(self):
         if self.name and self.name.get('en'):
             return self.name['en']

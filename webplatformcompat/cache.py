@@ -220,7 +220,7 @@ class Cache(BaseCache):
             return obj
 
     def section_v1_invalidator(self, obj):
-        return []
+        return [('Specification', obj.specification_id, False)]
 
     def specification_v1_serializer(self, obj):
         if not obj:
@@ -231,11 +231,18 @@ class Cache(BaseCache):
             history_pks = list(
                 obj.history.all().values_list('history_id', flat=True))
 
+        section_pks = getattr(obj, '_section_pks', None)
+        if section_pks is None:
+            section_pks = list(
+                obj.sections.all().values_list('pk', flat=True))
+
         return dict((
             ('id', obj.pk),
             ('key', obj.key),
             ('name', obj.name),
             ('uri', obj.uri),
+            self.field_to_json(
+                'PKList', 'sections', model=Section, pks=section_pks),
             self.field_to_json(
                 'PK', 'maturity', model=Maturity, pk=obj.maturity_id),
             self.field_to_json(
@@ -255,6 +262,8 @@ class Cache(BaseCache):
         else:
             obj._history_pks = list(
                 obj.history.all().values_list('history_id', flat=True))
+            obj._section_pks = list(
+                obj.sections.values_list('pk', flat=True))
             return obj
 
     def specification_v1_invalidator(self, obj):

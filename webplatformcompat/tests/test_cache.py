@@ -255,7 +255,9 @@ class TestCache(TestCase):
         section = self.create(
             Section, specification=spec,
             name={'en': 'A section'}, subpath={'en': '#section'})
-        self.assertEqual([], self.cache.section_v1_invalidator(section))
+        self.assertEqual(
+            [('Specification', spec.pk, False)],
+            self.cache.section_v1_invalidator(section))
 
     def test_specification_v1_serializer(self):
         maturity = self.create(
@@ -270,6 +272,11 @@ class TestCache(TestCase):
             'key': 'MathML2',
             'name': {"en": "MathML 2.0"},
             'uri': {"en": "http://www.w3.org/TR/MathML2/"},
+            'sections:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'section',
+                'pks': [],
+            },
             'maturity:PK': {
                 'app': u'webplatformcompat',
                 'model': 'maturity',
@@ -300,7 +307,7 @@ class TestCache(TestCase):
             uri={'en': (
                 'https://dvcs.w3.org/hg/push/raw-file/default/index.html')}
         )
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(3):
             obj = self.cache.specification_v1_loader(spec.pk)
         with self.assertNumQueries(0):
             serialized = self.cache.specification_v1_serializer(obj)
