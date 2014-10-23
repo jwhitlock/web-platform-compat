@@ -1179,6 +1179,7 @@ The **section** representation includes:
 
 * **attributes**
     - **id** *(server selected)* - Database ID
+    - **number** *(optional)* - The section number
     - **name** *(localized)* - Section name
     - **subpath** *(localized, optional)* - A subpage (possibly with an
       #anchor) to get to the subsection in the doc.  Can be empty string.
@@ -1209,6 +1210,7 @@ A sample response is:
     {
         "sections": {
             "id": "792",
+            "number": "9.2.4",
             "name": {
                 "en": "'display'"
             },

@@ -189,12 +189,13 @@ class TestCache(TestCase):
             name='{"en": "MathML 2.0"}',
             uri='{"en": "http://www.w3.org/TR/MathML2/"}')
         section = self.create(
-            Section, specification=spec,
+            Section, specification=spec, number="3.2.4",
             name={'en': 'Number (mn)'},
             subpath={'en': 'chapter3.html#presm.mn'})
         out = self.cache.section_v1_serializer(section)
         expected = {
             'id': section.id,
+            'number': '3.2.4',
             'name': {"en": "Number (mn)"},
             'subpath': {'en': 'chapter3.html#presm.mn'},
             'note': {},

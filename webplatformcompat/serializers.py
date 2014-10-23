@@ -171,8 +171,8 @@ class SectionSerializer(HistoricalModelSerializer):
     class Meta:
         model = Section
         fields = (
-            'id', 'name', 'subpath', 'note', 'specification', 'features',
-            'history_current', 'history')
+            'id', 'number', 'name', 'subpath', 'note', 'specification',
+            'features', 'history_current', 'history')
 
 
 class SpecificationSerializer(HistoricalModelSerializer):

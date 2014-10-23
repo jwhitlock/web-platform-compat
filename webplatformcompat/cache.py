@@ -190,6 +190,7 @@ class Cache(BaseCache):
 
         return dict((
             ('id', obj.pk),
+            ('number', obj.number),
             ('name', obj.name),
             ('subpath', obj.subpath),
             ('note', obj.note),

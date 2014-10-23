@@ -335,8 +335,11 @@ class Specification(models.Model):
 class Section(models.Model):
     '''A section of a specification document'''
     specification = models.ForeignKey('Specification', related_name='sections')
+    number = models.CharField(
+        help_text="Section number",
+        max_length=10, blank=True)
     name = TranslatedField(
-        help_text="Name of section")
+        help_text="Name of section, without section number")
     subpath = TranslatedField(
         help_text=(
             "A subpage (possible with an #anchor) to get to the subsection"

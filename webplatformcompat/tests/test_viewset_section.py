@@ -22,7 +22,7 @@ class TestSectionViewSet(APITestCase):
             name={'en': "CSS Level&nbsp;1"},
             uri={'en': 'http://www.w3.org/TR/CSS1/'})
         section = self.create(
-            Section, specification=spec,
+            Section, specification=spec, number='5.6.1',
             name={'en': "display"}, subpath={'en': '#display'})
         url = reverse('section-detail', kwargs={'pk': spec.pk})
         history_pk = spec.history.all()[0].pk
@@ -31,6 +31,7 @@ class TestSectionViewSet(APITestCase):
 
         expected_data = {
             'id': section.id,
+            'number': '5.6.1',
             'name': {'en': 'display'},
             'subpath': {'en': '#display'},
             'note': None,
@@ -44,6 +45,7 @@ class TestSectionViewSet(APITestCase):
         expected_json = {
             "sections": {
                 "id": str(section.id),
+                'number': '5.6.1',
                 'name': {'en': 'display'},
                 'subpath': {'en': '#display'},
                 'note': None,
@@ -93,7 +95,7 @@ class TestSectionViewSet(APITestCase):
             name={'en': "CSS Animations"},
             uri={'en': 'http://dev.w3.org/csswg/css-animations/'})
         section = self.create(
-            Section, specification=spec,
+            Section, specification=spec, number='4.10',
             name={'en': "The 'animation' shorthand property"},
             subpath={'en': '#animation'})
         url = reverse('section-list')
@@ -107,6 +109,7 @@ class TestSectionViewSet(APITestCase):
             'next': None,
             'results': [{
                 'id': section.id,
+                'number': '4.10',
                 'name': {'en': "The 'animation' shorthand property"},
                 'subpath': {'en': '#animation'},
                 'note': None,
@@ -120,6 +123,7 @@ class TestSectionViewSet(APITestCase):
         expected_json = {
             "sections": [{
                 "id": str(section.id),
+                'number': '4.10',
                 "name": {"en": "The 'animation' shorthand property"},
                 "subpath": {"en": "#animation"},
                 "note": None,

@@ -232,6 +232,7 @@ class ViewFeaturesViewSet(ViewSet):
                 ("sections", [
                     OrderedDict((
                         ("id", "746"),
+                        ("number", "4.3.10"),
                         ("name", {"en": "The address element"}),
                         ("subpath",
                          {"en": "sections.html#the-address-element"}),
@@ -244,6 +245,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "421"),
+                        ("number", "4.3.9"),
                         ("name", {"en": "The address element"}),
                         ("subpath",
                          {"en": "sections.html#the-address-element"}),
@@ -255,6 +257,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "70"),
+                        ("number", "7.5.6"),
                         ("name", {"en": "The ADDRESS element"}),
                         ("subpath", {"en": "struct/global.html#h-7.5.6"}),
                         ("notes", None),
