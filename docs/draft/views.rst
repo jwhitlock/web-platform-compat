@@ -166,7 +166,7 @@ A sample response is:
             "maturities": [
                 {
                     "id": "23",
-                    "key": "Living",
+                    "slug": "Living",
                     "name": {
                         "en": "Living Standard",
                     },
@@ -175,7 +175,7 @@ A sample response is:
                     }
                 }, {
                     "id": "49",
-                    "key": "REC",
+                    "slug": "REC",
                     "name": {
                         "en": "Recommendation",
                         "jp": "勧告"
@@ -185,7 +185,7 @@ A sample response is:
                     }
                 }, {
                     "id": "52",
-                    "key": "CR",
+                    "slug": "CR",
                     "name": {
                         "en": "Candidate Recommendation",
                         "ja": "勧告候補",
@@ -847,7 +847,7 @@ The process for using this representation is:
           specifications.name.(lang or en), with title based on
           sections.name.(lang or en) or feature.name.(lang or en).
         * Add the second column: A span with class
-          "spec-" + maturities.mdn_key, and the text
+          "spec-" + maturities.slug, and the text
           maturities.name.(lang or en).
         * Add the third column:
           maturities.notes.(lang or en), or empty string

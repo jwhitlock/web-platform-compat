@@ -294,9 +294,9 @@ class HistoricalMaturityRecords(HistoricalRecords):
 @python_2_unicode_compatible
 class Maturity(models.Model):
     '''Maturity of a specification document'''
-    key = models.SlugField(
+    slug = models.SlugField(
         help_text=(
-            "Unique, human-friendly key, sourced from the KumaScript macro"
+            "Unique, human-friendly slug, sourced from the KumaScript macro"
             " Spec2"),
         unique=True)
     name = TranslatedField(
@@ -307,7 +307,7 @@ class Maturity(models.Model):
         verbose_name_plural = 'maturities'
 
     def __str__(self):
-        return self.key
+        return self.slug
 
 
 @python_2_unicode_compatible

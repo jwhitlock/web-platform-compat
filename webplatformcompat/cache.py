@@ -145,7 +145,7 @@ class Cache(BaseCache):
 
         return dict((
             ('id', obj.pk),
-            ('key', obj.key),
+            ('slug', obj.slug),
             ('name', obj.name),
             self.field_to_json(
                 'PKList', 'specifications', model=Specification,

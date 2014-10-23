@@ -32,7 +32,7 @@ class TestFeature(unittest.TestCase):
 
 class TestMaturity(unittest.TestCase):
     def test_str(self):
-        maturity = Maturity(key="Draft")
+        maturity = Maturity(slug="Draft")
         self.assertEqual('Draft', str(maturity))
 
 
@@ -100,7 +100,7 @@ class TestM2MChangedSignal(TestCase):
             'webplatformcompat.tasks.update_cache_for_instance')
         self.login_superuser()
         self.mocked_update_cache = self.patcher.start()
-        self.maturity = self.create(Maturity, key='Foo')
+        self.maturity = self.create(Maturity, slug='Foo')
         self.specification = self.create(Specification, maturity=self.maturity)
         self.section = self.create(Section, specification=self.specification)
         self.feature = self.create(Feature)

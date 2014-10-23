@@ -20,7 +20,7 @@ class TestHistoricalSectionViewset(APITestCase):
     def test_get(self):
         user = self.login_superuser()
         maturity = self.create(
-            Maturity, key='M', name={'en': 'A Maturity'})
+            Maturity, slug='M', name={'en': 'A Maturity'})
         spec = self.create(
             Specification, maturity=maturity, slug="spec",
             name={'en': 'A Specification'},
@@ -95,7 +95,7 @@ class TestHistoricalSectionViewset(APITestCase):
     def test_filter_by_id(self):
         user = self.login_superuser()
         maturity = self.create(
-            Maturity, key='M', name={'en': 'A Maturity'})
+            Maturity, slug='M', name={'en': 'A Maturity'})
         self.create(
             Specification, maturity=maturity, slug='other_spec',
             name={'en': 'Other Spec'}, uri={'en': 'http://w3c.org/spec'})

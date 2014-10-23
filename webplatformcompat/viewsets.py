@@ -81,7 +81,7 @@ class FeatureViewSet(ModelViewSet):
 class MaturityViewSet(ModelViewSet):
     model = Maturity
     serializer_class = MaturitySerializer
-    filter_fields = ('key',)
+    filter_fields = ('slug',)
 
 
 class SectionViewSet(ModelViewSet):
@@ -132,7 +132,7 @@ class HistoricalFeatureViewSet(ReadOnlyModelViewSet):
 class HistoricalMaturityViewSet(ReadOnlyModelViewSet):
     model = Maturity.history.model
     serializer_class = HistoricalMaturitySerializer
-    filter_fields = ('id', 'key')
+    filter_fields = ('id', 'slug')
 
 
 class HistoricalSectionViewSet(ReadOnlyModelViewSet):
@@ -306,13 +306,13 @@ class ViewFeaturesViewSet(ViewSet):
                 ("maturities", [
                     OrderedDict((
                         ("id", "23"),
-                        ("key", "Living"),
+                        ("slug", "Living"),
                         ("name", {"en": "Living Standard"}),
                         ("links", {"specifications": ["62"]}),
                     )),
                     OrderedDict((
                         ("id", "49"),
-                        ("key", "REC"),
+                        ("slug", "REC"),
                         ("name", OrderedDict((
                             ("en", "Recommendation"),
                             ("jp", "勧告"),
@@ -324,7 +324,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "52"),
-                        ("key", "CR"),
+                        ("slug", "CR"),
                         ("name", OrderedDict((
                             ("en", "Candidate Recommendation"),
                             ("ja", "勧告候補"),

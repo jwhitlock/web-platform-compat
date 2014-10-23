@@ -1244,7 +1244,7 @@ The **maturity** representation includes:
 
 * **attributes**
     - **id** *(server selected)* - Database ID
-    - **key** - A human-friendly identifier for this maturity.  When applicabile,
+    - **slug** - A human-friendly identifier for this maturity.  When applicabile,
       it match the key in the KumaScript macro Spec2_
     - **name** *(localized)* - Status name
 * **links**
@@ -1271,7 +1271,7 @@ A sample response is:
     {
         "maturities": {
             "id": "49",
-            "key": "REC",
+            "slug": "REC",
             "name": {
                 "en": "Recommendation",
                 "jp": "勧告"

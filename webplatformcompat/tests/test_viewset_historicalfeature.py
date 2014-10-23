@@ -100,7 +100,7 @@ class TestHistoricalFeatureViewset(APITestCase):
             Feature, slug="the_feature", name={"en": "The Feature"},
             _history_user=user,
             _history_date=datetime(2014, 10, 1, 14, 25, 14, 955097, UTC))
-        maturity = self.create(Maturity, key='Bar')
+        maturity = self.create(Maturity, slug='Bar')
         specification = self.create(Specification, maturity=maturity)
         section = self.create(Section, specification=specification)
         feature.sections.add(section)

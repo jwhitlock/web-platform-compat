@@ -16,7 +16,7 @@ from .base import APITestCase
 class TestSpecificationViewSet(APITestCase):
     def test_get(self):
         maturity = self.create(
-            Maturity, key='REC', name={'en': 'Recommendation'})
+            Maturity, slug='REC', name={'en': 'Recommendation'})
         spec = self.create(
             Specification, maturity=maturity, slug="css1", mdn_key="CSS1",
             name={'en': "CSS Level&nbsp;1"},
@@ -85,7 +85,7 @@ class TestSpecificationViewSet(APITestCase):
 
     def test_add_name(self):
         maturity = self.create(
-            Maturity, key='REC', name={'en': 'Recommendation'})
+            Maturity, slug='REC', name={'en': 'Recommendation'})
         spec = self.create(
             Specification, maturity=maturity, slug="css1",
             name={'en': "Cascading Style Sheets, level 1"},
@@ -129,7 +129,7 @@ class TestSpecificationViewSet(APITestCase):
 
     def test_sections_are_ordered(self):
         maturity = self.create(
-            Maturity, key='WD', name={'en': 'Working Draft'})
+            Maturity, slug='WD', name={'en': 'Working Draft'})
         spec = self.create(
             Specification, maturity=maturity, slug="css3-animations",
             mdn_key='CSS3 Animations',
@@ -207,7 +207,7 @@ class TestSpecificationViewSet(APITestCase):
 
     def test_list(self):
         maturity = self.create(
-            Maturity, key='WD', name={'en': 'Working Draft'})
+            Maturity, slug='WD', name={'en': 'Working Draft'})
         spec = self.create(
             Specification, maturity=maturity, slug='css3_animations',
             mdn_key="CSS3 Animations",
@@ -290,7 +290,7 @@ class TestSpecificationViewSet(APITestCase):
 
     def test_filter_by_slug(self):
         maturity = self.create(
-            Maturity, key="CR", name={'en': 'Candidate Recommendation'})
+            Maturity, slug="CR", name={'en': 'Candidate Recommendation'})
         spec = self.create(
             Specification, maturity=maturity, slug='web-workers',
             mdn_key='Web Workers',
@@ -325,7 +325,7 @@ class TestSpecificationViewSet(APITestCase):
 
     def test_filter_by_mdn_key(self):
         maturity = self.create(
-            Maturity, key="CR", name={'en': 'Candidate Recommendation'})
+            Maturity, slug="CR", name={'en': 'Candidate Recommendation'})
         spec = self.create(
             Specification, maturity=maturity, slug='web-workers',
             mdn_key='Web Workers',

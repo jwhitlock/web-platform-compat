@@ -16,7 +16,7 @@ from .base import APITestCase
 class TestSectionViewSet(APITestCase):
     def test_get(self):
         maturity = self.create(
-            Maturity, key='REC', name={'en': 'Recommendation'})
+            Maturity, slug='REC', name={'en': 'Recommendation'})
         spec = self.create(
             Specification, maturity=maturity, slug="css1",
             name={'en': "CSS Level&nbsp;1"},
@@ -86,7 +86,7 @@ class TestSectionViewSet(APITestCase):
 
     def test_list(self):
         maturity = self.create(
-            Maturity, key='WD', name={'en': 'Working Draft'})
+            Maturity, slug='WD', name={'en': 'Working Draft'})
         spec = self.create(
             Specification, maturity=maturity, slug='css3_animations',
             mdn_key="CSS3 Animations",

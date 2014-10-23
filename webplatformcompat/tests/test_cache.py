@@ -137,11 +137,11 @@ class TestCache(TestCase):
 
     def test_maturity_v1_serializer(self):
         maturity = self.create(
-            Maturity, key='REC', name='{"en-US": "Recommendation"}')
+            Maturity, slug='REC', name='{"en-US": "Recommendation"}')
         out = self.cache.maturity_v1_serializer(maturity)
         expected = {
             'id': maturity.id,
-            'key': 'REC',
+            'slug': 'REC',
             'name': {"en-US": "Recommendation"},
             'specifications:PKList': {
                 'app': u'webplatformcompat',
@@ -182,7 +182,7 @@ class TestCache(TestCase):
 
     def test_section_v1_serializer(self):
         maturity = self.create(
-            Maturity, key="REC", name={'en': 'Recommendation'})
+            Maturity, slug="REC", name={'en': 'Recommendation'})
         spec = self.create(
             Specification, slug='mathml2', mdn_key='MathML2',
             maturity=maturity,
@@ -226,7 +226,7 @@ class TestCache(TestCase):
 
     def test_section_v1_loader(self):
         maturity = self.create(
-            Maturity, key='WD', name={'en': 'Working Draft'})
+            Maturity, slug='WD', name={'en': 'Working Draft'})
         spec = self.create(
             Specification, slug='push_api', mdn_key='Push API',
             maturity=maturity,
@@ -249,7 +249,7 @@ class TestCache(TestCase):
 
     def test_section_v1_invalidator(self):
         maturity = self.create(
-            Maturity, key='WD', name={'en': 'Working Draft'})
+            Maturity, slug='WD', name={'en': 'Working Draft'})
         spec = self.create(
             Specification, slug='spec', mdn_key='Spec', maturity=maturity,
             name={'en': 'Spec'},
@@ -263,7 +263,7 @@ class TestCache(TestCase):
 
     def test_specification_v1_serializer(self):
         maturity = self.create(
-            Maturity, key="REC", name={'en': 'Recommendation'})
+            Maturity, slug="REC", name={'en': 'Recommendation'})
         spec = self.create(
             Specification, slug="mathml2", mdn_key='MathML2',
             maturity=maturity,
@@ -304,7 +304,7 @@ class TestCache(TestCase):
 
     def test_specification_v1_loader(self):
         maturity = self.create(
-            Maturity, key='WD', name={'en': 'Working Draft'})
+            Maturity, slug='WD', name={'en': 'Working Draft'})
         spec = self.create(
             Specification, slug='push-api', maturity=maturity,
             name={'en': 'Push API'},
@@ -323,7 +323,7 @@ class TestCache(TestCase):
 
     def test_specification_v1_invalidator(self):
         maturity = self.create(
-            Maturity, key='WD', name={'en': 'Working Draft'})
+            Maturity, slug='WD', name={'en': 'Working Draft'})
         spec = self.create(
             Specification, slug='spec', maturity=maturity,
             name={'en': 'Spec'},
