@@ -195,7 +195,7 @@ class SpecificationSerializer(HistoricalModelSerializer):
     class Meta:
         model = Specification
         fields = (
-            'id', 'key', 'name', 'uri', 'maturity', 'sections',
+            'id', 'slug', 'mdn_key', 'name', 'uri', 'maturity', 'sections',
             'history_current', 'history')
 
 

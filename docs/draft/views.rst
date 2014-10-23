@@ -121,7 +121,8 @@ A sample response is:
             "specifications": [
                 {
                     "id": "62",
-                    "key": "HTML WHATWG",
+                    "slug": "html_whatwg",
+                    "mdn_key": "HTML WHATWG",
                     "name": {
                         "en": "WHATWG HTML Living Standard",
                     },
@@ -134,7 +135,8 @@ A sample response is:
                     }
                 },{
                     "id": "114",
-                    "key": "HTML5 W3C",
+                    "slug": "html5_w3c",
+                    "mdn_key": "HTML5 W3C",
                     "name": {
                         "en": "HTML5",
                     },
@@ -147,7 +149,8 @@ A sample response is:
                     }
                 },{
                     "id": "576",
-                    "key": "HTML4.01",
+                    "slug": "html4_01",
+                    "mdn_key": "HTML4.01",
                     "name": {
                         "en": "HTML 4.01 Specification",
                     },

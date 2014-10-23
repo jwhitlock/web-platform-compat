@@ -90,7 +90,7 @@ class TestMaturityViewSet(APITestCase):
             'ru': u'\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a',
         }
         maturity = self.create(Maturity, key='Draft', name=name)
-        spec = self.create(Specification, key='Foo', maturity=maturity)
+        spec = self.create(Specification, slug='foo', maturity=maturity)
         url = reverse('maturity-detail', kwargs={'pk': maturity.pk})
         fh_pk = maturity.history.all()[0].pk
         response = self.client.get(url, HTTP_ACCEPT="application/vnd.api+json")

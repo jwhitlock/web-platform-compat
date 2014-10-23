@@ -18,7 +18,7 @@ class TestSpecificationViewSet(APITestCase):
         maturity = self.create(
             Maturity, key='REC', name={'en': 'Recommendation'})
         spec = self.create(
-            Specification, maturity=maturity, key="CSS1",
+            Specification, maturity=maturity, slug="css1", mdn_key="CSS1",
             name={'en': "CSS Level&nbsp;1"},
             uri={'en': 'http://www.w3.org/TR/CSS1/'})
         url = reverse('specification-detail', kwargs={'pk': spec.pk})
@@ -28,7 +28,8 @@ class TestSpecificationViewSet(APITestCase):
 
         expected_data = {
             'id': spec.id,
-            'key': 'CSS1',
+            'slug': 'css1',
+            'mdn_key': 'CSS1',
             'name': {'en': 'CSS Level&nbsp;1'},
             'uri': {'en': 'http://www.w3.org/TR/CSS1/'},
             'maturity': maturity.pk,
@@ -41,7 +42,8 @@ class TestSpecificationViewSet(APITestCase):
         expected_json = {
             "specifications": {
                 "id": str(spec.id),
-                "key": 'CSS1',
+                'slug': 'css1',
+                'mdn_key': 'CSS1',
                 "name": {"en": "CSS Level&nbsp;1"},
                 "uri": {"en": "http://www.w3.org/TR/CSS1/"},
                 "links": {
@@ -85,7 +87,7 @@ class TestSpecificationViewSet(APITestCase):
         maturity = self.create(
             Maturity, key='REC', name={'en': 'Recommendation'})
         spec = self.create(
-            Specification, maturity=maturity, key="css1",
+            Specification, maturity=maturity, slug="css1",
             name={'en': "Cascading Style Sheets, level 1"},
             uri={'en': 'http://www.w3.org/TR/REC-CSS1/'})
         url = reverse('specification-detail', kwargs={'pk': spec.pk})
@@ -108,7 +110,8 @@ class TestSpecificationViewSet(APITestCase):
 
         expected_data = {
             'id': spec.id,
-            'key': 'css1',
+            'slug': 'css1',
+            'mdn_key': None,
             'name': {
                 'en': "Cascading Style Sheets, level 1",
                 'fr': "Les feuilles de style en cascade, niveau 1"
@@ -128,7 +131,8 @@ class TestSpecificationViewSet(APITestCase):
         maturity = self.create(
             Maturity, key='WD', name={'en': 'Working Draft'})
         spec = self.create(
-            Specification, maturity=maturity, key="css3-animations",
+            Specification, maturity=maturity, slug="css3-animations",
+            mdn_key='CSS3 Animations',
             name={'en': "CSS Animations"},
             uri={'en': 'http://dev.w3.org/csswg/css-animations/'})
         section46 = self.create(
@@ -147,7 +151,8 @@ class TestSpecificationViewSet(APITestCase):
 
         expected_data = {
             'id': spec.id,
-            'key': 'css3-animations',
+            'slug': 'css3-animations',
+            'mdn_key': 'CSS3 Animations',
             'name': {'en': "CSS Animations"},
             'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
             'maturity': maturity.pk,
@@ -171,7 +176,8 @@ class TestSpecificationViewSet(APITestCase):
 
         expected_data = {
             'id': spec.id,
-            'key': 'css3-animations',
+            'slug': 'css3-animations',
+            'mdn_key': 'CSS3 Animations',
             'name': {'en': "CSS Animations"},
             'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
             'maturity': maturity.pk,
@@ -188,7 +194,8 @@ class TestSpecificationViewSet(APITestCase):
 
         expected_data = {
             'id': spec.id,
-            'key': 'css3-animations',
+            'slug': 'css3-animations',
+            'mdn_key': 'CSS3 Animations',
             'name': {'en': "CSS Animations"},
             'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
             'maturity': maturity.pk,
@@ -202,7 +209,8 @@ class TestSpecificationViewSet(APITestCase):
         maturity = self.create(
             Maturity, key='WD', name={'en': 'Working Draft'})
         spec = self.create(
-            Specification, maturity=maturity, key="CSS3 Animations",
+            Specification, maturity=maturity, slug='css3_animations',
+            mdn_key="CSS3 Animations",
             name={'en': "CSS Animations"},
             uri={'en': 'http://dev.w3.org/csswg/css-animations/'})
         url = reverse('specification-list')
@@ -216,7 +224,8 @@ class TestSpecificationViewSet(APITestCase):
             'next': None,
             'results': [{
                 'id': spec.id,
-                'key': 'CSS3 Animations',
+                'slug': 'css3_animations',
+                'mdn_key': 'CSS3 Animations',
                 'name': {'en': "CSS Animations"},
                 'uri': {'en': 'http://dev.w3.org/csswg/css-animations/'},
                 'maturity': maturity.pk,
@@ -229,7 +238,8 @@ class TestSpecificationViewSet(APITestCase):
         expected_json = {
             "specifications": [{
                 "id": str(spec.id),
-                "key": "CSS3 Animations",
+                "slug": "css3_animations",
+                "mdn_key": "CSS3 Animations",
                 "name": {"en": "CSS Animations"},
                 "uri": {"en": "http://dev.w3.org/csswg/css-animations/"},
                 "links": {
@@ -278,21 +288,23 @@ class TestSpecificationViewSet(APITestCase):
         actual_json = loads(response.content.decode('utf-8'))
         self.assertDataEqual(expected_json, actual_json)
 
-    def test_filter_by_key(self):
+    def test_filter_by_slug(self):
         maturity = self.create(
             Maturity, key="CR", name={'en': 'Candidate Recommendation'})
         spec = self.create(
-            Specification, maturity=maturity, key='Web Workers',
+            Specification, maturity=maturity, slug='web-workers',
+            mdn_key='Web Workers',
             name={'en': 'Web Workers'},
             uri={'en': 'http://dev.w3.org/html5/workers/'})
         self.create(
-            Specification, key='Websockets', maturity=maturity,
+            Specification, slug='websockets', mdn_key='Websockets',
+            maturity=maturity,
             name={'en': 'The WebSocket API'},
             uri={'en': 'http://dev.w3.org/html5/websockets/'})
         history_pk = spec.history.all()[0].pk
 
         response = self.client.get(
-            reverse('specification-list'), {'key': 'Web Workers'})
+            reverse('specification-list'), {'slug': 'web-workers'})
         self.assertEqual(200, response.status_code, response.data)
         expected_data = {
             'count': 1,
@@ -300,7 +312,43 @@ class TestSpecificationViewSet(APITestCase):
             'next': None,
             'results': [{
                 'id': spec.id,
-                'key': 'Web Workers',
+                'slug': 'web-workers',
+                'mdn_key': 'Web Workers',
+                'name': {'en': 'Web Workers'},
+                'uri': {'en': 'http://dev.w3.org/html5/workers/'},
+                'maturity': maturity.pk,
+                'sections': [],
+                'history': [history_pk],
+                'history_current': history_pk,
+            }]}
+        self.assertDataEqual(response.data, expected_data)
+
+    def test_filter_by_mdn_key(self):
+        maturity = self.create(
+            Maturity, key="CR", name={'en': 'Candidate Recommendation'})
+        spec = self.create(
+            Specification, maturity=maturity, slug='web-workers',
+            mdn_key='Web Workers',
+            name={'en': 'Web Workers'},
+            uri={'en': 'http://dev.w3.org/html5/workers/'})
+        self.create(
+            Specification, slug='websockets', mdn_key='Websockets',
+            maturity=maturity,
+            name={'en': 'The WebSocket API'},
+            uri={'en': 'http://dev.w3.org/html5/websockets/'})
+        history_pk = spec.history.all()[0].pk
+
+        response = self.client.get(
+            reverse('specification-list'), {'mdn_key': 'Web Workers'})
+        self.assertEqual(200, response.status_code, response.data)
+        expected_data = {
+            'count': 1,
+            'previous': None,
+            'next': None,
+            'results': [{
+                'id': spec.id,
+                'slug': 'web-workers',
+                'mdn_key': 'Web Workers',
                 'name': {'en': 'Web Workers'},
                 'uri': {'en': 'http://dev.w3.org/html5/workers/'},
                 'maturity': maturity.pk,

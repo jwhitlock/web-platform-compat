@@ -92,7 +92,7 @@ class SectionViewSet(ModelViewSet):
 class SpecificationViewSet(ModelViewSet):
     model = Specification
     serializer_class = SpecificationSerializer
-    filter_fields = ('key',)
+    filter_fields = ('slug', 'mdn_key')
 
 
 class SupportViewSet(ModelViewSet):
@@ -144,7 +144,7 @@ class HistoricalSectionViewSet(ReadOnlyModelViewSet):
 class HistoricalSpecificationViewSet(ReadOnlyModelViewSet):
     model = Specification.history.model
     serializer_class = HistoricalSpecificationSerializer
-    filter_fields = ('id', 'key')
+    filter_fields = ('id', 'slug', 'mdn_key')
 
 
 class HistoricalSupportViewSet(ReadOnlyModelViewSet):
@@ -267,7 +267,8 @@ class ViewFeaturesViewSet(ViewSet):
                 ("specifications", [
                     OrderedDict((
                         ("id", "62"),
-                        ("key", "HTML WHATWG"),
+                        ("slug", "html_whatwg"),
+                        ("mdn_key", "HTML WHATWG"),
                         ("name", {"en": "WHATWG HTML Living Standard"}),
                         ("uri", {
                             "en": (
@@ -281,7 +282,8 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "114"),
-                        ("key", "HTML5 W3C"),
+                        ("slug", "html5_w3c"),
+                        ("mdn_key", "HTML5 W3C"),
                         ("name", {"en": "HTML5"}),
                         ("uri", {"en": "http://www.w3.org/TR/html5/"}),
                         ("links", OrderedDict((
@@ -291,7 +293,8 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "576"),
-                        ("key", "HTML4.01"),
+                        ("slug", "html4_01"),
+                        ("mdn_key", "HTML4.01"),
                         ("name", {"en": "HTML 4.01 Specification"}),
                         ("uri", {"en": "http://www.w3.org/TR/html401/"}),
                         ("links", OrderedDict((

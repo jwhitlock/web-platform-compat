@@ -184,7 +184,8 @@ class TestCache(TestCase):
         maturity = self.create(
             Maturity, key="REC", name={'en': 'Recommendation'})
         spec = self.create(
-            Specification, key='MathML2', maturity=maturity,
+            Specification, slug='mathml2', mdn_key='MathML2',
+            maturity=maturity,
             name='{"en": "MathML 2.0"}',
             uri='{"en": "http://www.w3.org/TR/MathML2/"}')
         section = self.create(
@@ -227,7 +228,8 @@ class TestCache(TestCase):
         maturity = self.create(
             Maturity, key='WD', name={'en': 'Working Draft'})
         spec = self.create(
-            Specification, key='Push API', maturity=maturity,
+            Specification, slug='push_api', mdn_key='Push API',
+            maturity=maturity,
             name={'en': 'Push API'},
             uri={'en': (
                 'https://dvcs.w3.org/hg/push/raw-file/default/index.html')}
@@ -249,7 +251,7 @@ class TestCache(TestCase):
         maturity = self.create(
             Maturity, key='WD', name={'en': 'Working Draft'})
         spec = self.create(
-            Specification, key='Spec', maturity=maturity,
+            Specification, slug='spec', mdn_key='Spec', maturity=maturity,
             name={'en': 'Spec'},
             uri={'en': 'http://example.com/spec.html'})
         section = self.create(
@@ -263,13 +265,15 @@ class TestCache(TestCase):
         maturity = self.create(
             Maturity, key="REC", name={'en': 'Recommendation'})
         spec = self.create(
-            Specification, key='MathML2', maturity=maturity,
+            Specification, slug="mathml2", mdn_key='MathML2',
+            maturity=maturity,
             name='{"en": "MathML 2.0"}',
             uri='{"en": "http://www.w3.org/TR/MathML2/"}')
         out = self.cache.specification_v1_serializer(spec)
         expected = {
             'id': spec.id,
-            'key': 'MathML2',
+            'slug': 'mathml2',
+            'mdn_key': 'MathML2',
             'name': {"en": "MathML 2.0"},
             'uri': {"en": "http://www.w3.org/TR/MathML2/"},
             'sections:PKList': {
@@ -302,7 +306,7 @@ class TestCache(TestCase):
         maturity = self.create(
             Maturity, key='WD', name={'en': 'Working Draft'})
         spec = self.create(
-            Specification, key='Push API', maturity=maturity,
+            Specification, slug='push-api', maturity=maturity,
             name={'en': 'Push API'},
             uri={'en': (
                 'https://dvcs.w3.org/hg/push/raw-file/default/index.html')}
@@ -321,7 +325,7 @@ class TestCache(TestCase):
         maturity = self.create(
             Maturity, key='WD', name={'en': 'Working Draft'})
         spec = self.create(
-            Specification, key='Spec', maturity=maturity,
+            Specification, slug='spec', maturity=maturity,
             name={'en': 'Spec'},
             uri={'en': 'http://example.com/spec.html'})
         self.assertEqual(

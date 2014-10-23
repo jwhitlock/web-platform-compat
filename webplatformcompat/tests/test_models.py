@@ -52,8 +52,8 @@ class TestSection(unittest.TestCase):
 
 class TestSpecification(unittest.TestCase):
     def test_str(self):
-        specification = Specification(key='Spec')
-        self.assertEqual('Spec', str(specification))
+        specification = Specification(slug='spec')
+        self.assertEqual('spec', str(specification))
 
 
 class TestSupport(unittest.TestCase):

@@ -313,7 +313,7 @@ class TestFeatureViewSet(APITestCase):
         self.assertEqual([], feature.history.all()[0].sections)
 
         maturity = self.create(Maturity)
-        spec1 = self.create(Specification, key='Web Stuff', maturity=maturity)
+        spec1 = self.create(Specification, slug='web-stuff', maturity=maturity)
         section1 = self.create(
             Section, specification=spec1, name={'en': 'Section 1'})
         data = {
@@ -332,7 +332,8 @@ class TestFeatureViewSet(APITestCase):
             [section1.pk], list(feature.sections.values_list('pk', flat=True)))
         self.assertEqual([section1.pk], feature.history.all()[0].sections)
 
-        spec2 = self.create(Specification, key='Other Spec', maturity=maturity)
+        spec2 = self.create(
+            Specification, slug='other-spec', maturity=maturity)
         section2 = self.create(
             Section, specification=spec2, name={'en': 'Section 2'})
         data = {

@@ -22,7 +22,7 @@ class TestHistoricalSpecificationViewset(APITestCase):
         maturity = self.create(
             Maturity, key='M', name={'en': 'A Maturity'})
         spec = self.create(
-            Specification, maturity=maturity, key="Spec",
+            Specification, maturity=maturity, slug="spec",
             name={'en': 'A Specification'},
             uri={'en': 'http://example.com/spec.html'},
             _history_user=user,
@@ -41,7 +41,8 @@ class TestHistoricalSpecificationViewset(APITestCase):
             'specification': spec.pk,
             'specifications': {
                 'id': str(spec.id),
-                'key': 'Spec',
+                'slug': 'spec',
+                'mdn_key': None,
                 'name': {'en': 'A Specification'},
                 'uri': {'en': 'http://example.com/spec.html'},
                 'links': {
@@ -58,7 +59,8 @@ class TestHistoricalSpecificationViewset(APITestCase):
                 'event': 'created',
                 'specifications': {
                     'id': str(spec.id),
-                    'key': 'Spec',
+                    'slug': 'spec',
+                    'mdn_key': None,
                     'name': {'en': 'A Specification'},
                     'uri': {'en': 'http://example.com/spec.html'},
                     'links': {
@@ -94,10 +96,10 @@ class TestHistoricalSpecificationViewset(APITestCase):
         maturity = self.create(
             Maturity, key='M', name={'en': 'A Maturity'})
         self.create(
-            Specification, maturity=maturity, key='Other Spec',
+            Specification, maturity=maturity, slug='other_spec',
             name={'en': 'Other Spec'}, uri={'en': 'http://w3c.org/spec'})
         spec = self.create(
-            Specification, maturity=maturity, key="Spec",
+            Specification, maturity=maturity, slug="spec",
             name={'en': 'A Specification'},
             uri={'en': 'http://example.com/spec.html'},
             _history_user=user,
@@ -117,7 +119,88 @@ class TestHistoricalSpecificationViewset(APITestCase):
                 'specification': spec.pk,
                 'specifications': {
                     'id': str(spec.pk),
-                    'key': 'Spec',
+                    'slug': 'spec',
+                    'mdn_key': None,
+                    'name': {'en': 'A Specification'},
+                    'uri': {'en': 'http://example.com/spec.html'},
+                    'links': {
+                        'maturity': str(maturity.id),
+                        'history_current': str(history_pk),
+                    }
+                },
+            }]}
+        self.assertDataEqual(expected_data, response.data)
+
+    def test_filter_by_slug(self):
+        user = self.login_superuser()
+        maturity = self.create(
+            Maturity, key='M', name={'en': 'A Maturity'})
+        self.create(
+            Specification, maturity=maturity, slug='other_spec',
+            name={'en': 'Other Spec'}, uri={'en': 'http://w3c.org/spec'})
+        spec = self.create(
+            Specification, maturity=maturity, slug="spec",
+            name={'en': 'A Specification'},
+            uri={'en': 'http://example.com/spec.html'},
+            _history_user=user,
+            _history_date=datetime(2014, 10, 19, 11, 47, 22, 595634, UTC))
+        history_pk = spec.history.all()[0].pk
+        url = reverse('historicalspecification-list')
+        response = self.client.get(url, {'slug': 'spec'})
+        expected_data = {
+            'count': 1,
+            'previous': None,
+            'next': None,
+            'results': [{
+                'id': history_pk,
+                'date': spec._history_date,
+                'event': 'created',
+                'user': user.pk,
+                'specification': spec.pk,
+                'specifications': {
+                    'id': str(spec.pk),
+                    'slug': 'spec',
+                    'mdn_key': None,
+                    'name': {'en': 'A Specification'},
+                    'uri': {'en': 'http://example.com/spec.html'},
+                    'links': {
+                        'maturity': str(maturity.id),
+                        'history_current': str(history_pk),
+                    }
+                },
+            }]}
+        self.assertDataEqual(expected_data, response.data)
+
+    def test_filter_by_mdn_key(self):
+        user = self.login_superuser()
+        maturity = self.create(
+            Maturity, key='M', name={'en': 'A Maturity'})
+        self.create(
+            Specification, maturity=maturity, slug='other_spec',
+            name={'en': 'Other Spec'}, uri={'en': 'http://w3c.org/spec'})
+        spec = self.create(
+            Specification, maturity=maturity, slug="spec", mdn_key="Spec",
+            name={'en': 'A Specification'},
+            uri={'en': 'http://example.com/spec.html'},
+            _history_user=user,
+            _history_date=datetime(2014, 10, 19, 11, 47, 22, 595634, UTC))
+        history_pk = spec.history.all()[0].pk
+        url = reverse('historicalspecification-list')
+        response = self.client.get(url, {'mdn_key': 'Spec'})
+        expected_data = {
+            'count': 1,
+            'previous': None,
+            'next': None,
+            'results': [{
+                'id': history_pk,
+                'date': spec._history_date,
+                'event': 'created',
+                'user': user.pk,
+                'specification': spec.pk,
+                'specifications': {
+                    'id': str(spec.pk),
+                    'slug': 'spec',
+                    'mdn_key': 'Spec',
                     'name': {'en': 'A Specification'},
                     'uri': {'en': 'http://example.com/spec.html'},
                     'links': {

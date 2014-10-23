@@ -296,8 +296,8 @@ class Maturity(models.Model):
     '''Maturity of a specification document'''
     key = models.SlugField(
         help_text=(
-            "Unique, human-friendly key, sourced when possible from the"
-            " KumaScript macro Spec2"),
+            "Unique, human-friendly key, sourced from the KumaScript macro"
+            " Spec2"),
         unique=True)
     name = TranslatedField(
         help_text="Name of maturity")
@@ -314,11 +314,12 @@ class Maturity(models.Model):
 class Specification(models.Model):
     '''A Specification document'''
     maturity = models.ForeignKey('Maturity', related_name='specifications')
-    key = models.SlugField(
-        help_text=(
-            "Unique, human-friendly key, sourced when possible from the"
-            " KumaScript macro SpecName"),
+    slug = models.SlugField(
+        help_text="Unique, human-friendly slug",
         unique=True)
+    mdn_key = models.CharField(
+        help_text="Key used in the KumaScript macro SpecName",
+        max_length=30, blank=True)
     name = TranslatedField(
         help_text="Name of specification")
     uri = TranslatedField(
@@ -327,7 +328,7 @@ class Specification(models.Model):
     history = HistoricalRecords()
 
     def __str__(self):
-        return self.key
+        return self.slug
 
 
 @python_2_unicode_compatible

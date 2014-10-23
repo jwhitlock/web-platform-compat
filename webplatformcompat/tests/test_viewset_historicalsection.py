@@ -22,7 +22,7 @@ class TestHistoricalSectionViewset(APITestCase):
         maturity = self.create(
             Maturity, key='M', name={'en': 'A Maturity'})
         spec = self.create(
-            Specification, maturity=maturity, key="Spec",
+            Specification, maturity=maturity, slug="spec",
             name={'en': 'A Specification'},
             uri={'en': 'http://example.com/spec.html'})
         section = self.create(
@@ -97,10 +97,10 @@ class TestHistoricalSectionViewset(APITestCase):
         maturity = self.create(
             Maturity, key='M', name={'en': 'A Maturity'})
         self.create(
-            Specification, maturity=maturity, key='Other Spec',
+            Specification, maturity=maturity, slug='other_spec',
             name={'en': 'Other Spec'}, uri={'en': 'http://w3c.org/spec'})
         spec = self.create(
-            Specification, maturity=maturity, key="Spec",
+            Specification, maturity=maturity, slug="spec",
             name={'en': 'A Specification'},
             uri={'en': 'http://example.com/spec.html'})
         section = self.create(

@@ -18,7 +18,7 @@ class TestSectionViewSet(APITestCase):
         maturity = self.create(
             Maturity, key='REC', name={'en': 'Recommendation'})
         spec = self.create(
-            Specification, maturity=maturity, key="CSS1",
+            Specification, maturity=maturity, slug="css1",
             name={'en': "CSS Level&nbsp;1"},
             uri={'en': 'http://www.w3.org/TR/CSS1/'})
         section = self.create(
@@ -88,7 +88,8 @@ class TestSectionViewSet(APITestCase):
         maturity = self.create(
             Maturity, key='WD', name={'en': 'Working Draft'})
         spec = self.create(
-            Specification, maturity=maturity, key="CSS3 Animations",
+            Specification, maturity=maturity, slug='css3_animations',
+            mdn_key="CSS3 Animations",
             name={'en': "CSS Animations"},
             uri={'en': 'http://dev.w3.org/csswg/css-animations/'})
         section = self.create(

@@ -238,7 +238,8 @@ class Cache(BaseCache):
 
         return dict((
             ('id', obj.pk),
-            ('key', obj.key),
+            ('slug', obj.slug),
+            ('mdn_key', obj.mdn_key),
             ('name', obj.name),
             ('uri', obj.uri),
             self.field_to_json(
