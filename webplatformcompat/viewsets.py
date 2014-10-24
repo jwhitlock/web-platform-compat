@@ -91,6 +91,7 @@ class SectionViewSet(ModelViewSet):
 
 class SpecificationViewSet(ModelViewSet):
     model = Specification
+    queryset = Specification.objects.order_by('id')
     serializer_class = SpecificationSerializer
     filter_fields = ('slug', 'mdn_key')
 
@@ -102,6 +103,7 @@ class SupportViewSet(ModelViewSet):
 
 
 class VersionViewSet(ModelViewSet):
+    queryset = Version.objects.order_by('id')
     model = Version
     serializer_class = VersionSerializer
     filter_fields = ('browser', 'browser__slug', 'version', 'status')
