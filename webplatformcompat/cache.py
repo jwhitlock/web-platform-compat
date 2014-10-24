@@ -3,7 +3,8 @@
 from django.contrib.auth.models import User
 
 from drf_cached_reads.cache import BaseCache
-from .models import Browser, Feature, Support, Version
+from .models import (
+    Browser, Feature, Maturity, Section, Specification, Support, Version)
 
 
 class Cache(BaseCache):
@@ -28,7 +29,6 @@ class Cache(BaseCache):
         return dict((
             ('id', obj.pk),
             ('slug', obj.slug),
-            ('icon', obj.icon),
             ('name', obj.name),
             ('note', obj.note),
             self.field_to_json(
@@ -74,6 +74,10 @@ class Cache(BaseCache):
         if support_pks is None:
             support_pks = list(obj.supports.values_list('pk', flat=True))
 
+        section_pks = getattr(obj, '_section_pks', None)
+        if section_pks is None:
+            section_pks = list(obj.sections.values_list('pk', flat=True))
+
         return dict((
             ('id', obj.pk),
             ('slug', obj.slug),
@@ -83,6 +87,8 @@ class Cache(BaseCache):
             ('stable', obj.stable),
             ('obsolete', obj.obsolete),
             ('name', obj.name),
+            self.field_to_json(
+                'PKList', 'sections', model=Section, pks=section_pks),
             self.field_to_json(
                 'PKList', 'supports', model=Support, pks=support_pks),
             self.field_to_json(
@@ -108,6 +114,7 @@ class Cache(BaseCache):
                 obj.history.all().values_list('history_id', flat=True))
             obj._children_pks = list(obj.children.values_list('pk', flat=True))
             obj._support_pks = list(obj.supports.values_list('pk', flat=True))
+            obj._section_pks = list(obj.sections.values_list('pk', flat=True))
             return obj
 
     def feature_v1_invalidator(self, obj):
@@ -121,6 +128,148 @@ class Cache(BaseCache):
             list(obj.children.values_list('pk', flat=True)))
         pks += children_pks
         return [('Feature', pk, False) for pk in pks]
+
+    def maturity_v1_serializer(self, obj):
+        if not obj:
+            return None
+
+        history_pks = getattr(obj, '_history_pks', None)
+        if history_pks is None:
+            history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+
+        specification_pks = getattr(obj, '_specification_pks', None)
+        if specification_pks is None:
+            specification_pks = list(
+                obj.specifications.values_list('pk', flat=True))
+
+        return dict((
+            ('id', obj.pk),
+            ('slug', obj.slug),
+            ('name', obj.name),
+            self.field_to_json(
+                'PKList', 'specifications', model=Specification,
+                pks=specification_pks),
+            self.field_to_json(
+                'PKList', 'history', model=obj.history.model,
+                pks=history_pks),
+            self.field_to_json(
+                'PK', 'history_current', model=obj.history.model,
+                pk=history_pks[0]),
+        ))
+
+    def maturity_v1_loader(self, pk):
+        queryset = Maturity.objects
+        try:
+            obj = queryset.get(pk=pk)
+        except Maturity.DoesNotExist:
+            return None
+        else:
+            obj._specification_pks = list(
+                obj.specifications.values_list('pk', flat=True))
+            obj._history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+            return obj
+
+    def maturity_v1_invalidator(self, obj):
+        return []
+
+    def section_v1_serializer(self, obj):
+        if not obj:
+            return None
+
+        history_pks = getattr(obj, '_history_pks', None)
+        if history_pks is None:
+            history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+
+        feature_pks = getattr(obj, '_feature_pks', None)
+        if feature_pks is None:
+            feature_pks = list(
+                obj.features.all().values_list('pk', flat=True))
+
+        return dict((
+            ('id', obj.pk),
+            ('number', obj.number),
+            ('name', obj.name),
+            ('subpath', obj.subpath),
+            ('note', obj.note),
+            self.field_to_json(
+                'PK', 'specification', model=Specification,
+                pk=obj.specification_id),
+            self.field_to_json(
+                'PKList', 'features', model=Feature, pks=feature_pks),
+            self.field_to_json(
+                'PKList', 'history', model=obj.history.model,
+                pks=history_pks),
+            self.field_to_json(
+                'PK', 'history_current', model=obj.history.model,
+                pk=history_pks[0]),
+        ))
+
+    def section_v1_loader(self, pk):
+        queryset = Section.objects
+        try:
+            obj = queryset.get(pk=pk)
+        except Section.DoesNotExist:
+            return None
+        else:
+            obj._history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+            obj._feature_pks = list(
+                obj.features.values_list('pk', flat=True))
+            return obj
+
+    def section_v1_invalidator(self, obj):
+        return [('Specification', obj.specification_id, False)]
+
+    def specification_v1_serializer(self, obj):
+        if not obj:
+            return None
+
+        history_pks = getattr(obj, '_history_pks', None)
+        if history_pks is None:
+            history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+
+        section_pks = getattr(obj, '_section_pks', None)
+        if section_pks is None:
+            section_pks = list(
+                obj.sections.all().values_list('pk', flat=True))
+
+        return dict((
+            ('id', obj.pk),
+            ('slug', obj.slug),
+            ('mdn_key', obj.mdn_key),
+            ('name', obj.name),
+            ('uri', obj.uri),
+            self.field_to_json(
+                'PKList', 'sections', model=Section, pks=section_pks),
+            self.field_to_json(
+                'PK', 'maturity', model=Maturity, pk=obj.maturity_id),
+            self.field_to_json(
+                'PKList', 'history', model=obj.history.model,
+                pks=history_pks),
+            self.field_to_json(
+                'PK', 'history_current', model=obj.history.model,
+                pk=history_pks[0]),
+        ))
+
+    def specification_v1_loader(self, pk):
+        queryset = Specification.objects
+        try:
+            obj = queryset.get(pk=pk)
+        except Specification.DoesNotExist:
+            return None
+        else:
+            obj._history_pks = list(
+                obj.history.all().values_list('history_id', flat=True))
+            obj._section_pks = list(
+                obj.sections.values_list('pk', flat=True))
+            return obj
+
+    def specification_v1_invalidator(self, obj):
+        return [('Maturity', obj.maturity_id, False)]
 
     def support_v1_serializer(self, obj):
         if not obj:
@@ -140,6 +289,7 @@ class Cache(BaseCache):
             ('alternate_mandatory', obj.alternate_mandatory),
             ('requires_config', obj.requires_config),
             ('default_config', obj.default_config),
+            ('protected', obj.protected),
             ('note', obj.note),
             ('footnote', obj.footnote),
             self.field_to_json(
@@ -235,7 +385,6 @@ class Cache(BaseCache):
             ('browsers', {
                 'id': obj.id,
                 'slug': obj.slug,
-                'icon': obj.icon,
                 'name': obj.name,
                 'note': obj.note,
                 'history_current': obj.history_id

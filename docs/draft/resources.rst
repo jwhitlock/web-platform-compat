@@ -37,7 +37,6 @@ The **browsers** representation includes:
 * **attributes**
     - **id** *(server selected)* - Database ID
     - **slug** *(write-once)* - Unique, human-friendly slug
-    - **icon** - Secure URI (https) of representative icon
     - **name** *(localized)* - Browser name
     - **note** *(localized)* - Notes, intended for related data like
       OS, applicable device, engines, etc.
@@ -74,7 +73,6 @@ A sample response is:
         "browsers": [{
             "id": "1",
             "slug": "chrome",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/chrome.png",
             "name": {
                 "en": "Chrome"
             },
@@ -87,7 +85,6 @@ A sample response is:
         },{
             "id": "2",
             "slug": "firefox",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/firefox.png",
             "name": {
                 "en": "Firefox"
             },
@@ -102,7 +99,6 @@ A sample response is:
         },{
             "id": "3",
             "slug": "ie",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/ie.png",
             "name": {
                 "en": "Internet Explorer"
             },
@@ -115,7 +111,6 @@ A sample response is:
         },{
             "id": "4",
             "slug": "opera",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/opera.png",
             "name": {
                 "en": "Opera"
             },
@@ -128,7 +123,6 @@ A sample response is:
         },{
             "id": "5",
             "slug": "safari",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/safari.png",
             "name": {
                 "en": "Safari"
             },
@@ -143,7 +137,6 @@ A sample response is:
         },{
             "id": "6",
             "slug": "android",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/android.png",
             "name": {
                 "en": "Android"
             },
@@ -156,7 +149,6 @@ A sample response is:
         },{
             "id": "7",
             "slug": "firefox-mobile",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/firefox-mobile.png",
             "name": {
                 "en": "Firefox Mobile"
             },
@@ -171,7 +163,6 @@ A sample response is:
         },{
             "id": "8",
             "slug": "ie-phone",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/ie-phone.png",
             "name": {
                 "en": "IE Phone"
             },
@@ -184,7 +175,6 @@ A sample response is:
         },{
             "id": "9",
             "slug": "opera-mobile",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/opera-mobile.png",
             "name": {
                 "en": "Opera Mobile"
             },
@@ -197,7 +187,6 @@ A sample response is:
         },{
             "id": "10",
             "slug": "safari-mobile",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/safari-mobile.png",
             "name": {
                 "en": "Safari Mobile"
             },
@@ -259,7 +248,6 @@ A sample response is:
         "browsers": {
             "id": "2",
             "slug": "firefox",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/firefox.png",
             "name": {
                 "en": "Firefox"
             },
@@ -312,7 +300,6 @@ A sample response is:
         "browsers": [{
             "id": "2",
             "slug": "firefox",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/firefox.png",
             "name": {
                 "en": "Firefox"
             },
@@ -385,7 +372,6 @@ A sample response is:
         "browsers": {
             "id": "15",
             "slug": "amazon-silk-mobile",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/amazon-silk-mobile.png",
             "name": {
                 "en": "Amazon Silk Mobile"
             },
@@ -459,7 +445,6 @@ To update a **browser**:
         "browsers": {
             "id": "3",
             "slug": "ie",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/ie.png",
             "name": {
                 "en": "IE"
             },
@@ -479,7 +464,6 @@ A sample response is:
         "browsers": {
             "id": "3",
             "slug": "ie",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/ie.png",
             "name": {
                 "en": "IE"
             },
@@ -541,7 +525,6 @@ A sample response is:
         "browsers": {
             "id": "3",
             "slug": "ie",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/ie.png",
             "name": {
                 "en": "M$ Internet Exploder 💩"
             },
@@ -600,7 +583,6 @@ A sample response is:
         "browsers": {
             "id": "3",
             "slug": "ie",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/ie.png",
             "name": {
                 "en": "M$ Internet Exploder 💩"
             },
@@ -664,7 +646,6 @@ A sample response is:
         "browsers": {
             "id": "3",
             "slug": "ie",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/ie.png",
             "name": {
                 "en": "Internet Explorer"
             },
@@ -734,7 +715,6 @@ A sample response is:
         "browsers": {
             "id": "2",
             "slug": "firefox",
-            "icon": "https://cdn.browsersupports.org/media/img/browsers/firefox.png",
             "name": {
                 "en": "Firefox"
             },
@@ -1048,15 +1028,18 @@ The **support** representation includes:
       ``"media.peerconnection.enabled=on"``
     - **default_config** - The configuration string in the shipping
       browser, such as ``"media.peerconnection.enabled=off"``
+    - **protected** - True if the feature requires additional steps to enable
+      in order to protect the user's security or privacy, such as geolocation
+      and the Bluetooth API.
     - **note** *(localized)* - Short note on support, designed for inline
       display, max 20 characters
     - **footnote** *(localized)* - Long note on support, designed for
       display after a compatibility table, MDN wiki format
 * **links**
-    - **version** *(one)* - The associated version_.  Can
-      be changed by the user.
-    - **feature** *(one)* - The associated feature_.  Can be changed by
-      the user.
+    - **version** *(one)* - The associated version_.  Cannot be changed by
+      the user after creation.
+    - **feature** *(one)* - The associated feature_.  Cannot be changed by
+      the user after creation.  The version and feature combo must be unique.
     - **history_current** *(one)* - Current
       historical_supports_.  Can be changed to a valid
       **history** to revert to that version.
@@ -1091,6 +1074,7 @@ A sample response is:
             "alternate_name_mandatory": false,
             "requires_config": null,
             "default_config": null,
+            "protected": false,
             "note": null,
             "footnote": null,
             "links": {
@@ -1129,8 +1113,8 @@ The **specification** representation includes:
 
 * **attributes**
     - **id** *(server selected)* - Database ID
-    - **mdn_key** - The key for the KumaScript macros SpecName_ and Spec2_
-      used as a data source.
+    - **slug** - Unique, human-friendly key
+    - **mdn_key** - Key used in the KumaScript macros SpecName_ and Spec2_.
     - **name** *(localized)* - Specification name
     - **uri** *(localized)* - Specification URI, without subpath and anchor
 * **links**
@@ -1159,6 +1143,7 @@ A sample response is:
     {
         "specifications": {
             "id": "273",
+            "slug": "CSS1",
             "mdn_key": "CSS1",
             "name": {
                 "en": "Cascading Style Sheets, level 1",
@@ -1194,10 +1179,11 @@ The **section** representation includes:
 
 * **attributes**
     - **id** *(server selected)* - Database ID
+    - **number** *(optional)* - The section number
     - **name** *(localized)* - Section name
-    - **subpath** *(localized)* - A subpage (possibly with an #anchor) to get
-      to the subsection in the doc.  Can be empty string.
-    - **note** *(localized)* - Notes for this section
+    - **subpath** *(localized, optional)* - A subpage (possibly with an
+      #anchor) to get to the subsection in the doc.  Can be empty string.
+    - **note** *(localized, optional)* - Notes for this section
 * **links**
     - **specification** *(one)* - The specification_.  Can be changed by
       the user.
@@ -1224,6 +1210,7 @@ A sample response is:
     {
         "sections": {
             "id": "792",
+            "number": "9.2.4",
             "name": {
                 "en": "'display'"
             },
@@ -1259,7 +1246,8 @@ The **maturity** representation includes:
 
 * **attributes**
     - **id** *(server selected)* - Database ID
-    - **mdn_key** - The value for this status in the KumaScript macro Spec2_
+    - **slug** - A human-friendly identifier for this maturity.  When applicabile,
+      it match the key in the KumaScript macro Spec2_
     - **name** *(localized)* - Status name
 * **links**
     - **specifications** *(many)* - Associated specifications_.  In ID order,
@@ -1285,7 +1273,7 @@ A sample response is:
     {
         "maturities": {
             "id": "49",
-            "mdn_key": "REC",
+            "slug": "REC",
             "name": {
                 "en": "Recommendation",
                 "jp": "勧告"

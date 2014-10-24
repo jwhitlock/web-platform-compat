@@ -92,12 +92,34 @@ A **historical_features** resource represents the state of a feature_ at a point
 in time, and who is responsible for that representation.  See
 historical_browsers_ and features_ for an idea of the represention.
 
+Historical Sections
+-------------------
+
+A **historical_sections** resource represents the state of a section_ at a point
+in time, and who is responsible for that representation.  See
+historical_browsers_ and sections_ for an idea of the represention.
+
+Historical Specifications
+-------------------------
+
+A **historical_specifications** resource represents the state of a specification_ at a point
+in time, and who is responsible for that representation.  See
+historical_browsers_ and specifications_ for an idea of the represention.
+
 Historical Supports
 -------------------
 
-A **historical_supports** resource represents a state of a support_ at a point
+A **historical_supports** resource represents the state of a support_ at a point
 in time, and who is responsible for that representation.  See
 historical_browsers_ and supports_ for an idea of the represention.
+
+Historical Maturities
+---------------------
+
+A **historical_maturities** resource represents the state of a maturity_ at a point
+in time, and who is responsible for that representation.  See
+historical_browsers_ and maturities_ for an idea of the represention.
+
 
 .. _historical_browser: `Historical Browsers`_
 .. _historical_browsers: `Historical Browsers`_
@@ -109,6 +131,12 @@ historical_browsers_ and supports_ for an idea of the represention.
 .. _supports: resources.html#supports
 .. _feature: resources.html#features
 .. _features: resources.html#features
+.. _maturity: resources.html#maturities
+.. _maturities: resources.html#maturities
+.. _specification: resources.html#specifications
+.. _specifications: resources.html#specifications
+.. _section: resources.html#sections
+.. _sections: resources.html#sections
 
 .. _changeset: change-control#changesets
 

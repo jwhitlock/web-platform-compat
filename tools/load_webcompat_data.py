@@ -417,7 +417,7 @@ def upload_version(session, version_id, parsed_data, api_ids):
 
     Keyword Arguments:
     session - authenticated session to use for uploads
-    version_id - ID of the browser in parsed_data['versions']
+    version_id - ID of the version in parsed_data['versions']
     parsed_data - dictionary of all the parsed data
     api_ids - dictionary of IDs of uploaded instances
 
@@ -452,7 +452,7 @@ def upload_feature(session, feature_id, parsed_data, api_ids):
 
     Keyword Arguments:
     session - authenticated session to use for uploads
-    version_id - ID of the browser in parsed_data['versions']
+    feature_id - ID of the feature in parsed_data['features']
     parsed_data - dictionary of all the parsed data
     api_ids - dictionary of IDs of uploaded instances
 
@@ -490,7 +490,7 @@ def upload_support(session, support_id, parsed_data, api_ids):
 
     Keyword Arguments:
     session - authenticated session to use for uploads
-    version_id - ID of the browser in parsed_data['versions']
+    support_id - ID of the support in parsed_data['supports']
     parsed_data - dictionary of all the parsed data
     api_ids - dictionary of IDs of uploaded instances
 

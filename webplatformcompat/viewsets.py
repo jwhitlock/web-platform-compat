@@ -21,13 +21,18 @@ from drf_cached_reads.mixins import CachedViewMixin as BaseCacheViewMixin
 
 from .cache import Cache
 from .mixins import PartialPutMixin
-from .models import Browser, Feature, Support, Version
+from .models import (
+    Browser, Feature, Maturity, Section, Specification, Support, Version)
 from .parsers import JsonApiParser
 from .renderers import JsonApiRenderer
 from .serializers import (
-    BrowserSerializer, FeatureSerializer, SupportSerializer, VersionSerializer,
+    BrowserSerializer, FeatureSerializer, MaturitySerializer,
+    SectionSerializer, SpecificationSerializer, SupportSerializer,
+    VersionSerializer,
     HistoricalBrowserSerializer, HistoricalFeatureSerializer,
-    HistoricalSupportSerializer, HistoricalVersionSerializer,
+    HistoricalMaturitySerializer, HistoricalSectionSerializer,
+    HistoricalSpecificationSerializer, HistoricalSupportSerializer,
+    HistoricalVersionSerializer,
     UserSerializer)
 
 
@@ -73,6 +78,24 @@ class FeatureViewSet(ModelViewSet):
         return qs
 
 
+class MaturityViewSet(ModelViewSet):
+    model = Maturity
+    serializer_class = MaturitySerializer
+    filter_fields = ('slug',)
+
+
+class SectionViewSet(ModelViewSet):
+    model = Section
+    serializer_class = SectionSerializer
+
+
+class SpecificationViewSet(ModelViewSet):
+    model = Specification
+    queryset = Specification.objects.order_by('id')
+    serializer_class = SpecificationSerializer
+    filter_fields = ('slug', 'mdn_key')
+
+
 class SupportViewSet(ModelViewSet):
     model = Support
     serializer_class = SupportSerializer
@@ -80,6 +103,7 @@ class SupportViewSet(ModelViewSet):
 
 
 class VersionViewSet(ModelViewSet):
+    queryset = Version.objects.order_by('id')
     model = Version
     serializer_class = VersionSerializer
     filter_fields = ('browser', 'browser__slug', 'version', 'status')
@@ -105,6 +129,24 @@ class HistoricalFeatureViewSet(ReadOnlyModelViewSet):
     model = Feature.history.model
     serializer_class = HistoricalFeatureSerializer
     filter_fields = ('id', 'slug')
+
+
+class HistoricalMaturityViewSet(ReadOnlyModelViewSet):
+    model = Maturity.history.model
+    serializer_class = HistoricalMaturitySerializer
+    filter_fields = ('id', 'slug')
+
+
+class HistoricalSectionViewSet(ReadOnlyModelViewSet):
+    model = Section.history.model
+    serializer_class = HistoricalSectionSerializer
+    filter_fields = ('id',)
+
+
+class HistoricalSpecificationViewSet(ReadOnlyModelViewSet):
+    model = Specification.history.model
+    serializer_class = HistoricalSpecificationSerializer
+    filter_fields = ('id', 'slug', 'mdn_key')
 
 
 class HistoricalSupportViewSet(ReadOnlyModelViewSet):
@@ -192,6 +234,7 @@ class ViewFeaturesViewSet(ViewSet):
                 ("sections", [
                     OrderedDict((
                         ("id", "746"),
+                        ("number", "4.3.10"),
                         ("name", {"en": "The address element"}),
                         ("subpath",
                          {"en": "sections.html#the-address-element"}),
@@ -204,6 +247,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "421"),
+                        ("number", "4.3.9"),
                         ("name", {"en": "The address element"}),
                         ("subpath",
                          {"en": "sections.html#the-address-element"}),
@@ -215,6 +259,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "70"),
+                        ("number", "7.5.6"),
                         ("name", {"en": "The ADDRESS element"}),
                         ("subpath", {"en": "struct/global.html#h-7.5.6"}),
                         ("notes", None),
@@ -227,7 +272,8 @@ class ViewFeaturesViewSet(ViewSet):
                 ("specifications", [
                     OrderedDict((
                         ("id", "62"),
-                        ("kumu-key", "HTML WHATWG"),
+                        ("slug", "html_whatwg"),
+                        ("mdn_key", "HTML WHATWG"),
                         ("name", {"en": "WHATWG HTML Living Standard"}),
                         ("uri", {
                             "en": (
@@ -241,7 +287,8 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "114"),
-                        ("kumu-key", "HTML5 W3C"),
+                        ("slug", "html5_w3c"),
+                        ("mdn_key", "HTML5 W3C"),
                         ("name", {"en": "HTML5"}),
                         ("uri", {"en": "http://www.w3.org/TR/html5/"}),
                         ("links", OrderedDict((
@@ -251,7 +298,8 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "576"),
-                        ("kumu-key", "HTML4.01"),
+                        ("slug", "html4_01"),
+                        ("mdn_key", "HTML4.01"),
                         ("name", {"en": "HTML 4.01 Specification"}),
                         ("uri", {"en": "http://www.w3.org/TR/html401/"}),
                         ("links", OrderedDict((
@@ -263,13 +311,13 @@ class ViewFeaturesViewSet(ViewSet):
                 ("maturities", [
                     OrderedDict((
                         ("id", "23"),
-                        ("mdn_key", "Living"),
+                        ("slug", "Living"),
                         ("name", {"en": "Living Standard"}),
                         ("links", {"specifications": ["62"]}),
                     )),
                     OrderedDict((
                         ("id", "49"),
-                        ("mdn_key", "REC"),
+                        ("slug", "REC"),
                         ("name", OrderedDict((
                             ("en", "Recommendation"),
                             ("jp", "勧告"),
@@ -281,7 +329,7 @@ class ViewFeaturesViewSet(ViewSet):
                     )),
                     OrderedDict((
                         ("id", "52"),
-                        ("mdn_key", "CR"),
+                        ("slug", "CR"),
                         ("name", OrderedDict((
                             ("en", "Candidate Recommendation"),
                             ("ja", "勧告候補"),
@@ -301,6 +349,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -319,6 +368,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -337,6 +387,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -355,6 +406,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -373,6 +425,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -391,6 +444,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -409,6 +463,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -427,6 +482,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -445,6 +501,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -463,6 +520,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -481,6 +539,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -499,6 +558,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -517,6 +577,7 @@ class ViewFeaturesViewSet(ViewSet):
                         ("alternate_name_mandatory", False),
                         ("requires_config", None),
                         ("default_config", None),
+                        ("protected", False),
                         ("note", None),
                         ("footnote", None),
                         ("links", OrderedDict((
@@ -699,9 +760,6 @@ class ViewFeaturesViewSet(ViewSet):
                     OrderedDict((
                         ("id", "1"),
                         ("slug", "chrome"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/chrome.png")),
                         ("name", OrderedDict((
                             ("en", "Chrome"),
                         ))),
@@ -714,9 +772,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "2"),
                         ("slug", "firefox"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/firefox.png")),
                         ("name", OrderedDict((
                             ("en", "Firefox"),
                         ))),
@@ -731,9 +786,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "3"),
                         ("slug", "ie"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/ie.png")),
                         ("name", OrderedDict((
                             ("en", "Internet Explorer"),
                         ))),
@@ -746,9 +798,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "4"),
                         ("slug", "opera"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/opera.png")),
                         ("name", OrderedDict((
                             ("en", "Opera"),
                         ))),
@@ -761,9 +810,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "5"),
                         ("slug", "safari"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/safari.png")),
                         ("name", OrderedDict((
                             ("en", "Safari"),
                         ))),
@@ -778,9 +824,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "6"),
                         ("slug", "android"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/android.png")),
                         ("name", OrderedDict((
                             ("en", "Android"),
                         ))),
@@ -793,9 +836,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "7"),
                         ("slug", "firefox-mobile"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/firefox-mobile.png")),
                         ("name", OrderedDict((
                             ("en", "Firefox Mobile"),
                         ))),
@@ -810,9 +850,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "8"),
                         ("slug", "ie-phone"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/ie-phone.png")),
                         ("name", OrderedDict((
                             ("en", "IE Phone"),
                         ))),
@@ -825,9 +862,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "9"),
                         ("slug", "opera-mobile"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/opera-mobile.png")),
                         ("name", OrderedDict((
                             ("en", "Opera Mobile"),
                         ))),
@@ -840,9 +874,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "10"),
                         ("slug", "safari-mobile"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/safari-mobile.png")),
                         ("name", OrderedDict((
                             ("en", "Safari Mobile"),
                         ))),
@@ -855,9 +886,6 @@ class ViewFeaturesViewSet(ViewSet):
                     )), OrderedDict((
                         ("id", "11"),
                         ("slug", "opera-mini"),
-                        ("icon", (
-                            "https://cdn.browsersupports.org/media/img/"
-                            "browsers/opera-mini.png")),
                         ("name", OrderedDict((
                             ("en", "Opera Mini"),
                         ))),

@@ -21,3 +21,15 @@ Install in Heroku
 4. See current config with ``heroku config``, and customize with environment
    variables using ``heroku config:set`` (see ``wpcsite/settings.py``)
 5. Add superuser account (``heroku run ./manage.py createsuperuser``)
+
+
+Load Data
+---------
+To load sample data:
+
+1. Run w/ instance cache (``USE_INSTANCE_CACHE=0 ./manage.py runserver``)
+2. Load subset of webplatform_ data (``tools/load_webcompat_data.py``) or full
+   set of data (``tools/load_webcompat.py --all-data``)
+3. Load specification data (``tools/load_spec_data.py``)
+
+.. _webplatform: https://github.com/webplatform/compatibility-data

@@ -12,8 +12,9 @@ from rest_framework.serializers import (
 from . import fields
 from .drf_fields import (
     CurrentHistoryField, HistoricalObjectField, HistoryField,
-    MPTTRelationField, OptionalCharField, SecureURLField, TranslatedTextField)
-from .models import Browser, Feature, Support, Version
+    MPTTRelationField, OptionalCharField, TranslatedTextField)
+from .models import (
+    Browser, Feature, Maturity, Section, Specification, Support, Version)
 
 
 #
@@ -52,7 +53,6 @@ class FieldMapMixin(object):
     """Automatically handle fields used by this project"""
     field_mapping = ModelSerializer.field_mapping
     field_mapping[fields.TranslatedField] = TranslatedTextField
-    field_mapping[fields.SecureURLField] = SecureURLField
     field_mapping[CharField] = OptionalCharField
 
     def get_field(self, model_field):
@@ -133,8 +133,8 @@ class BrowserSerializer(HistoricalModelSerializer):
     class Meta:
         model = Browser
         fields = (
-            'id', 'slug', 'icon', 'name', 'note', 'history',
-            'history_current', 'versions')
+            'id', 'slug', 'name', 'note', 'history', 'history_current',
+            'versions')
         update_only_fields = (
             'history', 'history_current', 'versions')
         write_once_fields = ('slug',)
@@ -150,8 +150,53 @@ class FeatureSerializer(HistoricalModelSerializer):
         fields = (
             'id', 'slug', 'mdn_path', 'experimental', 'standardized',
             'stable', 'obsolete', 'name',
-            'parent', 'children', 'supports', 'history_current', 'history')
+            'sections', 'supports', 'parent', 'children',
+            'history_current', 'history')
         read_only_fields = ('supports',)
+
+
+class MaturitySerializer(HistoricalModelSerializer):
+    """Specification Maturity Serializer"""
+
+    class Meta:
+        model = Maturity
+        fields = (
+            'id', 'slug', 'name', 'specifications',
+            'history_current', 'history')
+
+
+class SectionSerializer(HistoricalModelSerializer):
+    """Specification Section Serializer"""
+
+    class Meta:
+        model = Section
+        fields = (
+            'id', 'number', 'name', 'subpath', 'note', 'specification',
+            'features', 'history_current', 'history')
+
+
+class SpecificationSerializer(HistoricalModelSerializer):
+    """Specification Serializer"""
+
+    def save_object(self, obj, **kwargs):
+        if 'sections' in getattr(obj, '_related_data', {}):
+            sections = obj._related_data.pop('sections')
+        else:
+            sections = None
+
+        super(SpecificationSerializer, self).save_object(obj, **kwargs)
+
+        if sections:
+            s_pks = [s.pk for s in sections]
+            current_order = obj.get_section_order()
+            if s_pks != current_order:
+                obj.set_section_order(s_pks)
+
+    class Meta:
+        model = Specification
+        fields = (
+            'id', 'slug', 'mdn_key', 'name', 'uri', 'maturity', 'sections',
+            'history_current', 'history')
 
 
 class SupportSerializer(HistoricalModelSerializer):
@@ -162,8 +207,8 @@ class SupportSerializer(HistoricalModelSerializer):
         fields = (
             'id', 'version', 'feature', 'support', 'prefix',
             'prefix_mandatory', 'alternate_name', 'alternate_mandatory',
-            'requires_config', 'default_config', 'note', 'footnote',
-            'history_current', 'history')
+            'requires_config', 'default_config', 'protected', 'note',
+            'footnote', 'history_current', 'history')
 
 
 class VersionSerializer(HistoricalModelSerializer):
@@ -197,6 +242,8 @@ class HistoricalOptions(ModelSerializer._options_class):
     def __init__(self, meta):
         super(HistoricalOptions, self).__init__(meta)
         self.archive_link_fields = getattr(meta, 'archive_link_fields', [])
+        self.archive_cached_links_fields = getattr(
+            meta, 'archive_cached_links_fields', [])
 
 
 class HistoricalObjectSerializer(ModelSerializer):
@@ -223,11 +270,19 @@ class HistoricalObjectSerializer(ModelSerializer):
         data['id'] = str(data['id'])
 
         data['links'] = type(data)()  # Use dict-like type of serializer.data
+
+        # Archived link fields are to-one relations
         for field in self.opts.archive_link_fields:
             del data[field]
             value = getattr(obj, field + '_id')
             if value is not None:
                 value = str(value)
+            data['links'][field] = value
+
+        # Archived cached links fields are a list of primary keys
+        for field in self.opts.archive_cached_links_fields:
+            value = getattr(obj, field)
+            value = [str(x) for x in value]
             data['links'][field] = value
         data['links']['history_current'] = str(obj.history_id)
 
@@ -256,7 +311,9 @@ class HistoricalFeatureSerializer(HistoricalObjectSerializer):
 
     class ArchivedObject(FeatureSerializer):
         class Meta(FeatureSerializer.Meta):
-            exclude = ('history_current', 'history', 'supports', 'children')
+            exclude = (
+                'history_current', 'history', 'sections', 'supports',
+                'children')
 
     feature = HistoricalObjectField()
     features = SerializerMethodField('get_archive')
@@ -266,6 +323,54 @@ class HistoricalFeatureSerializer(HistoricalObjectSerializer):
         fields = HistoricalObjectSerializer.Meta.fields + (
             'feature', 'features')
         archive_link_fields = ('parent',)
+        archive_cached_links_fields = ('sections',)
+
+
+class HistoricalMaturitySerializer(HistoricalObjectSerializer):
+
+    class ArchivedObject(MaturitySerializer):
+        class Meta(MaturitySerializer.Meta):
+            exclude = ('specifications', 'history_current', 'history')
+
+    maturity = HistoricalObjectField()
+    maturities = SerializerMethodField('get_archive')
+
+    class Meta(HistoricalObjectSerializer.Meta):
+        model = Maturity.history.model
+        fields = HistoricalObjectSerializer.Meta.fields + (
+            'maturity', 'maturities')
+
+
+class HistoricalSectionSerializer(HistoricalObjectSerializer):
+
+    class ArchivedObject(SectionSerializer):
+        class Meta(SectionSerializer.Meta):
+            exclude = ('features', 'history_current', 'history')
+
+    section = HistoricalObjectField()
+    sections = SerializerMethodField('get_archive')
+
+    class Meta(HistoricalObjectSerializer.Meta):
+        model = Section.history.model
+        fields = HistoricalObjectSerializer.Meta.fields + (
+            'section', 'sections')
+        archive_link_fields = ('specification',)
+
+
+class HistoricalSpecificationSerializer(HistoricalObjectSerializer):
+
+    class ArchivedObject(SpecificationSerializer):
+        class Meta(SpecificationSerializer.Meta):
+            exclude = ('sections', 'history_current', 'history')
+
+    specification = HistoricalObjectField()
+    specifications = SerializerMethodField('get_archive')
+
+    class Meta(HistoricalObjectSerializer.Meta):
+        model = Specification.history.model
+        fields = HistoricalObjectSerializer.Meta.fields + (
+            'specification', 'specifications')
+        archive_link_fields = ('maturity',)
 
 
 class HistoricalSupportSerializer(HistoricalObjectSerializer):

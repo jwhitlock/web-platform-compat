@@ -10,7 +10,7 @@ from pytz import UTC
 
 from django.core.urlresolvers import reverse
 
-from webplatformcompat.models import Feature
+from webplatformcompat.models import Feature, Maturity, Section, Specification
 
 from .base import APITestCase
 
@@ -45,6 +45,7 @@ class TestHistoricalFeatureViewset(APITestCase):
                 'name': {'en': 'The Feature'},
                 'links': {
                     'parent': None,
+                    'sections': [],
                     'history_current': str(history.id),
                 }
             },
@@ -66,6 +67,7 @@ class TestHistoricalFeatureViewset(APITestCase):
                     'name': {'en': 'The Feature'},
                     'links': {
                         'parent': None,
+                        'sections': [],
                         'history_current': str(history.id),
                     }
                 },
@@ -91,6 +93,47 @@ class TestHistoricalFeatureViewset(APITestCase):
         }
         actual_json = loads(response.content.decode('utf-8'))
         self.assertDataEqual(expected_json, actual_json)
+
+    def test_get_with_sections(self):
+        user = self.login_superuser()
+        feature = self.create(
+            Feature, slug="the_feature", name={"en": "The Feature"},
+            _history_user=user,
+            _history_date=datetime(2014, 10, 1, 14, 25, 14, 955097, UTC))
+        maturity = self.create(Maturity, slug='Bar')
+        specification = self.create(Specification, maturity=maturity)
+        section = self.create(Section, specification=specification)
+        feature.sections.add(section)
+        feature.save()
+        self.assertEqual(2, len(feature.history.all()))
+        history = feature.history.all()[0]
+        url = reverse('historicalfeature-detail', kwargs={'pk': history.pk})
+        response = self.client.get(url, HTTP_ACCEPT="application/vnd.api+json")
+        self.assertEqual(200, response.status_code, response.data)
+
+        expected_data = {
+            'id': history.history_id,
+            'date': feature._history_date,
+            'event': 'changed',
+            'user': user.pk,
+            'feature': feature.pk,
+            'features': {
+                'id': str(feature.id),
+                'slug': 'the_feature',
+                'mdn_path': None,
+                'experimental': False,
+                'standardized': True,
+                'stable': True,
+                'obsolete': False,
+                'name': {'en': 'The Feature'},
+                'links': {
+                    'parent': None,
+                    'sections': [str(section.pk)],
+                    'history_current': str(history.history_id),
+                }
+            },
+        }
+        self.assertDataEqual(expected_data, response.data)
 
     def test_filter_by_id(self):
         user = self.login_superuser()
@@ -123,6 +166,7 @@ class TestHistoricalFeatureViewset(APITestCase):
                     'name': None,
                     'links': {
                         'parent': str(parent.id),
+                        'sections': [],
                         'history_current': str(history.id),
                     }
                 },

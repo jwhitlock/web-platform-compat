@@ -8,7 +8,8 @@ from pytz import UTC
 
 from django.contrib.auth.models import User
 
-from webplatformcompat.models import Browser, Feature, Support, Version
+from webplatformcompat.models import (
+    Browser, Feature, Maturity, Section, Specification, Support, Version)
 from webplatformcompat.cache import Cache
 
 from .base import TestCase
@@ -24,7 +25,6 @@ class TestCache(TestCase):
         expected = {
             'id': browser.id,
             'slug': u'',
-            'icon': u'',
             'name': {},
             'note': {},
             'history:PKList': {
@@ -82,6 +82,11 @@ class TestCache(TestCase):
                 'model': 'support',
                 'pks': [],
             },
+            'sections:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'section',
+                'pks': [],
+            },
             'parent:PK': {
                 'app': u'webplatformcompat',
                 'model': 'feature',
@@ -110,7 +115,7 @@ class TestCache(TestCase):
 
     def test_feature_v1_loader(self):
         feature = self.create(Feature)
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             obj = self.cache.feature_v1_loader(feature.pk)
         with self.assertNumQueries(0):
             serialized = self.cache.feature_v1_serializer(obj)
@@ -130,45 +135,203 @@ class TestCache(TestCase):
         expected = [('Feature', parent.id, False)]
         self.assertEqual(expected, self.cache.feature_v1_invalidator(feature))
 
-    def test_support_v1_serializer(self):
-        browser = self.create(Browser)
-        version = self.create(Version, browser=browser, version='1.0')
-        feature = self.create(Feature, slug='feature')
-        support = self.create(Support, version=version, feature=feature)
-        out = self.cache.support_v1_serializer(support)
+    def test_maturity_v1_serializer(self):
+        maturity = self.create(
+            Maturity, slug='REC', name='{"en-US": "Recommendation"}')
+        out = self.cache.maturity_v1_serializer(maturity)
         expected = {
-            'id': support.id,
-            "support": u"yes",
-            "prefix": u"",
-            "prefix_mandatory": False,
-            "alternate_name": u"",
-            "alternate_mandatory": False,
-            "requires_config": u"",
-            "default_config": u"",
-            "note": {},
-            "footnote": {},
-            'version:PK': {
+            'id': maturity.id,
+            'slug': 'REC',
+            'name': {"en-US": "Recommendation"},
+            'specifications:PKList': {
                 'app': u'webplatformcompat',
-                'model': 'version',
-                'pk': version.id,
-            },
-            'feature:PK': {
-                'app': u'webplatformcompat',
-                'model': 'feature',
-                'pk': feature.id,
+                'model': 'specification',
+                'pks': [],
             },
             'history:PKList': {
                 'app': u'webplatformcompat',
-                'model': 'historicalsupport',
+                'model': 'historicalmaturity',
                 'pks': [1],
             },
             'history_current:PK': {
                 'app': u'webplatformcompat',
-                'model': 'historicalsupport',
+                'model': 'historicalmaturity',
                 'pk': 1,
             },
         }
         self.assertEqual(out, expected)
+
+    def test_maturity_v1_serializer_empty(self):
+        self.assertEqual(None, self.cache.maturity_v1_serializer(None))
+
+    def test_maturity_v1_loader(self):
+        maturity = self.create(Maturity)
+        with self.assertNumQueries(3):
+            obj = self.cache.maturity_v1_loader(maturity.pk)
+        with self.assertNumQueries(0):
+            serialized = self.cache.maturity_v1_serializer(obj)
+        self.assertTrue(serialized)
+
+    def test_maturity_v1_loader_not_exist(self):
+        self.assertFalse(Maturity.objects.filter(pk=666).exists())
+        self.assertIsNone(self.cache.maturity_v1_loader(666))
+
+    def test_maturity_v1_invalidator(self):
+        maturity = self.create(Maturity)
+        self.assertEqual([], self.cache.maturity_v1_invalidator(maturity))
+
+    def test_section_v1_serializer(self):
+        maturity = self.create(
+            Maturity, slug="REC", name={'en': 'Recommendation'})
+        spec = self.create(
+            Specification, slug='mathml2', mdn_key='MathML2',
+            maturity=maturity,
+            name='{"en": "MathML 2.0"}',
+            uri='{"en": "http://www.w3.org/TR/MathML2/"}')
+        section = self.create(
+            Section, specification=spec, number="3.2.4",
+            name={'en': 'Number (mn)'},
+            subpath={'en': 'chapter3.html#presm.mn'})
+        out = self.cache.section_v1_serializer(section)
+        expected = {
+            'id': section.id,
+            'number': '3.2.4',
+            'name': {"en": "Number (mn)"},
+            'subpath': {'en': 'chapter3.html#presm.mn'},
+            'note': {},
+            'specification:PK': {
+                'app': u'webplatformcompat',
+                'model': 'specification',
+                'pk': spec.pk,
+            },
+            'features:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'feature',
+                'pks': [],
+            },
+            'history:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'historicalsection',
+                'pks': [1],
+            },
+            'history_current:PK': {
+                'app': u'webplatformcompat',
+                'model': 'historicalsection',
+                'pk': 1,
+            },
+        }
+        self.assertEqual(out, expected)
+
+    def test_section_v1_serializer_empty(self):
+        self.assertEqual(None, self.cache.section_v1_serializer(None))
+
+    def test_section_v1_loader(self):
+        maturity = self.create(
+            Maturity, slug='WD', name={'en': 'Working Draft'})
+        spec = self.create(
+            Specification, slug='push_api', mdn_key='Push API',
+            maturity=maturity,
+            name={'en': 'Push API'},
+            uri={'en': (
+                'https://dvcs.w3.org/hg/push/raw-file/default/index.html')}
+        )
+        section = self.create(
+            Section, specification=spec,
+            name={'en': ''}, note={'en': 'Non standard'})
+        with self.assertNumQueries(3):
+            obj = self.cache.section_v1_loader(section.pk)
+        with self.assertNumQueries(0):
+            serialized = self.cache.section_v1_serializer(obj)
+        self.assertTrue(serialized)
+
+    def test_section_v1_loader_not_exist(self):
+        self.assertFalse(Section.objects.filter(pk=666).exists())
+        self.assertIsNone(self.cache.section_v1_loader(666))
+
+    def test_section_v1_invalidator(self):
+        maturity = self.create(
+            Maturity, slug='WD', name={'en': 'Working Draft'})
+        spec = self.create(
+            Specification, slug='spec', mdn_key='Spec', maturity=maturity,
+            name={'en': 'Spec'},
+            uri={'en': 'http://example.com/spec.html'})
+        section = self.create(
+            Section, specification=spec,
+            name={'en': 'A section'}, subpath={'en': '#section'})
+        self.assertEqual(
+            [('Specification', spec.pk, False)],
+            self.cache.section_v1_invalidator(section))
+
+    def test_specification_v1_serializer(self):
+        maturity = self.create(
+            Maturity, slug="REC", name={'en': 'Recommendation'})
+        spec = self.create(
+            Specification, slug="mathml2", mdn_key='MathML2',
+            maturity=maturity,
+            name='{"en": "MathML 2.0"}',
+            uri='{"en": "http://www.w3.org/TR/MathML2/"}')
+        out = self.cache.specification_v1_serializer(spec)
+        expected = {
+            'id': spec.id,
+            'slug': 'mathml2',
+            'mdn_key': 'MathML2',
+            'name': {"en": "MathML 2.0"},
+            'uri': {"en": "http://www.w3.org/TR/MathML2/"},
+            'sections:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'section',
+                'pks': [],
+            },
+            'maturity:PK': {
+                'app': u'webplatformcompat',
+                'model': 'maturity',
+                'pk': maturity.pk,
+            },
+            'history:PKList': {
+                'app': u'webplatformcompat',
+                'model': 'historicalspecification',
+                'pks': [1],
+            },
+            'history_current:PK': {
+                'app': u'webplatformcompat',
+                'model': 'historicalspecification',
+                'pk': 1,
+            },
+        }
+        self.assertEqual(out, expected)
+
+    def test_specification_v1_serializer_empty(self):
+        self.assertEqual(None, self.cache.specification_v1_serializer(None))
+
+    def test_specification_v1_loader(self):
+        maturity = self.create(
+            Maturity, slug='WD', name={'en': 'Working Draft'})
+        spec = self.create(
+            Specification, slug='push-api', maturity=maturity,
+            name={'en': 'Push API'},
+            uri={'en': (
+                'https://dvcs.w3.org/hg/push/raw-file/default/index.html')}
+        )
+        with self.assertNumQueries(3):
+            obj = self.cache.specification_v1_loader(spec.pk)
+        with self.assertNumQueries(0):
+            serialized = self.cache.specification_v1_serializer(obj)
+        self.assertTrue(serialized)
+
+    def test_specification_v1_loader_not_exist(self):
+        self.assertFalse(Specification.objects.filter(pk=666).exists())
+        self.assertIsNone(self.cache.specification_v1_loader(666))
+
+    def test_specification_v1_invalidator(self):
+        maturity = self.create(
+            Maturity, slug='WD', name={'en': 'Working Draft'})
+        spec = self.create(
+            Specification, slug='spec', maturity=maturity,
+            name={'en': 'Spec'},
+            uri={'en': 'http://example.com/spec.html'})
+        self.assertEqual(
+            [('Maturity', 1, False)],
+            self.cache.specification_v1_invalidator(spec))
 
     def test_support_v1_serializer_empty(self):
         self.assertEqual(None, self.cache.support_v1_serializer(None))
@@ -278,7 +441,6 @@ class TestCache(TestCase):
             },
             'browsers': {
                 'history_current': 1,
-                'icon': u'',
                 'id': 1,
                 'name': {},
                 'note': {},

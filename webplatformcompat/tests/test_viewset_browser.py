@@ -25,7 +25,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             'id': browser.pk,
             'slug': '',
-            'icon': None,
             'name': None,
             'note': None,
             'history': [history_pk],
@@ -37,7 +36,6 @@ class TestBrowserViewset(APITestCase):
             "browsers": {
                 "id": str(browser.pk),
                 "slug": "",
-                "icon": None,
                 "name": None,
                 "note": None,
                 "links": {
@@ -74,8 +72,6 @@ class TestBrowserViewset(APITestCase):
         browser = self.create(
             Browser,
             slug="firefox",
-            icon=("https://people.mozilla.org/~faaborg/files/shiretoko"
-                  "/firefoxIcon/firefox-128.png"),
             name={"en": "Firefox"},
             note={"en": "Uses Gecko for its web browser engine"})
         url = reverse('browser-detail', kwargs={'pk': browser.pk})
@@ -84,8 +80,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             'id': browser.pk,
             'slug': 'firefox',
-            'icon': ("https://people.mozilla.org/~faaborg/files/shiretoko"
-                     "/firefoxIcon/firefox-128.png"),
             'name': {"en": "Firefox"},
             'note': {"en": "Uses Gecko for its web browser engine"},
             'history': [history_pk],
@@ -98,8 +92,6 @@ class TestBrowserViewset(APITestCase):
         firefox = self.create(
             Browser,
             slug="firefox", name={"en": "Firefox"},
-            icon=("https://people.mozilla.org/~faaborg/files/shiretoko"
-                  "/firefoxIcon/firefox-128.png"),
             note={"en": "Uses Gecko for its web browser engine"})
         chrome = self.create(Browser, slug="chrome", name={"en": "Chrome"})
         response = self.client.get(reverse('browser-list'))
@@ -110,8 +102,6 @@ class TestBrowserViewset(APITestCase):
                 {
                     'id': '%s' % firefox.pk,
                     'slug': 'firefox',
-                    'icon': ("https://people.mozilla.org/~faaborg/files/"
-                             "shiretoko/firefoxIcon/firefox-128.png"),
                     'name': {"en": "Firefox"},
                     'note': {"en": "Uses Gecko for its web browser engine"},
                     'links': {
@@ -122,7 +112,6 @@ class TestBrowserViewset(APITestCase):
                 }, {
                     'id': '%s' % chrome.pk,
                     'slug': 'chrome',
-                    'icon': None,
                     'name': {"en": "Chrome"},
                     'note': None,
                     'links': {
@@ -167,10 +156,8 @@ class TestBrowserViewset(APITestCase):
 
     def test_filter_by_slug(self):
         browser = self.create(
-            Browser, slug="firefox", icon='', name={"en": "Firefox"},
-            note=None)
-        self.create(
-            Browser, slug="chrome", icon='', name={"en": "Chrome"})
+            Browser, slug="firefox", name={"en": "Firefox"}, note=None)
+        self.create(Browser, slug="chrome", name={"en": "Chrome"})
         url = reverse('browser-list')
         response = self.client.get(url, {'slug': 'firefox'})
         history_pk = browser.history.get().pk
@@ -181,7 +168,6 @@ class TestBrowserViewset(APITestCase):
             'results': [{
                 'id': browser.pk,
                 'slug': 'firefox',
-                'icon': None,
                 'name': {"en": "Firefox"},
                 'note': None,
                 'history': [history_pk],
@@ -202,7 +188,6 @@ class TestBrowserViewset(APITestCase):
             'results': [{
                 'id': browser.pk,
                 'slug': '',
-                'icon': None,
                 'name': None,
                 'note': None,
                 'history': [history_pk],
@@ -240,7 +225,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": "firefox",
-            "icon": None,
             "name": {"en": "Firefox"},
             "note": None,
             'history': [history_pk],
@@ -290,7 +274,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": "firefox",
-            "icon": None,
             "name": {"en": "Firefox"},
             "note": None,
             'history': [history_pk],
@@ -303,8 +286,6 @@ class TestBrowserViewset(APITestCase):
         self.login_superuser()
         data = {
             'slug': 'firefox',
-            'icon': ("https://people.mozilla.org/~faaborg/files/shiretoko"
-                     "/firefoxIcon/firefox-128.png"),
             'name': '{"en": "Firefox"}',
             'note': '{"en": "Uses Gecko for its web browser engine"}',
         }
@@ -315,8 +296,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             'id': browser.pk,
             'slug': 'firefox',
-            'icon': ("https://people.mozilla.org/~faaborg/files/shiretoko"
-                     "/firefoxIcon/firefox-128.png"),
             'name': {"en": "Firefox"},
             'note': {"en": "Uses Gecko for its web browser engine"},
             'history': [history_pk],
@@ -329,8 +308,6 @@ class TestBrowserViewset(APITestCase):
         self.login_superuser()
         data = {
             'slug': 'bad slug',
-            'icon': ("http://people.mozilla.org/~faaborg/files/shiretoko"
-                     "/firefoxIcon/firefox-128.png"),
             'name': '"Firefox"',
             'note': '{"es": "Utiliza Gecko por su motor del navegador web"}',
         }
@@ -340,7 +317,6 @@ class TestBrowserViewset(APITestCase):
             'slug': [
                 "Enter a valid 'slug' consisting of letters, numbers,"
                 " underscores or hyphens."],
-            'icon': ["URI must use the 'https' protocol."],
             'name': [
                 "Value must be a JSON dictionary of language codes to"
                 " strings."],
@@ -367,7 +343,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": "browser",
-            "icon": None,
             "name": {"en": "New Name"},
             "note": None,
             "history": [h.pk for h in histories],
@@ -388,7 +363,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": "browser",
-            "icon": None,
             "name": {"en": "New Name"},
             "note": None,
             "history": [h.pk for h in histories],
@@ -420,7 +394,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": "browser",
-            "icon": None,
             "name": {"en": "Old Name"},
             "note": None,
             'history': [h.pk for h in histories],
@@ -475,7 +448,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": "browser",
-            "icon": None,
             "name": {"en": "Browser"},
             "note": None,
             'history': [h.pk for h in histories],
@@ -495,7 +467,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": 'browser',
-            "icon": None,
             "name": {"en": "Browser"},
             "note": None,
             "history": [h.pk for h in history],
@@ -524,7 +495,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": 'browser',
-            "icon": None,
             "name": {"en": "Browser"},
             "note": None,
             "history": [h.pk for h in history],
@@ -553,7 +523,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": 'browser',
-            "icon": None,
             "name": {"en": "Browser"},
             "note": None,
             "history": [h.pk for h in history],
@@ -578,7 +547,6 @@ class TestBrowserViewset(APITestCase):
         expected_data = {
             "id": browser.pk,
             "slug": 'browser',
-            "icon": None,
             "name": {"en": "Browser"},
             "note": None,
             "history": [h.pk for h in history],

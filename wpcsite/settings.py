@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     'mptt',
     'simple_history',
     'rest_framework',
+    'sortedm2m',
 
     'drf_cached_reads',
     'webplatformcompat',
