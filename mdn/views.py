@@ -1,0 +1,181 @@
+"""Views for MDN migration app."""
+from collections import OrderedDict
+from json import loads
+
+from django import forms
+from django.contrib.auth.decorators import user_passes_test
+from django.contrib import messages
+from django.core.urlresolvers import reverse
+from django.http import HttpResponseRedirect, JsonResponse
+from django.views.generic import DetailView, FormView, ListView
+from django.views.generic.detail import BaseDetailView
+from django.views.generic.edit import CreateView, UpdateView
+
+from .models import FeaturePage, validate_mdn_url
+from .tasks import start_crawl, parse_page
+
+
+def can_create(user):
+    return user.is_authenticated and user.is_staff
+
+
+class FeaturePageListView(ListView):
+    model = FeaturePage
+    template_name = "mdn/feature_page_list.jinja2"
+    paginate_by = 50
+
+    def get_queryset(self):
+        return FeaturePage.objects.order_by('modified')
+
+    def get_context_data(self, **kwargs):
+        ctx = super(FeaturePageListView, self).get_context_data(**kwargs)
+        ctx['request'] = self.request
+        return ctx
+
+
+class FeaturePageCreateView(CreateView):
+    model = FeaturePage
+    template_name = "mdn/feature_page_form.jinja2"
+    fields = ['url', 'feature']
+
+    def get_initial(self):
+        initial = self.initial.copy()
+        url = self.request.GET.get('url')
+        if url:
+            initial['url'] = url
+        return initial
+
+    def form_valid(self, form):
+        """Start the parsing process on submission."""
+        redirect = super(FeaturePageCreateView, self).form_valid(form)
+        assert self.object and self.object.id
+        self.object.reset()
+        start_crawl.delay(self.object.id)
+        return redirect
+
+
+class FeaturePageDetailView(DetailView):
+    model = FeaturePage
+    template_name = "mdn/feature_page_detail.jinja2"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(FeaturePageDetailView, self).get_context_data(**kwargs)
+        ctx['request'] = self.request
+        return ctx
+
+
+class FeaturePageJSONView(BaseDetailView):
+    model = FeaturePage
+
+    def render_to_response(self, context):
+        obj = context['object']
+        return JsonResponse(loads(obj.data, object_pairs_hook=OrderedDict))
+
+
+class SearchForm(forms.Form):
+    url = forms.URLField(
+        label='MDN URL',
+        widget=forms.URLInput(attrs={
+            'placeholder': "https://developer.mozilla.org/en-US/docs/..."}))
+
+    def clean_url(self):
+        data = self.cleaned_data['url']
+        validate_mdn_url(data)
+        return data
+
+
+class FeaturePageSearch(FormView):
+    form_class = SearchForm
+    template_name = "mdn/feature_page_form.jinja2"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(FeaturePageSearch, self).get_context_data(**kwargs)
+        ctx['action'] = "Search by URL"
+        ctx['action_url'] = reverse('feature_page_search')
+        return ctx
+
+    def form_valid(self, form):
+        url = form.cleaned_data['url']
+        try:
+            fp = FeaturePage.objects.get(url=url)
+        except FeaturePage.DoesNotExist:
+            msg = 'URL "%s" has not been scraped.' % url
+            if can_create(self.request.user):
+                msg += ' Scrape it?'
+                messages.add_message(self.request, messages.INFO, msg)
+                next_url = reverse('feature_page_create') + '?url=' + url
+            else:
+                messages.add_message(self.request, messages.INFO, msg)
+                next_url = reverse('feature_page_list')
+        else:
+            next_url = reverse('feature_page_detail', kwargs={'pk': fp.pk})
+        return HttpResponseRedirect(next_url)
+
+
+class FeaturePageReParse(UpdateView):
+    model = FeaturePage
+    fields = []
+    template_name = "mdn/feature_page_form.jinja2"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(FeaturePageReParse, self).get_context_data(**kwargs)
+        pk = ctx['object'].pk
+        ctx['action'] = "Re-parse MDN Page"
+        ctx['action_url'] = reverse(
+            'feature_page_reparse', kwargs={'pk': pk})
+        ctx['back_url'] = reverse(
+            'feature_page_detail', kwargs={'pk': pk})
+        ctx['back'] = "Back to Details"
+        return ctx
+
+    def form_valid(self, form):
+        """Start reparsing the page on submission."""
+        redirect = super(FeaturePageReParse, self).form_valid(form)
+        assert self.object and self.object.id
+        self.object.status = FeaturePage.STATUS_PARSING
+        self.object.reset_data()
+        self.object.save()
+        messages.add_message(
+            self.request, messages.INFO, "Re-parsed the page.")
+        parse_page.delay(self.object.id)
+        return redirect
+
+
+class FeaturePageReset(UpdateView):
+    model = FeaturePage
+    fields = []
+    template_name = "mdn/feature_page_form.jinja2"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(FeaturePageReset, self).get_context_data(**kwargs)
+        pk = ctx['object'].pk
+        ctx['action'] = "Reset MDN Page"
+        ctx['action_url'] = reverse(
+            'feature_page_reset', kwargs={'pk': pk})
+        ctx['back_url'] = reverse(
+            'feature_page_detail', kwargs={'pk': pk})
+        ctx['back'] = "Back to Details"
+        return ctx
+
+    def form_valid(self, form):
+        """Start refetching the page on submission."""
+        redirect = super(FeaturePageReset, self).form_valid(form)
+        assert self.object and self.object.id
+        self.object.reset()
+        messages.add_message(
+            self.request, messages.INFO,
+            "Resetting cached MDN pages, re-parsing.")
+        start_crawl.delay(self.object.id)
+        return redirect
+
+
+feature_page_create = user_passes_test(can_create)(
+    FeaturePageCreateView.as_view())
+feature_page_detail = FeaturePageDetailView.as_view()
+feature_page_json = FeaturePageJSONView.as_view()
+feature_page_search = FeaturePageSearch.as_view()
+feature_page_list = FeaturePageListView.as_view()
+feature_page_reset = user_passes_test(can_create)(
+    FeaturePageReset.as_view())
+feature_page_reparse = user_passes_test(can_create)(
+    FeaturePageReParse.as_view())

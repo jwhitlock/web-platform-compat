@@ -1,0 +1,182 @@
+{% extends "webplatformcompat/base.jinja2" %}
+
+{% block head_title %}Parse results for {{object.slug()}}{% endblock %}
+
+{% block body_title %}Parse results for {{object.slug()}}{% endblock %}
+
+{% block quick_nav %}
+<p><em>back to <a href="{{ url('feature_page_list') }}">page list</a></em></p>
+{% endblock %}
+
+{% block content %}
+<dl>
+  <dt>ID</dt>
+    <dd>{{object.id}}</dd>
+  <dt>MDN URL</dt>
+    <dd>
+      <a href="{{object.url}}">{{object.url}}</a>
+      <br/>
+      (<a href="{{object.url}}#Specifications">Specifications</a>,
+      <a href="{{object.url}}#Browser_compatibility">Browser Compatibility</a>)
+    </dd>
+  <dt>Feature ID</dt>
+    <dd><a href="/view_feature/{{object.feature_id}}">{{object.feature_id}}</a></td>
+  <dt>Status</dt>
+    <dd>{{object.get_status_display()}}</dd>
+  <dt>Last Modified</dt>
+    <dd>{{ object.same_since() }}</dd>
+  <dt>Issues</dt>
+    <dd>{% if object.has_issues %}
+      <ul>
+        {% for error in object.data['meta']['scrape']['errors'] %}
+        <li>{{ error | safe }}</li>
+        {% else %}
+        <li><em><code>.has_errors</code> is set, but no errors recorded</em></li>
+        {% endfor %}
+      </ul>{% else %}
+      <em>None detected</em>
+      {% endif %}
+    </dd>
+</dl>
+{% if request.user.is_staff %}
+<h3>Refresh Import</h3>
+<div>
+<form action="{{url('feature_page_reset', pk=object.pk)}}" method="post">
+{{ csrf() }}
+<input id="submit-reset" class="btn btn-primary" type="submit" value="Reset">
+<label for="submit-reset">Download MDN pages and reparse</label>
+</form>
+<br/>
+<form action="{{url('feature_page_reparse', pk=object.pk)}}" method="post">
+{{ csrf() }}
+<input id="submit-reparse" class="btn btn-primary" type="submit" value="Reparse">
+<label for="submit-reparse">Re-parse the cached MDN pages</label>
+</form>
+</div>
+<br/>
+{% endif %}
+
+{% if object.status == object.STATUS_PARSED %}
+<h1>Sample Presentation of {{object.slug()}}</h1>
+<h2>Specifications</h2>
+<div id="wpc_specifications">
+  <p><i>Loading...</i></p>
+</div>
+
+<h2>Browser compatibility</h2>
+<div id="wpc_tables">
+  <p><i>Loading...</i></p>
+</div>
+
+<h2>Languages</h2>
+<p>
+    The data may include translations of items such as feature names,
+    specification statuses, release notes URIs, etc.  Available languages:</p>
+<div id="wpc_languages">
+  <ul>
+    <li><i>Loading...</i></li>
+  </ul>
+</div>
+
+<h2>Raw Data</h2>
+<p>
+  This
+  <a href="{{url('feature_page_json', pk=object.pk)}}">raw JSON-API data</a>
+  resembles that returned from
+  <code>
+    <a id="wpc_uri" href="/api/v1/view_features/{{feature_id}}">
+      /api/v1/view_features/{{object.feature.id}}
+    </a>
+  </code>
+</p>
+
+<div id="wpc_data">
+  <p><i>Loading...</i></p>
+</div>
+{% else %}
+<p><em>
+    Parsed data and scraping issues will be available when the status is "Parsing Complete".
+</em></p>
+{% endif %}
+{% endblock content %}
+
+{% block body_js_extra %}
+<script>
+function load_tables(resources, lang) {
+    var spec_table, browser_tables, langs, pagination;
+
+    spec_table = WPC.generate_specification_table(resources, lang);
+    if (spec_table) {
+    $("#wpc_specifications").html(spec_table);
+    } else {
+    $("#wpc_specifications").html("<p><i>No specifications</i></p>");
+    }
+
+    browser_tables = WPC.generate_browser_tables(resources, lang);
+    if (browser_tables) {
+    $("#wpc_tables").html(browser_tables);
+    } else {
+    $("#wpc_tables").html("<p><i>No features</i></p>");
+    }
+
+    langs = "<ul>";
+    $.each(resources.meta.compat_table.languages, function(index, value) {
+        langs += (
+            "<li><a href=\"#\" onclick=\"load_tables(resources, '" +
+            value + "')\" >" + value + "</a>");
+        if (value === lang) {
+            langs += " (<strong>current</strong>)";
+        }
+        langs += "</li>";
+    });
+    langs += '</ul>';
+    $("#wpc_languages").html($(langs));
+
+    mdn_uri = WPC.trans_str(resources.data.mdn_uri, lang);
+    if (!mdn_uri) {
+        mdn_uri = "https://developer.mozilla.org/";
+    }
+    $("#mdn_link").attr("href", mdn_uri);
+    $("#mdn_link").text(mdn_uri);
+
+    pagination = resources.meta.compat_table.pagination["linked.features"];
+    if (pagination && (pagination.next || pagination.previous)) {
+        pageText = (
+            "<p id=\"wpc_pagination\">There are " + pagination.count +
+            " sub-features, which is too many to display on one page." +
+            " Go to the ");
+        if (pagination.next) {
+            pageText += ("<a href=\"#\" onclick=\"load_json('" +
+                pagination.next + "')\">next page</a>");
+        }
+        if (pagination.next && pagination.previous) {
+            pageText += " or the ";
+        }
+        if (pagination.previous) {
+            pageText += ("<a href=\"#\" onclick=\"load_json('" +
+                pagination.previous + "')\">previous page</a>");
+        }
+        pageText += ".</p>";
+        $("#wpc_pagination").html($(pageText));
+    }
+
+    return true;
+};
+
+function load_json(data) {
+    var resources, json_dump, title;
+    json_dump = $("<pre>").text(JSON.stringify(data, null, "  "));
+    $("#wpc_data").html(json_dump);
+    window.resources = resources = WPC.parse_resources(data);
+    load_tables(window.resources, "en");
+};
+
+data = {{ object.raw_data | default('null', True) | safe }};
+
+$( document ).ready(function () {
+    if (data) {
+        load_json(data);
+    }
+});
+</script>
+{% endblock body_js_extra %}

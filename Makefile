@@ -48,7 +48,7 @@ test-all:
 
 coverage:
 	coverage erase
-	coverage run --source webplatformcompat,tools setup.py test
+	coverage run --source mdn,webplatformcompat,tools setup.py test
 	coverage report -m
 	coverage html
 	open htmlcov/index.html

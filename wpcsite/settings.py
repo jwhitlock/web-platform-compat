@@ -27,6 +27,8 @@ ALLOWED_HOSTS - comma-separated list of allowed hosts
 DATABASE_URL - See https://github.com/kennethreitz/dj-database-url
 DJANGO_DEBUG - 1 to enable, 0 to disable, default disabled
 EXTRA_INSTALLED_APPS - comma-separated list of apps to add to INSTALLED_APPS
+MDN_ALLOWED_URL_PREFIXES - comma-separated list of URL prefixes allowed by
+  the scraper
 MEMCACHE_SERVERS - semicolon-separated list of memcache servers
 MEMCACHE_USERNAME - username for memcache servers
 MEMCACHE_PASSWORD - password for memcache servers
@@ -88,6 +90,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'sortedm2m',
 
+    'mdn',
     'webplatformcompat',
 ]
 if environ.get('EXTRA_INSTALLED_APPS'):
@@ -188,6 +191,16 @@ SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 
 # When the number of descendants means to paginate a view_feature
 PAGINATE_VIEW_FEATURE = 50
+
+# Authentication
+LOGIN_URL = '/api-auth/login/'
+
+# MDN Scraping
+if environ.get('MDN_ALLOWED_URL_PREFIXES') and not TESTING:
+    raw = environ['MDN_ALLOWED_URL_PREFIXES']
+    MDN_ALLOWED_URLS = tuple(raw.split(','))
+else:
+    MDN_ALLOWED_URLS = ('https://developer.mozilla.org/en-US/docs/', )
 
 #
 # 3rd Party Libraries

@@ -1,0 +1,15 @@
+{% extends "webplatformcompat/base.jinja2" %}
+
+{% block head_title %}MDN Importer - {{action | default("Add MDN Page")}}{% endblock %}
+
+{% block body_title %}MDN Importer - {{action | default("Add MDN Page")}}{% endblock %}
+
+{% block content %}
+<form {% if action_url %}action="{{action_url}}"{% endif %} method="post">
+{{ csrf() }}
+{{ form.as_p() }}
+<input class="btn btn-primary" type="submit" value="{{action | default("Add MDN Page")}}">
+<a class="btn btn-default" href="{{back_url | default(url('feature_page_list'))}}">{{back | default("Back to List")}}</a>
+</form>
+
+{% endblock content %}

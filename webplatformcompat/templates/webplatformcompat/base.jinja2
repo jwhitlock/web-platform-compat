@@ -18,11 +18,23 @@
     {%- block head_extra %}{% endblock %}
   </head>
   <body>
-    {% block body_container -%}
+    {% block pre_body_container %}{% endblock %}
+    {%- block body_container -%}
     <div class="container">
         {% block body_title_elem -%}
         <h1 id="body_title">{% block body_title %}TODO: set block body_title{% endblock %}</h1>
         {%- endblock body_title_elem %}
+        {% block quick_nav %}{% endblock %}
+        {% block messages %}
+          {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{message.tags}} alert-dismissible fade in" role="alert">
+              <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            {{message}}
+            </div>
+            {% endfor %}
+          {% endif %}
+        {% endblock messages %}
         {% block content %}{% endblock %}
         <hr>
         <footer>

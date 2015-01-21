@@ -7,6 +7,8 @@ recursive-include data README.txt
 recursive-include docs Makefile *.gv *.svg conf.py *.rst make.bat
 recursive-include tests *.py
 recursive-include tools *.py
+recursive-include mdn *.py
+recursive-include mdn/templates *.jinja2
 recursive-include webplatformcompat/migrations *.py
 recursive-include webplatformcompat/static *.css *.map *.eot *.svg *.ttf *.woff *.js .keep
 recursive-include webplatformcompat/templates *.html *.jinja2
