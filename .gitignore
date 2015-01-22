@@ -44,10 +44,8 @@ output/*/index.html
 docs/_build/*
 
 # Downloaded files
-data-human.json
-Spec2.txt
-SpecName.txt
 data/*.json
+data/*.txt
 
 # SQLite databases
 *.sqlite3
