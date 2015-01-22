@@ -12,9 +12,9 @@ web-platform-compat
     :target: https://heroku.com/deploy?template=https://github.com/jwhitlock/web-platform-compat
     :alt: Deploy
 
-The Web Platform Compatibility API will support compatability data on the
+The Web Platform Compatibility API will support compatibility data on the
 `Mozilla Developer Network`_.  This currently takes the form of browser
-compatability tables, such as the one on the `CSS display property`_.
+compatibility tables, such as the one on the `CSS display property`_.
 The API will help centralize this data, and allow it to be kept consistant
 across languages and different presentations.
 

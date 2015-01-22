@@ -2,7 +2,7 @@ Issues
 ======
 
 This draft API reflects a good guess at a useful, efficent API for storing
-user-contributed compatability data.  Some of the guesses are better than
+user-contributed compatibility data.  Some of the guesses are better than
 others.  This section highlights the areas where more experienced opinions
 are welcome, and areas where more work is expected.
 
@@ -142,7 +142,7 @@ Unresolved Issues
 Interesting MDN Pages
 ---------------------
 
-These MDN pages represent use cases for compatability data.  They may suggest
+These MDN pages represent use cases for compatibility data.  They may suggest
 features to add, or existing features that will be dropped.
 
 * `Web/HTML/Element/address`_ - A typical "simple" example.  However, the name

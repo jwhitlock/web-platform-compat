@@ -26,7 +26,7 @@ import::
 
 load_webcompat_data.py
 ----------------------
-Initialize with compatability data from the webplatform_ project. Usage::
+Initialize with compatibility data from the webplatform_ project. Usage::
 
     $ tools/load_webcompat_data.py [--api <API>] [--user <USER>] [-vq] [--all-data]
 
@@ -38,7 +38,7 @@ Initialize with compatability data from the webplatform_ project. Usage::
 * ``-q`` `(optional)`: Only print warnings
 * ``--all-data`` `(optional)`: Import all data, rather than a subset
 
-This script requires a fresh database (no compatability data) and a user with
+This script requires a fresh database (no compatibility data) and a user with
 write access.  The bulk import will result in cascading cache invalidations,
 which can be avoided by running the server without cached instances during the
 import::

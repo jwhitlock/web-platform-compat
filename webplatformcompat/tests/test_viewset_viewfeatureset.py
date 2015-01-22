@@ -1637,7 +1637,7 @@ multipage/sections.html#the-address-element">
   </tbody>
 </table>
 
-<h2>Browser compatability</h2>
+<h2>Browser compatibility</h2>
 
 <h3>Desktop Browsers</h3>
 <table class="compat-table">

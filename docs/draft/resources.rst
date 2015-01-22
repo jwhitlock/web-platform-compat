@@ -838,7 +838,7 @@ as the value ``cover`` for the CSS ``background-size`` property.  It could be
 a heirarchical group of related technologies, such as the CSS
 ``background-size`` property or the set of all CSS properties.  Some features
 correspond to a page on MDN_, which will display the list of specifications
-and a browser compatability table of the sub-features.
+and a browser compatibility table of the sub-features.
 
 The **features** representation includes:
 
