@@ -40,7 +40,8 @@ specname_td = "<td>" kuma_esc_start "SpecName" kuma_func_start qtext
     "</td>"
 spec2_td = "<td>" kuma_esc_start "Spec2" kuma_func_start qtext
     kuma_func_end kuma_esc_end "</td>"
-specdesc_td = "<td>" _ bare_text _ "</td>"
+specdesc_td = "<td>" _ inner_td _ "</td>"
+inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
 kuma_esc_start = _ "{{" _
 kuma_func_start = "(" _
@@ -175,9 +176,6 @@ class PageVisitor(NodeVisitor):
             'section.note': desc,
             'section.id': section_id})
 
-    def visit_single_quoted_text(self, node, args):
-        return node.match.group('content')
-
     def visit_attr(self, node, children):
         ident = children[1]
         value = children[5][0]
@@ -208,9 +206,14 @@ class PageVisitor(NodeVisitor):
                   ' name="Specifications"> or no name attribute,'
                   ' actual name="%s"' % h2_name)))
 
-    visit_double_quoted_text = visit_single_quoted_text
-    visit_bare_text = visit_single_quoted_text
-    visit_ident = visit_single_quoted_text
+    def generic_visit_content(self, node, args):
+        return node.match.group('content')
+
+    visit_single_quoted_text = generic_visit_content
+    visit_double_quoted_text = generic_visit_content
+    visit_bare_text = generic_visit_content
+    visit_ident = generic_visit_content
+    visit_inner_td = generic_visit_content
 
 
 def range_error_to_html(page, start, end, reason, rule=None):

@@ -2,13 +2,40 @@
 from __future__ import unicode_literals
 from json import dumps
 
+from parsimonious.grammar import Grammar
+
 from mdn.models import FeaturePage, TranslatedContent
-from mdn.scrape import scrape_page, scrape_feature_page, range_error_to_html
+from mdn.scrape import (
+    page_grammar, range_error_to_html, scrape_page, scrape_feature_page)
 from webplatformcompat.models import Feature, Maturity, Section, Specification
 from webplatformcompat.tests.base import TestCase
 
 
-class BaseTestCase(TestCase):
+class TestGrammar(TestCase):
+    def setUp(self):
+        self.grammar = Grammar(page_grammar)
+
+    def test_specdesc_td_empty(self):
+        text = '<td></td>'
+        parsed = self.grammar['specdesc_td'].parse(text)
+        capture = parsed.children[2]
+        self.assertEqual('', capture.text)
+
+    def test_specdesc_td_plain_text(self):
+        text = '<td>Plain Text</td>'
+        parsed = self.grammar['specdesc_td'].parse(text)
+        capture = parsed.children[2]
+        self.assertEqual('Plain Text', capture.text)
+
+    def test_specdesc_td_html(self):
+        text = "<td>Defines <code>right</code> as animatable.</td>"
+        parsed = self.grammar['specdesc_td'].parse(text)
+        capture = parsed.children[2]
+        self.assertEqual(
+            'Defines <code>right</code> as animatable.', capture.text)
+
+
+class ScrapeTestCase(TestCase):
     """Fixtures for scraping tests."""
 
     # Based on:
@@ -77,7 +104,7 @@ Block formatting context</a></li>
             subpath='{"en": "#the-background-size"}')
 
 
-class TestScrape(BaseTestCase):
+class TestScrape(ScrapeTestCase):
     def test_empty(self):
         out = scrape_page("")
         expected = {
@@ -143,7 +170,7 @@ class TestScrape(BaseTestCase):
         self.assertEqual(expected, out)
 
 
-class TestScrapeFeaturePage(BaseTestCase):
+class TestScrapeFeaturePage(ScrapeTestCase):
     def setUp(self):
         web = self.create(Feature, slug='web')
         css = self.create(Feature, parent=web, slug='web-css')
@@ -241,7 +268,7 @@ class TestScrapeFeaturePage(BaseTestCase):
             fp.data['meta']['scrape']['errors'])
 
 
-class TestRangeErrorToHtml(BaseTestCase):
+class TestRangeErrorToHtml(ScrapeTestCase):
     def test_no_rule(self):
         html = range_error_to_html(
             self.simple_page, 902, 986,
