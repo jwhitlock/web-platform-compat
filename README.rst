@@ -12,6 +12,8 @@ web-platform-compat
     :target: https://heroku.com/deploy?template=https://github.com/jwhitlock/web-platform-compat
     :alt: Deploy
 
+.. Omit badges from docs
+
 The Web Platform Compatibility API will support compatibility data on the
 `Mozilla Developer Network`_.  This currently takes the form of browser
 compatibility tables, such as the one on the `CSS display property`_.
