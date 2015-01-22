@@ -204,6 +204,7 @@ class TestScrapeFeaturePage(ScrapeTestCase):
         self.assertTrue(fp.has_issues)
         section_ids = ["_CSS3 Backgrounds_#the-background-size"]
         self.assertEqual(section_ids, fp.data['features']['links']['sections'])
+        self.assertEqual('_unknown', fp.data['linked']['maturities'][0]['id'])
 
     def test_success_with_spec_data(self):
         self.add_spec_models()

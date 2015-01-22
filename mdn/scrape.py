@@ -306,8 +306,20 @@ def scrape_feature_page(fp):
             spec_id = '_' + row['specification.mdn_key']
             spec_content = OrderedDict((
                 ('id', spec_id),
-                ('mdn_key', row['specification.mdn_key'])))
+                ('mdn_key', row['specification.mdn_key']),
+                ('links', OrderedDict((
+                    ('maturity', '_unknown'),
+                    ('sections', [])
+                )))))
             specifications[spec_id] = spec_content
+
+            mat = maturities.get('_unknown', OrderedDict((
+                ('id', '_unknown'),
+                ('slug', ''),
+                ('name', {'en': 'Unknown'}),
+                ('links', {'specifications': []}))))
+            mat['links']['specifications'].append(spec_id)
+            maturities['_unknown'] = mat
 
         # Load Section
         section_id = row['section.id']
