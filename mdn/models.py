@@ -140,6 +140,10 @@ class FeaturePage(models.Model):
                 ('parent', str(self.feature.parent_id)),
                 ('children', []),
             )))))
+        for t in self.translations():
+            if t.locale != 'en-US':
+                feature['mdn_uri'][t.locale] = t.url()
+
         view_feature = OrderedDict((
             ('features', feature),
             ('linked', OrderedDict((
@@ -163,6 +167,7 @@ class FeaturePage(models.Model):
                     ("phase", "Starting Import"),
                     ("errors", []),
                     ("raw", None)))))))))
+
         self.data = view_feature
         self.has_issues = False
         return view_feature

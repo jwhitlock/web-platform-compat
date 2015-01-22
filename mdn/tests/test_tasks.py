@@ -100,7 +100,14 @@ class TestFetchMetaTask(TestCase):
         self.patcher_get.stop()
 
     def test_good_call(self):
-        data = {'foo': 'bar'}
+        data = {
+            'locale': 'en-US',
+            'url': '/en-US/docs/Web/CSS/display',
+            'translations': [{
+                'locale': 'es',
+                'url': '/es/docs/Web/CSS/display',
+            }],
+        }
         self.response.json.side_effect = None
         self.response.json.return_value = data
         self.mocked_fetch_all.side_effect = None

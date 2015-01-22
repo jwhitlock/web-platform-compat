@@ -14,10 +14,10 @@
     <dd>{{object.id}}</dd>
   <dt>MDN URL</dt>
     <dd>
-      <a href="{{object.url}}">{{object.url}}</a>
+      <a id="mdn_link" href="{{object.url}}">{{object.url}}</a>
       <br/>
-      (<a href="{{object.url}}#Specifications">Specifications</a>,
-      <a href="{{object.url}}#Browser_compatibility">Browser Compatibility</a>)
+      (<a id="mdn_link_spec" href="{{object.url}}#Specifications">Specifications</a>,
+      <a id="mdn_link_compat" href="{{object.url}}#Browser_compatibility">Browser Compatibility</a>)
     </dd>
   <dt>Feature ID</dt>
     <dd><a href="/view_feature/{{object.feature_id}}">{{object.feature_id}}</a></td>
@@ -138,6 +138,8 @@ function load_tables(resources, lang) {
     }
     $("#mdn_link").attr("href", mdn_uri);
     $("#mdn_link").text(mdn_uri);
+    $("#mdn_link_spec").attr("href", mdn_uri + "#Specifications")
+    $("#mdn_link_compat").attr("href", mdn_uri + "#Browser_compatibility")
 
     pagination = resources.meta.compat_table.pagination["linked.features"];
     if (pagination && (pagination.next || pagination.previous)) {
