@@ -9,15 +9,16 @@ from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
 
-from webplatformcompat.models import Section, Specification
+from webplatformcompat.models import Browser, Feature, Section, Specification
 
 
 # Parsimonious grammar for an MDN page
 page_grammar = r"""
-doc = other_text other_section* spec_section other_section* last_section?
+doc = other_text other_section* spec_section? compat_section?
+    other_section* last_section?
 
 other_text = ~r".*?(?=<h2)"s
-other_section = _ !spec_h2 other_h2 _ other_text
+other_section = _ !(spec_h2 / compat_h2) other_h2 _ other_text
 other_h2 = "<h2 " _ attrs? _ ">" _ bare_text _ "</h2>"
 last_section = _ other_h2 _ ~r".*(?!=<h2)"s
 
@@ -43,6 +44,29 @@ spec2_td = "<td>" kuma_esc_start "Spec2" kuma_func_start qtext
 specdesc_td = "<td>" _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
+compat_section = _ compat_h2 _ compat_kuma_div _ compat_div* compat_footnotes?
+compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
+compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
+compat_kuma_div = "<div>" _ kuma_esc_start _ "CompatibilityTable" _
+    kuma_esc_end _ "</div>"
+compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
+    _ "</div>"_
+compat_div_id = qtext
+compat_table = "<table class=\"compat-table\">" _ compat_body _ "</table>" _
+compat_body = "<tbody>" _ compat_hrow _ compat_rows* _ "</tbody>"
+compat_hrow = "<tr>" _ "<th>Feature</th>" _ compat_client_cells _ "</tr>" _
+compat_client_cells = compat_client_cell*
+compat_client_cell = "<th>" _ compat_client_name _ "</th>" _
+compat_client_name = ~r"(?P<content>.*?(?=</th>))"s
+compat_rows = compat_row* _
+compat_row = "<tr>" _ compat_feature_cell _ compat_support_cells _ "</tr>" _
+compat_feature_cell = "<td>" _ compat_feature _ "</td>" _
+compat_support_cells = compat_support_cell*
+compat_support_cell = "<td>" _ compat_support _ "</td>" _
+compat_feature = ~r"(?P<content>.*?(?=</td>))"s
+compat_support = ~r"(?P<content>.*?(?=</td>))"s
+compat_footnotes = ~r"(P<content>.*?(?=<h2))"s
+
 kuma_esc_start = _ "{{" _
 kuma_func_start = "(" _
 kuma_func_arg = _ "," _
@@ -64,13 +88,22 @@ _ = ~r"[ \t\r\n]*"
 """
 
 
-def scrape_page(mdn_page, locale='en'):
-    data = {
-        'specs': [],
-        'locale': locale,
-        'issues': [],
-        'errors': [],
-    }
+def end_of_line(text, pos):
+    """Get the position of the end of the line from pos"""
+    try:
+        return text.index('\n', pos)
+    except ValueError:
+        return len(text)
+
+
+def scrape_page(mdn_page, feature_id=None, locale='en'):
+    data = OrderedDict((
+        ('locale', locale),
+        ('specs', []),
+        ('compat', []),
+        ('issues', []),
+        ('errors', []),
+    ))
     if '<h2' not in mdn_page:
         data['errors'].append('No <h2> found in page')
         return data
@@ -78,23 +111,24 @@ def scrape_page(mdn_page, locale='en'):
     grammar = Grammar(page_grammar)
     try:
         page_parsed = grammar.parse(mdn_page)
-    except IncompleteParseError as ipe:  # pragma: no cover
+    except IncompleteParseError as ipe:
         error = (
-            ipe.pos, ipe.text.index('\n', ipe.pos),
+            ipe.pos, end_of_line(ipe.text, ipe.pos),
             'Unable to finish parsing MDN page, starting at this position.')
         data['errors'].append(error)
         return data
-    except ParseError as pe:
+    except ParseError as pe:  # pragma: no cover - usually skips section
         rule = pe.expr
         error = (
-            pe.pos, pe.text.index('\n', pe.pos),
+            pe.pos, end_of_line(pe.text, pe.pos),
             'Rule "%s" failed to match.  Rule definition:' % rule.name,
             rule.as_rule())
         data['errors'].append(error)
         return data
-    page_data = PageVisitor().visit(page_parsed)
+    page_data = PageVisitor(feature_id).visit(page_parsed)
 
     data['specs'] = page_data.get('specs', [])
+    data['compat'] = page_data.get('compat', [])
     data['issues'] = page_data.get('issues', [])
     data['errors'] = page_data.get('errors', [])
     return data
@@ -103,12 +137,42 @@ def scrape_page(mdn_page, locale='en'):
 class PageVisitor(NodeVisitor):
     """Extract and validate data from a parsed Specification section."""
 
-    def __init__(self, locale='en'):
+    browser_name_fixes = {
+        'Firefox (Gecko)': 'Firefox',
+        'Firefox Mobile (Gecko)': 'Firefox Mobile',
+    }
+
+    def __init__(self, feature_id=None, locale='en'):
         super(PageVisitor, self).__init__()
+        self.feature_id = feature_id
         self.locale = locale
         self.specs = []
         self.issues = []
         self.errors = []
+        self.compat = []
+        self._browser_ids = None
+        self._feature_ids = None
+
+    @property
+    def browser_ids(self):
+        if not self._browser_ids:
+            self._browser_ids = {}
+            for browser in Browser.objects.all():
+                self._browser_ids[browser.name[self.locale]] = browser.pk
+            for old_name, new_name in self.browser_name_fixes.items():
+                self._browser_ids[old_name] = self._browser_ids.get(new_name)
+        return self._browser_ids
+
+    def feature_id_for(self, name):
+        """Get or create the feature ID given a name."""
+        if not self._feature_ids:
+            self._feature_ids = {}
+            if self.feature_id:
+                for feature in Feature.objects.filter(parent=self.feature_id):
+                    self._feature_ids[feature.name[self.locale]] = feature.id
+        if name not in self._feature_ids:
+            self._feature_ids[name] = '_' + name
+        return self._feature_ids[name]
 
     def generic_visit(self, node, visited_children):
         return visited_children or node
@@ -119,6 +183,7 @@ class PageVisitor(NodeVisitor):
             'locale': self.locale,
             'issues': self.issues,
             'errors': self.errors,
+            'compat': self.compat,
         }
 
     visit_spec_section = visit_doc
@@ -195,16 +260,105 @@ class PageVisitor(NodeVisitor):
         if h2_id != 'Specifications':
             self.issues.append(
                 (node.start, node.end,
-                 ('In Specifications section, expected <h3'
+                 ('In Specifications section, expected <h2'
                   ' id="Specifications">, actual id="%s"' % h2_id)))
 
         h2_name = attrs.get('name')
         if h2_name is not None and h2_name != 'Specifications':
             self.issues.append(
                 (node.start, node.end,
-                 ('In Specifications section, expected <h3'
+                 ('In Specifications section, expected <h2'
                   ' name="Specifications"> or no name attribute,'
                   ' actual name="%s"' % h2_name)))
+
+    def visit_compat_section(self, node, children):
+        compat_divs = children[5]
+        self.compat = compat_divs
+
+    def visit_compat_div(self, node, children):
+        compat_div_id = children[6][0]
+        compat_body = children[9]
+
+        pre, div_id = compat_div_id.split('-', 1)
+        assert isinstance(div_id, text_type), type(div_id)
+
+        # Unpack body data
+        browsers, support_rows = compat_body
+        features, supports = support_rows
+
+        return {
+            'name': div_id,
+            'browsers': browsers,
+            'features': list(features),
+            'supports': list(chain.from_iterable(supports))
+        }
+
+    def visit_compat_table(self, node, children):
+        compat_body = children[2]
+        assert isinstance(compat_body, tuple), type(compat_body)
+        assert len(compat_body) == 2
+        return compat_body
+
+    def visit_compat_body(self, node, children):
+        compat_hrow = children[2]
+        compat_rows = children[4][0]
+
+        assert isinstance(compat_hrow, list), type(compat_hrow)
+        assert isinstance(compat_rows, list), type(compat_rows)
+        return (compat_hrow, compat_rows)
+
+    def visit_compat_hrow(self, node, children):
+        compat_client_cells = children[4]
+        assert isinstance(compat_client_cells, list), type(compat_client_cells)
+        return compat_client_cells
+
+    def visit_compat_client_cell(self, node, children):
+        compat_client_name = children[2]
+        assert isinstance(compat_client_name, text_type), \
+            type(compat_client_name)
+
+        browser_id = self.browser_ids.get(compat_client_name)
+        if not browser_id:
+            self.errors.append(
+                (node.start, node.end,
+                 'Unknown Browser "%s"' % compat_client_name))
+            browser_id = "_" + compat_client_name
+
+        return {
+            'name': compat_client_name,
+            'id': browser_id,
+        }
+
+    def visit_compat_feature_cell(self, node, children):
+        name = children[2]
+        assert isinstance(name, text_type), type(name)
+
+        feature_id = self.feature_id_for(name)
+        return {
+            'name': name,
+            'id': feature_id,
+            'experimental': False,
+            'standardized': True,
+            'stable': True,
+            'obsolete': False,
+        }
+
+    def visit_compat_rows(self, node, children):
+        compat_row_star = children[0]
+        assert isinstance(compat_row_star, list), type(compat_row_star)
+
+        # Turn list of (feature, support) pairs into list of features, supports
+        out = list(zip(chain.from_iterable(compat_row_star)))
+        return out
+
+    def visit_compat_row(self, node, children):
+        compat_feature_cell = children[2]
+        compat_support_cells = children[4]
+
+        assert isinstance(compat_feature_cell, dict), type(compat_feature_cell)
+        assert compat_support_cells
+
+        return (compat_feature_cell, [])
 
     def generic_visit_content(self, node, args):
         return node.match.group('content')
@@ -214,6 +368,9 @@ class PageVisitor(NodeVisitor):
     visit_bare_text = generic_visit_content
     visit_ident = generic_visit_content
     visit_inner_td = generic_visit_content
+    visit_compat_client_name = generic_visit_content
+    visit_compat_feature = generic_visit_content
+    visit_compat_support = generic_visit_content
 
 
 def range_error_to_html(page, start, end, reason, rule=None):
@@ -235,7 +392,8 @@ def range_error_to_html(page, start, end, reason, rule=None):
     # Highlight the errored portion
     err_page_bits = []
     err_line_count = 1
-    for p, c in enumerate(page):  # pragma: nocover
+    assert page
+    for p, c in enumerate(page):  # pragma: nocover - page always enumerates
         if c == '\n':
             err_page_bits.append(c)
             err_line_count += 1
@@ -258,12 +416,18 @@ def range_error_to_html(page, start, end, reason, rule=None):
     return ''.join(html_bits)
 
 
+def feature_slug(parent, name, existing_slugs):
+    # TODO: Bring in slugify, unique slugify from tools
+    slug = parent.slug + "-" + name
+    return slug
+
+
 def scrape_feature_page(fp):
     """Scrape a FeaturePage object"""
     en_content = fp.translatedcontent_set.get(locale='en-US')
     fp_data = fp.reset_data()
     main_feature_id = str(fp.feature.id)
-    data = scrape_page(en_content.raw)
+    data = scrape_page(en_content.raw, main_feature_id)
     fp_data['meta']['scrape']['raw'] = data
 
     # Load specification section data
@@ -356,12 +520,98 @@ def scrape_feature_page(fp):
         sections[section_id] = section_content
         fp_data['features']['links']['sections'].append(str(section_id))
 
-    # Add linked data
+    tabs = []
+    browsers = OrderedDict()
+    versions = OrderedDict()
+    features = OrderedDict()
+    supports = OrderedDict()
+    compat_table_supports = OrderedDict(((str(fp.feature.id), {}),))
+    feature_slugs = set()
+    # Load compatibility section
+    for table in data['compat']:
+        tab = OrderedDict((
+            ("name", {"en": table['name'].title()}),
+            ("browsers", []),
+        ))
+        for b in table['browsers']:
+            if str(b['id']).startswith('_'):
+                browser_content = OrderedDict((
+                    ('id', b['id']),
+                    ('slug', ''),
+                    ('name', {'en': b['name']}),
+                    ('note', None),
+                ))
+            else:
+                browser = Browser.objects.get(id=b['id'])
+                browser_content = OrderedDict((
+                    ('id', str(browser.id)),
+                    ('slug', browser.slug),
+                    ('name', browser.name),
+                    ('note', browser.note),
+                ))
+            browsers[b['id']] = browser_content
+            tab['browsers'].append(browser_content['id'])
+        for f in table['features']:
+            if str(f['id']).startswith('_'):
+                # Fake feature
+                slug = feature_slug(fp.feature, f['name'], feature_slugs)
+                feature_content = OrderedDict((
+                    ('id', f['id']),
+                    ('slug', slug),
+                    ('mdn_uri', None),
+                    ('experimental', f['experimental']),
+                    ('standardized', f['standardized']),
+                    ('stable', f['stable']),
+                    ('obsolete', f['obsolete']),
+                    ('name', {'en': f['name']}),
+                    ('links', OrderedDict((
+                        ('sections', []),
+                        ('supports', []),
+                        ('parent', str(fp.feature.id)),
+                        ('children', []))))))
+            else:
+                feature = Feature.objects.get(id=f['id'])
+                section_ids = [
+                    str(s_id) for s_id in
+                    feature.sections.values_list('pk', flat=True)]
+                support_ids = [
+                    str(s_id) for s_id in
+                    feature.supports.values_list('pk', flat=True)]
+                parent_id = (
+                    str(feature.parent_id) if feature.parent_id else None)
+                children_ids = [
+                    str(c_id) for c_id in
+                    feature.children.values_list('pk', flat=True)]
+                feature_content = OrderedDict((
+                    ('id', str(f['id'])),
+                    ('slug', feature.slug),
+                    ('mdn_uri', feature.mdn_uri),
+                    ('experimental', feature.experimental),
+                    ('standardized', feature.standardized),
+                    ('stable', feature.stable),
+                    ('obsolete', feature.obsolete),
+                    ('name', feature.name),
+                    ('links', OrderedDict((
+                        ('sections', section_ids),
+                        ('supports', support_ids),
+                        ('parent', parent_id),
+                        ('children', children_ids))))))
+            features.setdefault(f['id'], feature_content)
+            compat_table_supports.setdefault(f['id'], OrderedDict())
+        tabs.append(tab)
+
+    # Add linked data, meta
     fp_data['linked']['specifications'] = list(specifications.values())
     fp_data['linked']['maturities'] = list(maturities.values())
     fp_data['linked']['sections'] = list(sections.values())
+    fp_data['linked']['browsers'] = list(browsers.values())
+    fp_data['linked']['versions'] = list(versions.values())
+    fp_data['linked']['features'] = list(features.values())
+    fp_data['linked']['supports'] = list(supports.values())
     languages = fp_data['features']['mdn_uri'].keys()
     fp_data['meta']['compat_table']['languages'] = list(languages)
+    fp_data['meta']['compat_table']['tabs'] = tabs
+    fp_data['meta']['compat_table']['supports'] = compat_table_supports
     fp.data = fp_data
 
     # Add issues
