@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 from collections import OrderedDict
 from itertools import chain
+import string
 
 from django.utils.html import escape
 from django.utils.six import text_type
@@ -96,7 +97,7 @@ def end_of_line(text, pos):
         return len(text)
 
 
-def scrape_page(mdn_page, feature_id=None, locale='en'):
+def scrape_page(mdn_page, feature, locale='en'):
     data = OrderedDict((
         ('locale', locale),
         ('specs', []),
@@ -125,7 +126,7 @@ def scrape_page(mdn_page, feature_id=None, locale='en'):
             rule.as_rule())
         data['errors'].append(error)
         return data
-    page_data = PageVisitor(feature_id).visit(page_parsed)
+    page_data = PageVisitor(feature).visit(page_parsed)
 
     data['specs'] = page_data.get('specs', [])
     data['compat'] = page_data.get('compat', [])
@@ -142,16 +143,17 @@ class PageVisitor(NodeVisitor):
         'Firefox Mobile (Gecko)': 'Firefox Mobile',
     }
 
-    def __init__(self, feature_id=None, locale='en'):
+    def __init__(self, feature, locale='en'):
         super(PageVisitor, self).__init__()
-        self.feature_id = feature_id
+        self.feature = feature
+        assert isinstance(feature, Feature), type(feature)
         self.locale = locale
         self.specs = []
         self.issues = []
         self.errors = []
         self.compat = []
         self._browser_ids = None
-        self._feature_ids = None
+        self._feature_data = None
 
     @property
     def browser_ids(self):
@@ -163,16 +165,29 @@ class PageVisitor(NodeVisitor):
                 self._browser_ids[old_name] = self._browser_ids.get(new_name)
         return self._browser_ids
 
-    def feature_id_for(self, name):
-        """Get or create the feature ID given a name."""
-        if not self._feature_ids:
-            self._feature_ids = {}
-            if self.feature_id:
-                for feature in Feature.objects.filter(parent=self.feature_id):
-                    self._feature_ids[feature.name[self.locale]] = feature.id
-        if name not in self._feature_ids:
-            self._feature_ids[name] = '_' + name
-        return self._feature_ids[name]
+    def feature_id_and_slug(self, name):
+        """Get or create the feature ID and slug given a name."""
+        # Initialize Feature IDs
+        if not self._feature_data:
+            self._feature_data = {}
+            for feature in Feature.objects.filter(parent=self.feature):
+                name = feature.name.get(self.locale, feature.name['en'])
+                self._feature_data[name] = (feature.id, feature.slug)
+
+        # Select the Feature ID and slug
+        if name not in self._feature_data:
+            feature_id = '_' + name
+            attempt = 0
+            feature_slug = None
+            while not feature_slug:
+                base_slug = self.feature.slug + '_' + name
+                feature_slug = slugify(base_slug, suffix=attempt)
+                if Feature.objects.filter(slug=feature_slug).exists():
+                    attempt += 1
+                    feature_slug = ''
+            self._feature_data[name] = (feature_id, feature_slug)
+
+        return self._feature_data[name]
 
     def generic_visit(self, node, visited_children):
         return visited_children or node
@@ -333,10 +348,11 @@ class PageVisitor(NodeVisitor):
         name = children[2]
         assert isinstance(name, text_type), type(name)
 
-        feature_id = self.feature_id_for(name)
+        feature_id, feature_slug = self.feature_id_and_slug(name)
         return {
             'name': name,
             'id': feature_id,
+            'slug': feature_slug,
             'experimental': False,
             'standardized': True,
             'stable': True,
@@ -416,18 +432,12 @@ def range_error_to_html(page, start, end, reason, rule=None):
     return ''.join(html_bits)
 
 
-def feature_slug(parent, name, existing_slugs):
-    # TODO: Bring in slugify, unique slugify from tools
-    slug = parent.slug + "-" + name
-    return slug
-
-
 def scrape_feature_page(fp):
     """Scrape a FeaturePage object"""
     en_content = fp.translatedcontent_set.get(locale='en-US')
     fp_data = fp.reset_data()
     main_feature_id = str(fp.feature.id)
-    data = scrape_page(en_content.raw, main_feature_id)
+    data = scrape_page(en_content.raw, fp.feature)
     fp_data['meta']['scrape']['raw'] = data
 
     # Load specification section data
@@ -526,7 +536,6 @@ def scrape_feature_page(fp):
     features = OrderedDict()
     supports = OrderedDict()
     compat_table_supports = OrderedDict(((str(fp.feature.id), {}),))
-    feature_slugs = set()
     # Load compatibility section
     for table in data['compat']:
         tab = OrderedDict((
@@ -554,10 +563,9 @@ def scrape_feature_page(fp):
         for f in table['features']:
             if str(f['id']).startswith('_'):
                 # Fake feature
-                slug = feature_slug(fp.feature, f['name'], feature_slugs)
                 feature_content = OrderedDict((
                     ('id', f['id']),
-                    ('slug', slug),
+                    ('slug', f['slug']),
                     ('mdn_uri', None),
                     ('experimental', f['experimental']),
                     ('standardized', f['standardized']),
@@ -625,3 +633,20 @@ def scrape_feature_page(fp):
     # Update status, issues
     fp.status = fp.STATUS_PARSED
     fp.save()
+
+
+def slugify(word, length=50, suffix=""):
+    raw = word.lower()
+    out = []
+    acceptable = string.ascii_lowercase + string.digits + '_-'
+    for c in raw:
+        if c in acceptable:
+            out.append(c)
+        else:
+            out.append('_')
+    slugged = ''.join(out)
+    while '__' in slugged:
+        slugged = slugged.replace('__', '_')
+    suffix = str(suffix) if suffix else ""
+    with_suffix = slugged[slice(length - len(suffix))] + suffix
+    return with_suffix

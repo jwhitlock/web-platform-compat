@@ -126,6 +126,7 @@ def parse_compat_data(compat_data, local_collection):
 
 
 def slugify(word, attempt=0):
+    # TODO: replace with mdn.scrape.slugify
     raw = word.lower().encode('utf-8')
     out = []
     acceptable = string.ascii_lowercase + string.digits + '_-'

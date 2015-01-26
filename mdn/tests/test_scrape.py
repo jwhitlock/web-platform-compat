@@ -8,7 +8,7 @@ from parsimonious.grammar import Grammar
 from mdn.models import FeaturePage, TranslatedContent
 from mdn.scrape import (
     end_of_line, page_grammar, range_error_to_html, scrape_page,
-    scrape_feature_page)
+    scrape_feature_page, slugify)
 from webplatformcompat.models import (
     Browser, Feature, Maturity, Section, Specification)
 from webplatformcompat.tests.base import TestCase
@@ -174,6 +174,10 @@ Block formatting context</a></li>
             self.browsers[slug] = self.create(
                 Browser, slug=slug, name={"en": name})
 
+        if not hasattr(self, 'features'):
+            self.add_compat_features()
+
+    def add_compat_features(self):
         self.features = dict()
         self.features['web'] = self.create(
             Feature, slug='web', name={"en": "Web"})
@@ -201,10 +205,12 @@ class TestEndOfLine(ScrapeTestCase):
 
 
 class TestScrape(ScrapeTestCase):
+    def setUp(self):
+        self.add_compat_features()
 
     def assertScrape(self, page, expected):
         """Specialize assertion for scraping"""
-        actual = scrape_page(page)
+        actual = scrape_page(page, self.features['web-css-background-size'])
         exp_issues = expected.pop('issues')
         act_issues = actual.pop('issues')
         exp_errors = expected.pop('errors')
@@ -220,7 +226,7 @@ class TestScrape(ScrapeTestCase):
                 exp_error, act_error, range_error_to_html(page, *act_error))
 
     def test_empty(self):
-        out = scrape_page("")
+        out = scrape_page("", self.features['web-css-background-size'])
         expected = {
             'locale': 'en',
             'specs': [],
@@ -285,6 +291,7 @@ class TestScrape(ScrapeTestCase):
                     {
                         'name': 'Basic support',
                         'id': '_Basic support',
+                        'slug': 'web-css-background-size_basic_support',
                         'experimental': False,
                         'standardized': True,
                         'stable': True,
@@ -314,6 +321,7 @@ class TestScrape(ScrapeTestCase):
                     {
                         'name': 'Basic support',
                         'id': '_Basic support',
+                        'slug': 'web-css-background-size_basic_support',
                         'experimental': False,
                         'standardized': True,
                         'stable': True,
@@ -374,6 +382,7 @@ class TestScrape(ScrapeTestCase):
                     {
                         'name': 'Basic support',
                         'id': '_Basic support',
+                        'slug': 'web-css-background-size_basic_support',
                         'experimental': False,
                         'standardized': True,
                         'stable': True,
@@ -403,6 +412,7 @@ class TestScrape(ScrapeTestCase):
                     {
                         'name': 'Basic support',
                         'id': '_Basic support',
+                        'slug': 'web-css-background-size_basic_support',
                         'experimental': False,
                         'standardized': True,
                         'stable': True,
@@ -414,6 +424,21 @@ class TestScrape(ScrapeTestCase):
             'errors': [],
         }
         self.assertScrape(self.simple_page, expected)
+
+    def test_feature_slug_is_unique(self):
+        self.add_models()
+        collide = self.create(
+            Feature, slug='web-css-background-size_basic_support',
+            name={'en': 'Not Basic Support'})
+        actual = scrape_page(
+            self.simple_page,
+            self.features['web-css-background-size'])
+        self.assertNotEqual(
+            str(collide.id),
+            actual['compat'][0]['features'][0]['id'])
+        self.assertEqual(
+            'web-css-background-size_basic_support1',
+            actual['compat'][0]['features'][0]['slug'])
 
     def test_parse_error(self):
         page = self.simple_page.replace("</h2>", "</h3")
@@ -612,3 +637,23 @@ size&#39;, &#39;background-size&#39;)}}&lt;/td&gt;
 20    &lt;td&gt;&lt;/td&gt;
 </pre></p></div>"""
         self.assertEqual(expected, html)
+
+
+class TestSlugify(TestCase):
+    def test_already_slugged(self):
+        self.assertEqual('foo', slugify('foo'))
+
+    def test_long_string(self):
+        self.assertEqual(
+            'abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvw',
+            slugify('ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz'))
+
+    def test_non_ascii(self):
+        self.assertEqual('_', slugify("Рекомендация"))
+
+    def test_limit(self):
+        self.assertEqual(
+            'abcdefghij', slugify('ABCDEFGHIJKLMNOPQRSTUVWXYZ', length=10))
+
+    def test_num_suffix(self):
+        self.assertEqual('slug13', slugify('slug', suffix=13))

@@ -225,6 +225,7 @@ def parse_spec2(specname, local_collection):
 
 
 def slugify(word, attempt=0):
+    # TODO: replace with mdn.scrape.slugify
     raw = word.lower().encode('utf-8')
     out = []
     acceptable = string.ascii_lowercase + string.digits + '_-'
