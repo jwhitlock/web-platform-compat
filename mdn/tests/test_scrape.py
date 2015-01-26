@@ -205,6 +205,8 @@ class TestEndOfLine(ScrapeTestCase):
 
 
 class TestScrape(ScrapeTestCase):
+    longMessage = True
+
     def setUp(self):
         self.add_compat_features()
 
@@ -332,16 +334,16 @@ class TestScrape(ScrapeTestCase):
             'issues': [],
             'errors': [
                 (902, 986, 'Unknown Specification "CSS3 Backgrounds"'),
-                (1262, 1282, u'Unknown Browser "Chrome"'),
-                (1282, 1311, u'Unknown Browser "Firefox (Gecko)"'),
-                (1311, 1342, u'Unknown Browser "Internet Explorer"'),
-                (1342, 1361, u'Unknown Browser "Opera"'),
-                (1361, 1380, u'Unknown Browser "Safari"'),
-                (1665, 1686, u'Unknown Browser "Android"'),
-                (1686, 1722, u'Unknown Browser "Firefox Mobile (Gecko)"'),
-                (1722, 1745, u'Unknown Browser "IE Mobile"'),
-                (1745, 1771, u'Unknown Browser "Opera Mobile"'),
-                (1771, 1797, u'Unknown Browser "Safari Mobile"'),
+                (1266, 1272, 'Unknown Browser "Chrome"'),
+                (1286, 1301, 'Unknown Browser "Firefox (Gecko)"'),
+                (1315, 1332, 'Unknown Browser "Internet Explorer"'),
+                (1346, 1351, 'Unknown Browser "Opera"'),
+                (1365, 1371, 'Unknown Browser "Safari"'),
+                (1669, 1676, 'Unknown Browser "Android"'),
+                (1690, 1712, 'Unknown Browser "Firefox Mobile (Gecko)"'),
+                (1726, 1735, 'Unknown Browser "IE Mobile"'),
+                (1749, 1761, 'Unknown Browser "Opera Mobile"'),
+                (1775, 1788, 'Unknown Browser "Safari Mobile"'),
             ]
         }
         self.assertScrape(self.simple_page, expected)

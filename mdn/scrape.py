@@ -45,13 +45,16 @@ spec2_td = "<td>" kuma_esc_start "Spec2" kuma_func_start qtext
 specdesc_td = "<td>" _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
-compat_section = _ compat_h2 _ compat_kuma_div _ compat_div* compat_footnotes?
+compat_section = _ compat_h2 _ compat_kuma _ compat_div* compat_footnotes?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
-compat_kuma_div = "<div>" _ kuma_esc_start _ "CompatibilityTable" _
+compat_kuma = (compat_kuma_div / compat_kuma_p)
+compat_kuma_div = "<div>" _ kuma_esc_start _ "CompatibilityTable" "()"? _
     kuma_esc_end _ "</div>"
+compat_kuma_p = "<p>" _ kuma_esc_start _ "CompatibilityTable" "()"? _
+    kuma_esc_end _ "</p>"
 compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
-    _ "</div>"_
+    _ "</div>" _
 compat_div_id = qtext
 compat_table = "<table class=\"compat-table\">" _ compat_body _ "</table>" _
 compat_body = "<tbody>" _ compat_hrow _ compat_rows* _ "</tbody>"
@@ -329,18 +332,22 @@ class PageVisitor(NodeVisitor):
 
     def visit_compat_client_cell(self, node, children):
         compat_client_name = children[2]
-        assert isinstance(compat_client_name, text_type), \
+        assert isinstance(compat_client_name, dict), \
             type(compat_client_name)
+        return compat_client_name
 
-        browser_id = self.browser_ids.get(compat_client_name)
+    def visit_compat_client_name(self, node, children):
+        name = node.match.group('content')
+        assert isinstance(name, text_type), type(name)
+
+        browser_id = self.browser_ids.get(name)
         if not browser_id:
             self.errors.append(
-                (node.start, node.end,
-                 'Unknown Browser "%s"' % compat_client_name))
-            browser_id = "_" + compat_client_name
+                (node.start, node.end, 'Unknown Browser "%s"' % name))
+            browser_id = "_" + name
 
         return {
-            'name': compat_client_name,
+            'name': name,
             'id': browser_id,
         }
 
@@ -384,7 +391,6 @@ class PageVisitor(NodeVisitor):
     visit_bare_text = generic_visit_content
     visit_ident = generic_visit_content
     visit_inner_td = generic_visit_content
-    visit_compat_client_name = generic_visit_content
     visit_compat_feature = generic_visit_content
     visit_compat_support = generic_visit_content
 
