@@ -478,7 +478,7 @@ class PageVisitor(NodeVisitor):
         # Filter attributes
         attr_dict = {}
         for name, value in attrs:
-            if name not in expected:  # pragma: nocover
+            if name not in expected:
                 self.issues.append((
                     node.start, node.end,
                     "Unexpected attribute <%s %s=\"%s\">" % (

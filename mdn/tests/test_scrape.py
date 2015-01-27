@@ -8,7 +8,7 @@ from parsimonious.grammar import Grammar
 from mdn.models import FeaturePage, TranslatedContent
 from mdn.scrape import (
     end_of_line, page_grammar, range_error_to_html, scrape_page,
-    scrape_feature_page, slugify)
+    scrape_feature_page, slugify, PageVisitor)
 from webplatformcompat.models import (
     Browser, Feature, Maturity, Section, Specification)
 from webplatformcompat.tests.base import TestCase
@@ -326,6 +326,36 @@ class TestEndOfLine(ScrapeTestCase):
     def test_end_of_text(self):
         end = end_of_line(self.simple_page, len(self.simple_page) - 2)
         self.assertEqual(len(self.simple_page), end)
+
+
+class TestPageVisitor(ScrapeTestCase):
+    def setUp(self):
+        self.add_compat_features()
+        self.grammar = Grammar(page_grammar)
+        self.visitor = PageVisitor(self.features['web-css-background-size'])
+
+    def test_compat_row_cell_with_rowspan(self):
+        text = '<td rowspan="2">Some Feature</td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        capture = parsed.children[2]
+        self.assertEqual('Some Feature', capture.text)
+        expected = {
+            'content': 'Some Feature',
+            'rowspan': '2'
+        }
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_row_cell_with_unknown_attr(self):
+        text = '<td class="freaky">Some Feature</td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        capture = parsed.children[2]
+        self.assertEqual('Some Feature', capture.text)
+        expected = {
+            'content': 'Some Feature',
+        }
+        self.assertEqual(expected, self.visitor.visit(parsed))
+        expected_issues = [(0, 19, 'Unexpected attribute <td class="freaky">')]
+        self.assertEqual(expected_issues, self.visitor.issues)
 
 
 class TestScrape(ScrapeTestCase):
