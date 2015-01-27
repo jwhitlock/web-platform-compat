@@ -1,5 +1,5 @@
 """Test mdn.scrape."""
-# vim: set fileencoding=utf-8 :
+# -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 from json import dumps
 
@@ -132,6 +132,127 @@ class ScrapeTestCase(TestCase):
  </table>
 </div>
 """
+    # From Web/CSS/background-size?raw
+    # colspan="3" on the Safari column
+    # rowspan="2" on Basic Support row
+    # footnotes with a <pre> section
+    complex_compat_section = """\
+<h2 id="Browser_compatibility" name="Browser_compatibility">\
+Browser compatibility</h2>
+<div>
+ {{CompatibilityTable}}</div>
+<div id="compat-desktop">
+ <table class="compat-table">
+  <tbody>
+   <tr>
+    <th>Feature</th>
+    <th>Chrome</th>
+    <th>Firefox (Gecko)</th>
+    <th>Internet Explorer</th>
+    <th>Opera</th>
+    <th colspan="3">Safari (WebKit)</th>
+   </tr>
+   <tr>
+    <td rowspan="2">Basic support</td>
+    <td>1.0{{property_prefix("-webkit")}} [2]</td>
+    <td>{{CompatGeckoDesktop("1.9.2")}}{{property_prefix("-moz")}} [4]</td>
+    <td rowspan="2">9.0 [5]</td>
+    <td>9.5{{property_prefix("-o")}}<br>
+     with some bugs [1]</td>
+    <td>3.0 (522){{property_prefix("-webkit")}}<br>
+     but from an older CSS3 draft [2]</td>
+   </tr>
+   <tr>
+    <td>3.0</td>
+    <td>{{CompatGeckoDesktop("2.0")}}</td>
+    <td>10.0</td>
+    <td>4.1 (532)</td>
+   </tr>
+   <tr>
+    <td>Support for<br>
+     <code>contain</code> and <code>cover</code></td>
+    <td>3.0</td>
+    <td>{{CompatGeckoDesktop("1.9.2")}}</td>
+    <td>9.0 [5]</td>
+    <td>10.0</td>
+    <td colspan="3">4.1 (532)</td>
+   </tr>
+   <tr>
+    <td>Support for SVG backgrounds</td>
+    <td>{{CompatUnknown}}</td>
+    <td>{{CompatGeckoDesktop("8.0")}}</td>
+    <td>{{CompatUnknown}}</td>
+    <td>{{CompatUnknown}}</td>
+    <td colspan="3">{{CompatUnknown}}</td>
+   </tr>
+  </tbody>
+ </table>
+</div>
+<div id="compat-mobile">
+ <table class="compat-table">
+  <tbody>
+   <tr>
+    <th>Feature</th>
+    <th>Android</th>
+    <th>Firefox Mobile (Gecko)</th>
+    <th>Windows Phone</th>
+    <th>Opera Mobile</th>
+    <th>Safari Mobile</th>
+   </tr>
+   <tr>
+    <td>Basic support</td>
+    <td>{{CompatVersionUnknown}}{{property_prefix("-webkit")}}<br>
+     2.3</td>
+    <td>1.0{{property_prefix("-moz")}}<br>
+     4.0</td>
+    <td>{{CompatUnknown}}</td>
+    <td>{{CompatUnknown}}</td>
+    <td>5.1 (maybe earlier)</td>
+   </tr>
+   <tr>
+    <td>Support for SVG backgrounds</td>
+    <td>{{CompatUnknown}}</td>
+    <td>{{CompatGeckoMobile("8.0")}}</td>
+    <td>{{CompatUnknown}}</td>
+    <td>{{CompatUnknown}}</td>
+    <td>{{CompatUnknown}}</td>
+   </tr>
+  </tbody>
+ </table>
+</div>
+"""
+    complex_compat_footnotes = """\
+<p>[1] Opera 9.5's computation of the background positioning area is incorrect\
+ for fixed backgrounds.  Opera 9.5 also interprets the two-value form as a\
+ horizontal scaling factor and, from appearances, a vertical <em>clipping</em>\
+ dimension. This has been fixed in Opera 10.</p>
+<p>[2] WebKit-based browsers originally implemented an older draft of\
+ CSS3<code> background-size </code>in which an omitted second value is treated\
+ as <em>duplicating</em> the first value; this draft does not include\
+ the<code> contain </code>or<code> cover </code>keywords.</p>
+<p>[3] Konqueror 3.5.4 supports<code> -khtml-background-size</code>.</p>
+<p>[4] While this property is new in Gecko 1.9.2 (Firefox 3.6), it is possible\
+ to stretch a image fully over the background in Firefox 3.5 by using\
+ {{cssxref("-moz-border-image")}}.</p>
+<pre class="brush:css">.foo {
+  background-image: url(bg-image.png);
+
+  -webkit-background-size: 100% 100%;           /* Safari 3.0 */
+     -moz-background-size: 100% 100%;           /* Gecko 1.9.2 (Firefox 3.6) */
+       -o-background-size: 100% 100%;           /* Opera 9.5 */
+          background-size: 100% 100%;           /* Gecko 2.0 (Firefox 4.0) and\
+ other CSS3-compliant browsers */
+
+  -moz-border-image: url(bg-image.png) 0;    /* Gecko 1.9.1 (Firefox 3.5) */
+}</pre>
+<p>[5] Though Internet Explorer 8 doesn't support the\
+ <code>background-size</code> property, it is possible to emulate some of its\
+ functionality using the non-standard <code>-ms-filter</code> function:</p>
+<pre class="brush:css">-ms-filter:\
+ "progid:DXImageTransform.Microsoft.AlphaImageLoader(\
+src='path_relative_to_the_HTML_file', sizingMethod='scale')";</pre>
+<p>This simulates the value <code>cover</code>.</p>
+"""
 
     simple_see_also = """\
 <h2 id="See_also">See also</h2>
@@ -143,6 +264,9 @@ Block formatting context</a></li>
     simple_page = (
         simple_prefix + simple_other_section + simple_spec_section +
         simple_compat_section + simple_see_also)
+    complex_page = (
+        simple_prefix + simple_other_section + simple_spec_section +
+        complex_compat_section + complex_compat_footnotes + simple_see_also)
 
     def add_spec_models(self):
         self.maturity = self.create(
@@ -233,6 +357,7 @@ class TestScrape(ScrapeTestCase):
             'locale': 'en',
             'specs': [],
             'compat': [],
+            'footnotes': None,
             'issues': [],
             'errors': ["No <h2> found in page"],
         }
@@ -251,6 +376,7 @@ class TestScrape(ScrapeTestCase):
                 'section.id': None,
             }],
             'compat': [],
+            'footnotes': None,
             'issues': [],
             'errors': [
                 (251, 335, 'Unknown Specification "CSS3 Backgrounds"'),
@@ -277,7 +403,7 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Chrome',
                         'id': '_Chrome',
                     }, {
-                        'name': 'Firefox (Gecko)',
+                        'name': 'Firefox',
                         'id': '_Firefox (Gecko)',
                     }, {
                         'name': 'Internet Explorer',
@@ -300,6 +426,7 @@ class TestScrape(ScrapeTestCase):
                         'obsolete': False,
                     }],
                 'supports': [],
+                'versions': [],
             }, {
                 'name': 'mobile',
                 'browsers': [
@@ -307,7 +434,7 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Android',
                         'id': '_Android',
                     }, {
-                        'name': 'Firefox Mobile (Gecko)',
+                        'name': 'Firefox Mobile',
                         'id': '_Firefox Mobile (Gecko)',
                     }, {
                         'name': 'IE Mobile',
@@ -330,7 +457,9 @@ class TestScrape(ScrapeTestCase):
                         'obsolete': False,
                     }],
                 'supports': [],
+                'versions': [],
             }],
+            'footnotes': None,
             'issues': [],
             'errors': [
                 (902, 986, 'Unknown Specification "CSS3 Backgrounds"'),
@@ -368,7 +497,7 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Chrome',
                         'id': self.browsers['chrome'].pk,
                     }, {
-                        'name': 'Firefox (Gecko)',
+                        'name': 'Firefox',
                         'id': self.browsers['firefox'].pk,
                     }, {
                         'name': 'Internet Explorer',
@@ -391,6 +520,7 @@ class TestScrape(ScrapeTestCase):
                         'obsolete': False,
                     }],
                 'supports': [],
+                'versions': [],
             }, {
                 'name': 'mobile',
                 'browsers': [
@@ -398,7 +528,7 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Android',
                         'id': self.browsers['android'].pk,
                     }, {
-                        'name': 'Firefox Mobile (Gecko)',
+                        'name': 'Firefox Mobile',
                         'id': self.browsers['firefox-mobile'].pk,
                     }, {
                         'name': 'IE Mobile',
@@ -421,11 +551,128 @@ class TestScrape(ScrapeTestCase):
                         'obsolete': False,
                     }],
                 'supports': [],
+                'versions': [],
             }],
+            'footnotes': None,
             'issues': [],
             'errors': [],
         }
         self.assertScrape(self.simple_page, expected)
+
+    def test_complex_page_with_data(self):
+        self.add_models()
+        expected = {
+            'locale': 'en',
+            'specs': [{
+                'specification.mdn_key': 'CSS3 Backgrounds',
+                'specification.id': self.spec.id,
+                'section.subpath': '#the-background-size',
+                'section.name': 'background-size',
+                'section.note': '',
+                'section.id': self.section.id,
+            }],
+            'compat': [{
+                'name': 'desktop',
+                'browsers': [
+                    {
+                        'name': 'Chrome',
+                        'id': self.browsers['chrome'].pk,
+                    }, {
+                        'name': 'Firefox',
+                        'id': self.browsers['firefox'].pk,
+                    }, {
+                        'name': 'Internet Explorer',
+                        'id': self.browsers['ie'].pk,
+                    }, {
+                        'name': 'Opera',
+                        'id': self.browsers['opera'].pk,
+                    }, {
+                        'name': 'Safari',
+                        'id': self.browsers['safari'].pk,
+                    }],
+                'features': [
+                    {
+                        'name': 'Basic support',
+                        'id': '_Basic support',
+                        'slug': 'web-css-background-size_basic_support',
+                        'experimental': False,
+                        'standardized': True,
+                        'stable': True,
+                        'obsolete': False,
+                    }, {
+                        'id': (
+                            '_Support for<br>\n     <code>contain</code> and'
+                            ' <code>cover</code>'),
+                        'name': (
+                            'Support for<br>\n     <code>contain</code> and'
+                            ' <code>cover</code>'),
+                        'slug': (
+                            'web-css-background-size_support_for_br_code'
+                            '_contai'),
+                        'experimental': False,
+                        'standardized': True,
+                        'stable': True,
+                        'obsolete': False,
+                    }, {
+                        'name': 'Support for SVG backgrounds',
+                        'id': '_Support for SVG backgrounds',
+                        'slug': (
+                            'web-css-background-size_support_for_svg_'
+                            'background'),
+                        'experimental': False,
+                        'standardized': True,
+                        'stable': True,
+                        'obsolete': False,
+                    }],
+                'supports': [],
+                'versions': [],
+            }, {
+                'name': 'mobile',
+                'browsers': [
+                    {
+                        'name': 'Android',
+                        'id': self.browsers['android'].pk,
+                    }, {
+                        'name': 'Firefox Mobile',
+                        'id': self.browsers['firefox-mobile'].pk,
+                    }, {
+                        'name': 'IE Mobile',
+                        'id': self.browsers['ie-mobile'].pk,
+                    }, {
+                        'name': 'Opera Mobile',
+                        'id': self.browsers['opera-mobile'].pk,
+                    }, {
+                        'name': 'Safari Mobile',
+                        'id': self.browsers['safari-mobile'].pk,
+                    }],
+                'features': [
+                    {
+                        'name': 'Basic support',
+                        'id': '_Basic support',
+                        'slug': 'web-css-background-size_basic_support',
+                        'experimental': False,
+                        'standardized': True,
+                        'stable': True,
+                        'obsolete': False,
+                    }, {
+                        'name': 'Support for SVG backgrounds',
+                        'id': '_Support for SVG backgrounds',
+                        'slug': (
+                            'web-css-background-size_support_for_svg_'
+                            'background'),
+                        'experimental': False,
+                        'standardized': True,
+                        'stable': True,
+                        'obsolete': False,
+                    }],
+                'supports': [],
+                'versions': [],
+            }],
+            'footnotes': self.complex_compat_footnotes,
+            'issues': [],
+            'errors': [],
+        }
+        self.assertScrape(self.complex_page, expected)
 
     def test_feature_slug_is_unique(self):
         self.add_models()
@@ -448,6 +695,7 @@ class TestScrape(ScrapeTestCase):
             'locale': 'en',
             'specs': [],
             'compat': [],
+            'footnotes': None,
             'issues': [],
             'errors': [
                 (24, 52,
@@ -475,6 +723,7 @@ class TestScrape(ScrapeTestCase):
                 'section.id': None,
             }],
             'compat': [],
+            'footnotes': None,
             'issues': [
                 (0, 79,
                  'In Specifications section, expected <h2 id="Specifications">'

@@ -45,7 +45,7 @@ spec2_td = "<td>" kuma_esc_start "Spec2" kuma_func_start qtext
 specdesc_td = "<td>" _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
-compat_section = _ compat_h2 _ compat_kuma _ compat_div* compat_footnotes?
+compat_section = _ compat_h2 _ compat_kuma _ compat_divs compat_footnotes?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
 compat_kuma = (compat_kuma_div / compat_kuma_p)
@@ -53,23 +53,22 @@ compat_kuma_div = "<div>" _ kuma_esc_start _ "CompatibilityTable" "()"? _
     kuma_esc_end _ "</div>"
 compat_kuma_p = "<p>" _ kuma_esc_start _ "CompatibilityTable" "()"? _
     kuma_esc_end _ "</p>"
+compat_divs = compat_div+
 compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
     _ "</div>" _
 compat_div_id = qtext
 compat_table = "<table class=\"compat-table\">" _ compat_body _ "</table>" _
-compat_body = "<tbody>" _ compat_hrow _ compat_rows* _ "</tbody>"
-compat_hrow = "<tr>" _ "<th>Feature</th>" _ compat_client_cells _ "</tr>" _
+compat_body = "<tbody>" _ compat_headers _ compat_rows* _ "</tbody>"
+compat_headers = tr_open _ "<th>Feature</th>" _ compat_client_cells _ "</tr>" _
 compat_client_cells = compat_client_cell*
-compat_client_cell = "<th>" _ compat_client_name _ "</th>" _
+compat_client_cell = th_open _ compat_client_name _ "</th>" _
 compat_client_name = ~r"(?P<content>.*?(?=</th>))"s
 compat_rows = compat_row* _
-compat_row = "<tr>" _ compat_feature_cell _ compat_support_cells _ "</tr>" _
-compat_feature_cell = "<td>" _ compat_feature _ "</td>" _
-compat_support_cells = compat_support_cell*
-compat_support_cell = "<td>" _ compat_support _ "</td>" _
-compat_feature = ~r"(?P<content>.*?(?=</td>))"s
-compat_support = ~r"(?P<content>.*?(?=</td>))"s
-compat_footnotes = ~r"(P<content>.*?(?=<h2))"s
+compat_row = tr_open _ compat_row_cells _ "</tr>" _
+compat_row_cells = compat_row_cell+
+compat_row_cell = td_open _ compat_cell _ "</td>" _
+compat_cell = ~r"(?P<content>.*?(?=</td>))"s
+compat_footnotes = ~r"(?P<content>.*?(?=<h2))"s
 
 kuma_esc_start = _ "{{" _
 kuma_func_start = "(" _
@@ -77,7 +76,12 @@ kuma_func_arg = _ "," _
 kuma_func_end = _ ")" _
 kuma_esc_end = _ "}}" _
 
+tr_open = "<tr" _ opt_attrs ">"
+th_open = "<th" _ opt_attrs ">"
+td_open = "<td" _ opt_attrs ">"
+
 attrs = attr+
+opt_attrs = attr*
 attr = _ ident _ equals _ qtext _
 equals = "="
 ident = ~r"(?P<content>[a-z][a-z0-9-:]*)"
@@ -105,6 +109,7 @@ def scrape_page(mdn_page, feature, locale='en'):
         ('locale', locale),
         ('specs', []),
         ('compat', []),
+        ('footnotes', None),
         ('issues', []),
         ('errors', []),
     ))
@@ -135,6 +140,7 @@ def scrape_page(mdn_page, feature, locale='en'):
     data['compat'] = page_data.get('compat', [])
     data['issues'] = page_data.get('issues', [])
     data['errors'] = page_data.get('errors', [])
+    data['footnotes'] = page_data.get('footnotes', None)
     return data
 
 
@@ -144,6 +150,10 @@ class PageVisitor(NodeVisitor):
     browser_name_fixes = {
         'Firefox (Gecko)': 'Firefox',
         'Firefox Mobile (Gecko)': 'Firefox Mobile',
+        'Safari (WebKit)': 'Safari',
+        'Windows Phone': 'IE Mobile',
+        'IE Phone': 'IE Mobile',
+        'IE\xa0Phone': 'IE Mobile',
     }
 
     def __init__(self, feature, locale='en'):
@@ -155,6 +165,7 @@ class PageVisitor(NodeVisitor):
         self.issues = []
         self.errors = []
         self.compat = []
+        self.footnotes = None
         self._browser_ids = None
         self._feature_data = None
 
@@ -164,8 +175,6 @@ class PageVisitor(NodeVisitor):
             self._browser_ids = {}
             for browser in Browser.objects.all():
                 self._browser_ids[browser.name[self.locale]] = browser.pk
-            for old_name, new_name in self.browser_name_fixes.items():
-                self._browser_ids[old_name] = self._browser_ids.get(new_name)
         return self._browser_ids
 
     def feature_id_and_slug(self, name):
@@ -202,6 +211,7 @@ class PageVisitor(NodeVisitor):
             'issues': self.issues,
             'errors': self.errors,
             'compat': self.compat,
+            'footnotes': self.footnotes,
         }
 
     visit_spec_section = visit_doc
@@ -271,6 +281,8 @@ class PageVisitor(NodeVisitor):
     def visit_attrs(self, node, children):
         return children
 
+    visit_opt_attrs = visit_attrs
+
     def visit_spec_h2(self, node, children):
         attrs_list = children[2][0]
         attrs = dict(attrs_list)
@@ -291,97 +303,201 @@ class PageVisitor(NodeVisitor):
 
     def visit_compat_section(self, node, children):
         compat_divs = children[5]
+        compat_footnotes = children[6]
+
+        assert isinstance(compat_divs, list), type(compat_divs)
+        for div in compat_divs:
+            assert isinstance(div, dict), type(div)
         self.compat = compat_divs
+        self.footnotes = compat_footnotes[0].text or None
 
     def visit_compat_div(self, node, children):
         compat_div_id = children[6][0]
-        compat_body = children[9]
+        compat_table = children[9]
 
         pre, div_id = compat_div_id.split('-', 1)
         assert isinstance(div_id, text_type), type(div_id)
+        assert isinstance(compat_table, dict), type(compat_table)
 
-        # Unpack body data
-        browsers, support_rows = compat_body
-        features, supports = support_rows
-
-        return {
-            'name': div_id,
-            'browsers': browsers,
-            'features': list(features),
-            'supports': list(chain.from_iterable(supports))
-        }
+        div = compat_table.copy()
+        div['name'] = div_id
+        return div
 
     def visit_compat_table(self, node, children):
         compat_body = children[2]
-        assert isinstance(compat_body, tuple), type(compat_body)
-        assert len(compat_body) == 2
+        assert isinstance(compat_body, dict), type(compat_body)
         return compat_body
 
     def visit_compat_body(self, node, children):
-        compat_hrow = children[2]
+        compat_headers = children[2]
         compat_rows = children[4][0]
 
-        assert isinstance(compat_hrow, list), type(compat_hrow)
+        assert isinstance(compat_headers, list), type(compat_headers)
+        for header in compat_headers:
+            assert isinstance(header, dict), type(header)
         assert isinstance(compat_rows, list), type(compat_rows)
-        return (compat_hrow, compat_rows)
+        for row in compat_rows:
+            assert isinstance(row, dict), type(row)
 
-    def visit_compat_hrow(self, node, children):
+        browsers = OrderedDict()
+        versions = OrderedDict()
+        features = OrderedDict()
+        supports = OrderedDict()
+
+        # Gather the browsers and determine # of columns
+        columns = [None]
+        for browser in compat_headers:
+            colspan = int(browser.pop('colspan', 1))
+            browser_id = browser['id']
+            browsers[browser_id] = browser
+            for i in range(colspan):
+                columns.append(browser_id)
+
+        # Create an empty row grid
+        table = []
+        for row in range(len(compat_rows)):
+            table_row = []
+            for col in range(len(columns)):
+                table_row.append(None)
+            table.append(table_row)
+
+        # Parse the rows for features and supports
+        support_id = 0
+        for row, compat_row in enumerate(compat_rows):
+            for cell in compat_row['cells']:
+                col = table[row].index(None)
+                rowspan = int(cell.pop('rowspan', 1))
+                colspan = int(cell.pop('colspan', 1))
+                if col == 0:
+                    # Insert as feature
+                    name = cell['content']
+                    cell_id, feature_slug = self.feature_id_and_slug(name)
+                    feature = {
+                        'name': name,
+                        'id': cell_id,
+                        'slug': feature_slug,
+                        'experimental': False,
+                        'standardized': True,
+                        'stable': True,
+                        'obsolete': False,
+                    }
+                    features[cell_id] = feature
+                else:
+                    # Insert as support
+                    # support = {
+                    #     'content': cell['content']
+                    # }
+                    cell_id = support_id
+                    support_id += 1
+                # Insert IDs into table
+                for r in range(rowspan):
+                    for c in range(colspan):
+                        table[row + r][col + c] = cell_id
+
+        return {
+            'browsers': list(browsers.values()),
+            'versions': list(versions.values()),
+            'features': list(features.values()),
+            'supports': list(supports.values())
+        }
+
+    def visit_compat_headers(self, node, children):
         compat_client_cells = children[4]
         assert isinstance(compat_client_cells, list), type(compat_client_cells)
+        for cell in compat_client_cells:
+            assert isinstance(cell, dict), type(cell)
         return compat_client_cells
 
     def visit_compat_client_cell(self, node, children):
+        th_open = children[0]
         compat_client_name = children[2]
-        assert isinstance(compat_client_name, dict), \
-            type(compat_client_name)
-        return compat_client_name
+        assert isinstance(th_open, dict), type(th_open)
+        assert isinstance(compat_client_name, dict), type(compat_client_name)
+        client = compat_client_name.copy()
+        client.update(th_open)
+        return client
 
     def visit_compat_client_name(self, node, children):
         name = node.match.group('content')
         assert isinstance(name, text_type), type(name)
 
-        browser_id = self.browser_ids.get(name)
+        fixed_name = self.browser_name_fixes.get(name, name)
+        browser_id = self.browser_ids.get(fixed_name)
         if not browser_id:
             self.errors.append(
                 (node.start, node.end, 'Unknown Browser "%s"' % name))
             browser_id = "_" + name
 
         return {
-            'name': name,
+            'name': fixed_name,
             'id': browser_id,
         }
 
-    def visit_compat_feature_cell(self, node, children):
-        name = children[2]
-        assert isinstance(name, text_type), type(name)
-
-        feature_id, feature_slug = self.feature_id_and_slug(name)
-        return {
-            'name': name,
-            'id': feature_id,
-            'slug': feature_slug,
-            'experimental': False,
-            'standardized': True,
-            'stable': True,
-            'obsolete': False,
-        }
-
     def visit_compat_rows(self, node, children):
-        compat_row_star = children[0]
-        assert isinstance(compat_row_star, list), type(compat_row_star)
+        compat_rows = children[0]
 
-        # Turn list of (feature, support) pairs into list of features, supports
-        out = list(zip(chain.from_iterable(compat_row_star)))
-        return out
+        assert isinstance(compat_rows, list), type(compat_rows)
+        for row in compat_rows:
+            assert isinstance(row, dict), type(row)
+        return compat_rows
 
     def visit_compat_row(self, node, children):
-        compat_feature_cell = children[2]
-        compat_support_cells = children[4]
+        tr_open = children[0]
+        compat_row_cells = children[2]
 
-        assert isinstance(compat_feature_cell, dict), type(compat_feature_cell)
-        assert compat_support_cells
+        assert isinstance(tr_open, dict), type(tr_open)
+        assert isinstance(compat_row_cells, list), type(compat_row_cells)
+        for cell in compat_row_cells:
+            assert isinstance(cell, dict), type(cell)
+        row_dict = {
+            'cells': compat_row_cells,
+        }
+        row_dict.update(tr_open)
+        return row_dict
 
-        return (compat_feature_cell, [])
+    def visit_compat_row_cell(self, node, children):
+        td_open = children[0]
+        compat_cell = children[2]
+
+        assert isinstance(td_open, dict), type(td_open)
+        assert isinstance(compat_cell, text_type), type(compat_cell)
+
+        cell_dict = {
+            'content': compat_cell,
+        }
+        cell_dict.update(td_open)
+        return cell_dict
+
+    def visit_generic_open(self, node, children, tag, expected):
+        """Parse an opening tag with an expectd attributes list"""
+        attrs = children[2]
+        assert isinstance(attrs, list), type(attrs)
+        for attr in attrs:
+            assert len(attr) == 2, attr
+
+        # Filter attributes
+        attr_dict = {}
+        for name, value in attrs:
+            if name not in expected:  # pragma: nocover
+                self.issues.append((
+                    node.start, node.end,
+                    "Unexpected attribute <%s %s=\"%s\">" % (
+                        tag, name, value)))
+            else:
+                attr_dict[name] = value
+        return attr_dict
+
+    def visit_td_open(self, node, children):
+        expected = ('rowspan', 'colspan')
+        return self.visit_generic_open(node, children, 'td', expected)
+
+    def visit_th_open(self, node, children):
+        expected = ('colspan',)
+        return self.visit_generic_open(node, children, 'th', expected)
+
+    def visit_tr_open(self, node, children):
+        expected = []
+        return self.visit_generic_open(node, children, 'tr', expected)
 
     def generic_visit_content(self, node, args):
         return node.match.group('content')
@@ -393,6 +509,7 @@ class PageVisitor(NodeVisitor):
     visit_inner_td = generic_visit_content
     visit_compat_feature = generic_visit_content
     visit_compat_support = generic_visit_content
+    visit_compat_cell = generic_visit_content
 
 
 def range_error_to_html(page, start, end, reason, rule=None):
