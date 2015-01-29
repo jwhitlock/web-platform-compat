@@ -1,5 +1,5 @@
+# coding: utf-8
 """Test mdn.scrape."""
-# -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 from json import dumps
 
@@ -334,28 +334,227 @@ class TestPageVisitor(ScrapeTestCase):
         self.grammar = Grammar(page_grammar)
         self.visitor = PageVisitor(self.features['web-css-background-size'])
 
-    def test_compat_row_cell_with_rowspan(self):
+    def test_cleanup_whitespace(self):
+        text = """ This
+        text <br/>
+        has\t lots\xa0of
+        extra&nbsp;whitespace.
+        """
+        expected = "This text has lots of extra whitespace."
+        self.assertEqual(expected, self.visitor.cleanup_whitespace(text))
+
+    def test_compat_row_cell_feature_with_rowspan(self):
         text = '<td rowspan="2">Some Feature</td>'
         parsed = self.grammar['compat_row_cell'].parse(text)
-        capture = parsed.children[2]
-        self.assertEqual('Some Feature', capture.text)
-        expected = {
+        expected_cell = [{
+            'type': 'td',
+            'rowspan': '2',
+        }, {
+            'type': 'text',
             'content': 'Some Feature',
-            'rowspan': '2'
+            'start': 16,
+            'end': 28
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        expected_feature = {
+            'id': '_Some Feature',
+            'name': 'Some Feature',
+            'slug': 'web-css-background-size_some_feature',
         }
-        self.assertEqual(expected, self.visitor.visit(parsed))
+        feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(expected_feature, feature)
 
     def test_compat_row_cell_with_unknown_attr(self):
         text = '<td class="freaky">Some Feature</td>'
         parsed = self.grammar['compat_row_cell'].parse(text)
-        capture = parsed.children[2]
-        self.assertEqual('Some Feature', capture.text)
-        expected = {
+        expected_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'text',
             'content': 'Some Feature',
+            'start': 19,
+            'end': 31
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+
+    def test_compat_row_cell_feature_remove_whitespace(self):
+        text = (
+            '<td> Support for<br>\n     <code>contain</code> and'
+            ' <code>cover</code> </td>')
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        expected_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'text',
+            'content': 'Support for',
+            'start': 5,
+            'end': 16
+        }, {
+            'type': 'break',
+            'start': 16,
+            'end': 26
+        }, {
+            'type': 'code_block',
+            'content': 'contain',
+            'start': 26,
+            'end': 47
+        }, {
+            'type': 'text',
+            'content': 'and',
+            'start': 47,
+            'end': 51
+        }, {
+            'type': 'code_block',
+            'content': 'cover',
+            'start': 51,
+            'end': 70
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        expected_feature = {
+            'id': '_Support for <code>contain</code> and <code>cover</code>',
+            'name': 'Support for <code>contain</code> and <code>cover</code>',
+            'slug': 'web-css-background-size_support_for_contain_and_co',
         }
-        self.assertEqual(expected, self.visitor.visit(parsed))
-        expected_issues = [(0, 19, 'Unexpected attribute <td class="freaky">')]
-        self.assertEqual(expected_issues, self.visitor.issues)
+        feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(expected_feature, feature)
+
+    def test_compat_row_cell_feature_canonical(self):
+        text = '<td><code>list-item</code></td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        expected_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'code_block',
+            'content': 'list-item',
+            'start': 4,
+            'end': 26,
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        expected_feature = {
+            'id': '_list-item',
+            'name': 'list-item',
+            'canonical': True,
+            'slug': 'web-css-background-size_list-item',
+        }
+        feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(expected_feature, feature)
+
+    def test_compat_row_cell_feature_experimental(self):
+        text = '<td><code>grid</code> {{experimental_inline}}</td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        expected_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'code_block',
+            'content': 'grid',
+            'start': 4,
+            'end': 22
+        }, {
+            'type': 'kuma',
+            'name': 'experimental_inline',
+            'args': [],
+            'start': 22,
+            'end': 45
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        expected_feature = {
+            'id': '_grid',
+            'name': 'grid',
+            'canonical': True,
+            'experimental': True,
+            'slug': 'web-css-background-size_grid',
+        }
+        feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(expected_feature, feature)
+
+    def test_compat_row_cell_feature_unknown_kuma(self):
+        text = '<td>feature foo {{bar}}</td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        expected_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'text',
+            'content': 'feature foo',
+            'start': 4,
+            'end': 16
+        }, {
+            'type': 'kuma',
+            'name': 'bar',
+            'args': [],
+            'start': 16,
+            'end': 23
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        expected_feature = {
+            'id': '_feature foo',
+            'name': 'feature foo',
+            'slug': 'web-css-background-size_feature_foo',
+        }
+        feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(expected_feature, feature)
+        expected_error = [(16, 23, 'Unknown kuma function bar()')]
+        self.assertEqual(expected_error, self.visitor.errors)
+
+    def test_cell_to_feature_unknown_item(self):
+        bad_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'other',
+        }]
+        self.assertRaises(ValueError, self.visitor.cell_to_feature, bad_cell)
+
+    def test_compat_row_cell_support_complex(self):
+        text = (
+            '<td>{{CompatVersionUnknown}}{{property_prefix("-webkit")}}<br>\n'
+            '   2.3</td>')
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        expected_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'kuma',
+            'name': 'CompatVersionUnknown',
+            'args': [],
+            'start': 4,
+            'end': 28
+        }, {
+            'type': 'kuma',
+            'name': 'property_prefix',
+            'args': ['"-webkit"'],
+            'start': 28,
+            'end': 58
+        }, {
+            'type': 'break',
+            'start': 58,
+            'end': 66
+        }, {
+            'type': 'text',
+            'content': '2.3',
+            'start': 66,
+            'end': 69
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        feature = {
+            'id': '_feature',
+            'name': 'feature',
+            'slug': 'feature_slug',
+        }
+        browser = {
+            'id': '_browser',
+            'name': 'Browser',
+            'slug': 'browser_slug',
+        }
+        versions, supports = self.visitor.cell_to_support(
+            cell, feature, browser)
+        # TODO: Extract real data
+        self.assertEqual([], versions)
+        self.assertEqual([], supports)
 
 
 class TestScrape(ScrapeTestCase):
@@ -450,10 +649,6 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Basic support',
                         'id': '_Basic support',
                         'slug': 'web-css-background-size_basic_support',
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }],
                 'supports': [],
                 'versions': [],
@@ -481,10 +676,6 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Basic support',
                         'id': '_Basic support',
                         'slug': 'web-css-background-size_basic_support',
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }],
                 'supports': [],
                 'versions': [],
@@ -544,10 +735,6 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Basic support',
                         'id': '_Basic support',
                         'slug': 'web-css-background-size_basic_support',
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }],
                 'supports': [],
                 'versions': [],
@@ -575,10 +762,6 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Basic support',
                         'id': '_Basic support',
                         'slug': 'web-css-background-size_basic_support',
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }],
                 'supports': [],
                 'versions': [],
@@ -625,34 +808,22 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Basic support',
                         'id': '_Basic support',
                         'slug': 'web-css-background-size_basic_support',
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }, {
                         'id': (
-                            '_Support for<br>\n     <code>contain</code> and'
+                            '_Support for <code>contain</code> and'
                             ' <code>cover</code>'),
                         'name': (
-                            'Support for<br>\n     <code>contain</code> and'
+                            'Support for <code>contain</code> and'
                             ' <code>cover</code>'),
                         'slug': (
-                            'web-css-background-size_support_for_br_code'
-                            '_contai'),
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
+                            'web-css-background-size_support_for_contain'
+                            '_and_co'),
                     }, {
                         'name': 'Support for SVG backgrounds',
                         'id': '_Support for SVG backgrounds',
                         'slug': (
                             'web-css-background-size_support_for_svg_'
                             'background'),
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }],
                 'supports': [],
                 'versions': [],
@@ -680,20 +851,12 @@ class TestScrape(ScrapeTestCase):
                         'name': 'Basic support',
                         'id': '_Basic support',
                         'slug': 'web-css-background-size_basic_support',
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }, {
                         'name': 'Support for SVG backgrounds',
                         'id': '_Support for SVG backgrounds',
                         'slug': (
                             'web-css-background-size_support_for_svg_'
                             'background'),
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
                     }],
                 'supports': [],
                 'versions': [],

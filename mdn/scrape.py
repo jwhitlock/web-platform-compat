@@ -2,13 +2,14 @@
 from __future__ import unicode_literals
 from collections import OrderedDict
 from itertools import chain
+import re
 import string
 
 from django.utils.html import escape
 from django.utils.six import text_type
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
-from parsimonious.nodes import NodeVisitor
+from parsimonious.nodes import Node, NodeVisitor
 
 from webplatformcompat.models import Browser, Feature, Section, Specification
 
@@ -67,7 +68,18 @@ compat_rows = compat_row* _
 compat_row = tr_open _ compat_row_cells _ "</tr>" _
 compat_row_cells = compat_row_cell+
 compat_row_cell = td_open _ compat_cell _ "</td>" _
-compat_cell = ~r"(?P<content>.*?(?=</td>))"s
+compat_cell = compat_cell_item+
+compat_cell_item = (cell_tag / cell_break / code_block / cell_other)
+cell_tag = kuma_esc_start _ cell_kuma_func _ kuma_esc_end _
+cell_kuma_func = kuma_name kuma_arglist?
+kuma_name = ~r"(?P<content>.*?(?=((}})|\()))"s
+kuma_arglist = kuma_func_start kuma_arg kuma_arg_rest* kuma_func_end
+kuma_arg = ~r"(?P<content>.*?(?=[,)]))"
+kuma_arg_rest = kuma_func_arg kuma_arg
+cell_break = "<" _ "br" _ ("/>" / ">") _
+code_block = "<code>" _ code_text _ "</code>" _
+code_text = ~r"(?P<content>.*?(?=</code>))"s
+cell_other = ~r"(?P<content>[^{<]+)"s
 compat_footnotes = ~r"(?P<content>.*?(?=<h2))"s
 
 kuma_esc_start = _ "{{" _
@@ -92,7 +104,7 @@ bare_text = ~r"(?P<content>[^<]*)"
 double_quoted_text = ~r'"(?P<content>[^"]*)"'
 single_quoted_text = ~r"'(?P<content>[^']*)'"
 
-_ = ~r"[ \t\r\n]*"
+_ = ~r"[ \t\r\n]*"s
 """
 
 
@@ -147,15 +159,6 @@ def scrape_page(mdn_page, feature, locale='en'):
 class PageVisitor(NodeVisitor):
     """Extract and validate data from a parsed Specification section."""
 
-    browser_name_fixes = {
-        'Firefox (Gecko)': 'Firefox',
-        'Firefox Mobile (Gecko)': 'Firefox Mobile',
-        'Safari (WebKit)': 'Safari',
-        'Windows Phone': 'IE Mobile',
-        'IE Phone': 'IE Mobile',
-        'IE\xa0Phone': 'IE Mobile',
-    }
-
     def __init__(self, feature, locale='en'):
         super(PageVisitor, self).__init__()
         self.feature = feature
@@ -177,6 +180,14 @@ class PageVisitor(NodeVisitor):
                 self._browser_ids[browser.name[self.locale]] = browser.pk
         return self._browser_ids
 
+    browser_name_fixes = {
+        'Firefox (Gecko)': 'Firefox',
+        'Firefox Mobile (Gecko)': 'Firefox Mobile',
+        'Safari (WebKit)': 'Safari',
+        'Windows Phone': 'IE Mobile',
+        'IE Phone': 'IE Mobile',
+    }
+
     def feature_id_and_slug(self, name):
         """Get or create the feature ID and slug given a name."""
         # Initialize Feature IDs
@@ -191,8 +202,9 @@ class PageVisitor(NodeVisitor):
             feature_id = '_' + name
             attempt = 0
             feature_slug = None
+            plain_name = name.replace('<code>', '').replace('</code>', '')
             while not feature_slug:
-                base_slug = self.feature.slug + '_' + name
+                base_slug = self.feature.slug + '_' + plain_name
                 feature_slug = slugify(base_slug, suffix=attempt)
                 if Feature.objects.filter(slug=feature_slug).exists():
                     attempt += 1
@@ -200,6 +212,50 @@ class PageVisitor(NodeVisitor):
             self._feature_data[name] = (feature_id, feature_slug)
 
         return self._feature_data[name]
+
+    def cell_to_feature(self, cell):
+        # name = cell['content']
+        # cell_id, feature_slug = self.feature_id_and_slug(name)
+        name_bits = []
+        feature = {}
+        assert cell[0]['type'] == 'td'
+        for item in cell[1:]:
+            if item['type'] == 'break':
+                pass  # Discard breaks in feature names
+            elif item['type'] == 'text':
+                name_bits.append(item['content'])
+            elif item['type'] == 'code_block':
+                name_bits.append('<code>%s</code>' % item['content'])
+            elif item['type'] == 'kuma':
+                if item['name'] == 'experimental_inline':
+                    assert 'experimental' not in feature
+                    feature['experimental'] = True
+                else:
+                    self.errors.append((
+                        item['start'], item['end'],
+                        'Unknown kuma function %s(%s)' % (
+                            item['name'], ', '.join(item['args']))))
+            else:
+                raise ValueError("Unknown item!", item)
+        assert name_bits
+        if len(name_bits) == 1 and name_bits[0].startswith('<code>'):
+            feature['canonical'] = True
+            name = name_bits[0][6:-7]  # Trim out surrounding <code>xx</code>
+        else:
+            name = ' '.join(name_bits)
+        f_id, slug = self.feature_id_and_slug(name)
+        feature['name'] = name
+        feature['id'] = f_id
+        feature['slug'] = slug
+        return feature
+
+    def cell_to_support(self, cell, feature, browser):
+        assert feature
+        assert browser
+        versions = []
+        supports = []
+        # TODO: actuall process support
+        return versions, supports
 
     def generic_visit(self, node, visited_children):
         return visited_children or node
@@ -340,8 +396,8 @@ class PageVisitor(NodeVisitor):
             assert isinstance(row, dict), type(row)
 
         browsers = OrderedDict()
-        versions = OrderedDict()
         features = OrderedDict()
+        versions = OrderedDict()
         supports = OrderedDict()
 
         # Gather the browsers and determine # of columns
@@ -362,33 +418,33 @@ class PageVisitor(NodeVisitor):
             table.append(table_row)
 
         # Parse the rows for features and supports
-        support_id = 0
         for row, compat_row in enumerate(compat_rows):
             for cell in compat_row['cells']:
+                td = cell[0]
                 col = table[row].index(None)
-                rowspan = int(cell.pop('rowspan', 1))
-                colspan = int(cell.pop('colspan', 1))
+                rowspan = int(td.get('rowspan', 1))
+                colspan = int(td.get('colspan', 1))
                 if col == 0:
                     # Insert as feature
-                    name = cell['content']
-                    cell_id, feature_slug = self.feature_id_and_slug(name)
-                    feature = {
-                        'name': name,
-                        'id': cell_id,
-                        'slug': feature_slug,
-                        'experimental': False,
-                        'standardized': True,
-                        'stable': True,
-                        'obsolete': False,
-                    }
-                    features[cell_id] = feature
+                    feature = self.cell_to_feature(cell)
+                    cell_id = feature['id']
+                    features[feature['id']] = feature
                 else:
                     # Insert as support
-                    # support = {
-                    #     'content': cell['content']
-                    # }
-                    cell_id = support_id
-                    support_id += 1
+                    feature_id = table[row][0]
+                    assert feature_id
+                    feature = features[feature_id]
+                    browser = columns[col]
+                    cell_versions, cell_supports = self.cell_to_support(
+                        cell, feature, browser)
+                    cell_id = []
+                    assert not cell_versions
+                    assert not cell_supports
+                    # for version in cell_versions:
+                    #     versions[version['id']] = version
+                    # for support in supports:
+                    #     cell_id.append(support['id'])
+                    #     supports[support['id']] = support
                 # Insert IDs into table
                 for r in range(rowspan):
                     for c in range(colspan):
@@ -398,7 +454,7 @@ class PageVisitor(NodeVisitor):
             'browsers': list(browsers.values()),
             'versions': list(versions.values()),
             'features': list(features.values()),
-            'supports': list(supports.values())
+            'supports': list(supports.values()),
         }
 
     def visit_compat_headers(self, node, children):
@@ -417,16 +473,31 @@ class PageVisitor(NodeVisitor):
         client.update(th_open)
         return client
 
+    re_whitespace = re.compile(r'''(?x)  # Be verbose
+    (\s|                # Any whitespace, or
+     (<\s*br\s*/?>)|    # A variant of <br>, or
+     \xa0|              # Unicode non-breaking space, or
+     (\&nbsp;)          # HTML nbsp character
+    )+                  # One or more in a row
+    ''')
+
+    def cleanup_whitespace(self, text):
+        """Normalize whitespace"""
+        normal = self.re_whitespace.sub(' ', text)
+        assert '  ' not in normal
+        return normal.strip()
+
     def visit_compat_client_name(self, node, children):
         name = node.match.group('content')
         assert isinstance(name, text_type), type(name)
 
-        fixed_name = self.browser_name_fixes.get(name, name)
+        nname = self.cleanup_whitespace(name)
+        fixed_name = self.browser_name_fixes.get(nname, nname)
         browser_id = self.browser_ids.get(fixed_name)
         if not browser_id:
             self.errors.append(
                 (node.start, node.end, 'Unknown Browser "%s"' % name))
-            browser_id = "_" + name
+            browser_id = "_" + nname
 
         return {
             'name': fixed_name,
@@ -447,8 +518,10 @@ class PageVisitor(NodeVisitor):
 
         assert isinstance(tr_open, dict), type(tr_open)
         assert isinstance(compat_row_cells, list), type(compat_row_cells)
-        for cell in compat_row_cells:
-            assert isinstance(cell, dict), type(cell)
+        for cell_list in compat_row_cells:
+            assert isinstance(cell_list, list), type(cell_list)
+            for cell in cell_list:
+                assert isinstance(cell, dict), type(cell)
         row_dict = {
             'cells': compat_row_cells,
         }
@@ -460,13 +533,78 @@ class PageVisitor(NodeVisitor):
         compat_cell = children[2]
 
         assert isinstance(td_open, dict), type(td_open)
-        assert isinstance(compat_cell, text_type), type(compat_cell)
+        assert isinstance(compat_cell, list), type(compat_cell)
+        for item in compat_cell:
+            assert isinstance(item, dict)
+        td_open['type'] = 'td'
+        compat_cell.insert(0, td_open)
+        return compat_cell
 
-        cell_dict = {
-            'content': compat_cell,
+    def visit_compat_cell_item(self, node, children):
+        item = children[0]
+        assert isinstance(item, dict), type(item)
+        return item
+
+    def visit_code_block(self, node, children):
+        text = children[2].text
+        assert isinstance(text, text_type), type(text)
+        return {
+            'type': 'code_block',
+            'content': self.cleanup_whitespace(text),
+            'start': node.start,
+            'end': node.end
         }
-        cell_dict.update(td_open)
-        return cell_dict
+
+    def visit_cell_tag(self, node, children):
+        func = children[2]
+        assert isinstance(func, dict), type(func)
+        func['start'] = node.start
+        func['end'] = node.end
+        return func
+
+    def visit_cell_kuma_func(self, node, children):
+        name = children[0]
+        argslist = children[1]
+        if isinstance(argslist, Node):
+            assert argslist.start == argslist.end
+            args = []
+        else:
+            assert isinstance(argslist, list), type(argslist)
+            assert len(argslist) == 1
+            args = argslist[0]
+        assert isinstance(name, text_type), type(name)
+        assert isinstance(args, list), type(args)
+        return {
+            'type': 'kuma',
+            'name': name,
+            'args': args
+        }
+
+    def visit_kuma_arglist(self, node, children):
+        arg0 = children[1]
+        argrest = children[2]
+        args = []
+        assert arg0.text
+        args.append(arg0.text)
+        assert argrest.start == argrest.end
+        return args
+
+    def visit_cell_break(self, node, children):
+        return {
+            'type': 'break',
+            'start': node.start,
+            'end': node.end
+        }
+
+    def visit_cell_other(self, node, children):
+        text = self.cleanup_whitespace(node.text)
+        assert 'td>' not in text
+        return {
+            'type': 'text',
+            'content': text,
+            'start': node.start,
+            'end': node.end
+        }
 
     def visit_generic_open(self, node, children, tag, expected):
         """Parse an opening tag with an expectd attributes list"""
@@ -509,7 +647,7 @@ class PageVisitor(NodeVisitor):
     visit_inner_td = generic_visit_content
     visit_compat_feature = generic_visit_content
     visit_compat_support = generic_visit_content
-    visit_compat_cell = generic_visit_content
+    visit_kuma_name = generic_visit_content
 
 
 def range_error_to_html(page, start, end, reason, rule=None):
@@ -690,10 +828,10 @@ def scrape_feature_page(fp):
                     ('id', f['id']),
                     ('slug', f['slug']),
                     ('mdn_uri', None),
-                    ('experimental', f['experimental']),
-                    ('standardized', f['standardized']),
-                    ('stable', f['stable']),
-                    ('obsolete', f['obsolete']),
+                    ('experimental', f.get('experimental', False)),
+                    ('standardized', f.get('standardized', True)),
+                    ('stable', f.get('stable', True)),
+                    ('obsolete', f.get('obsolete', False)),
                     ('name', {'en': f['name']}),
                     ('links', OrderedDict((
                         ('sections', []),
