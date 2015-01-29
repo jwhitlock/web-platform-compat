@@ -40,6 +40,7 @@ class TestGrammar(TestCase):
 
 class ScrapeTestCase(TestCase):
     """Fixtures for scraping tests."""
+    longMessage = True
 
     # Based on:
     # https://developer.mozilla.org/en-US/docs/Web/CSS/background-size?raw
@@ -358,7 +359,7 @@ class TestPageVisitor(ScrapeTestCase):
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
         expected_feature = {
-            'id': '_Some Feature',
+            'id': '_some feature',
             'name': 'Some Feature',
             'slug': 'web-css-background-size_some_feature',
         }
@@ -378,6 +379,34 @@ class TestPageVisitor(ScrapeTestCase):
         }]
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
+
+    def test_compat_row_cell_feature_name_lookup(self):
+        texts = [
+            '<td>Some Feature</td>',
+            '<td>some feature</td>',
+            '<td rowspan="2">Some<br/>feature</td>',
+            '<td>SOME {{experimental_inline}} FEATURE</td>',
+            '<td><code>some feature</code></td>',
+        ]
+        expected_id = '_some feature'
+        expected_slug = 'web-css-background-size_some_feature'
+        for text in texts:
+            parsed = self.grammar['compat_row_cell'].parse(text)
+            cell = self.visitor.visit(parsed)
+            feature = self.visitor.cell_to_feature(cell)
+            self.assertEqual(expected_id, feature['id'], text)
+            self.assertEqual(expected_slug, feature['slug'], text)
+
+    def test_compat_row_cell_feature_match_canonical(self):
+        feature = self.create(
+            Feature, parent=self.visitor.feature,
+            name={'zxx': 'feature'}, slug='feature-slug')
+        text = '<td><code>feature</code></td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        cell = self.visitor.visit(parsed)
+        parsed_feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(parsed_feature['id'], feature.id)
+        self.assertEqual(parsed_feature['slug'], feature.slug)
 
     def test_compat_row_cell_feature_remove_whitespace(self):
         text = (
@@ -414,7 +443,7 @@ class TestPageVisitor(ScrapeTestCase):
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
         expected_feature = {
-            'id': '_Support for <code>contain</code> and <code>cover</code>',
+            'id': '_support for contain and cover',
             'name': 'Support for <code>contain</code> and <code>cover</code>',
             'slug': 'web-css-background-size_support_for_contain_and_co',
         }
@@ -558,8 +587,6 @@ class TestPageVisitor(ScrapeTestCase):
 
 
 class TestScrape(ScrapeTestCase):
-    longMessage = True
-
     def setUp(self):
         self.add_compat_features()
 
@@ -647,7 +674,7 @@ class TestScrape(ScrapeTestCase):
                 'features': [
                     {
                         'name': 'Basic support',
-                        'id': '_Basic support',
+                        'id': '_basic support',
                         'slug': 'web-css-background-size_basic_support',
                     }],
                 'supports': [],
@@ -674,7 +701,7 @@ class TestScrape(ScrapeTestCase):
                 'features': [
                     {
                         'name': 'Basic support',
-                        'id': '_Basic support',
+                        'id': '_basic support',
                         'slug': 'web-css-background-size_basic_support',
                     }],
                 'supports': [],
@@ -733,7 +760,7 @@ class TestScrape(ScrapeTestCase):
                 'features': [
                     {
                         'name': 'Basic support',
-                        'id': '_Basic support',
+                        'id': '_basic support',
                         'slug': 'web-css-background-size_basic_support',
                     }],
                 'supports': [],
@@ -760,7 +787,7 @@ class TestScrape(ScrapeTestCase):
                 'features': [
                     {
                         'name': 'Basic support',
-                        'id': '_Basic support',
+                        'id': '_basic support',
                         'slug': 'web-css-background-size_basic_support',
                     }],
                 'supports': [],
@@ -806,12 +833,10 @@ class TestScrape(ScrapeTestCase):
                 'features': [
                     {
                         'name': 'Basic support',
-                        'id': '_Basic support',
+                        'id': '_basic support',
                         'slug': 'web-css-background-size_basic_support',
                     }, {
-                        'id': (
-                            '_Support for <code>contain</code> and'
-                            ' <code>cover</code>'),
+                        'id': '_support for contain and cover',
                         'name': (
                             'Support for <code>contain</code> and'
                             ' <code>cover</code>'),
@@ -820,7 +845,7 @@ class TestScrape(ScrapeTestCase):
                             '_and_co'),
                     }, {
                         'name': 'Support for SVG backgrounds',
-                        'id': '_Support for SVG backgrounds',
+                        'id': '_support for svg backgrounds',
                         'slug': (
                             'web-css-background-size_support_for_svg_'
                             'background'),
@@ -849,11 +874,11 @@ class TestScrape(ScrapeTestCase):
                 'features': [
                     {
                         'name': 'Basic support',
-                        'id': '_Basic support',
+                        'id': '_basic support',
                         'slug': 'web-css-background-size_basic_support',
                     }, {
                         'name': 'Support for SVG backgrounds',
-                        'id': '_Support for SVG backgrounds',
+                        'id': '_support for svg backgrounds',
                         'slug': (
                             'web-css-background-size_support_for_svg_'
                             'background'),

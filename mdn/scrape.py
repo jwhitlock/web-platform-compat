@@ -190,28 +190,35 @@ class PageVisitor(NodeVisitor):
 
     def feature_id_and_slug(self, name):
         """Get or create the feature ID and slug given a name."""
+        def normalized(n):
+            return n.lower().replace('<code>', '').replace('</code>', '')
+        nname = normalized(name)
+
         # Initialize Feature IDs
         if not self._feature_data:
             self._feature_data = {}
             for feature in Feature.objects.filter(parent=self.feature):
-                name = feature.name.get(self.locale, feature.name['en'])
-                self._feature_data[name] = (feature.id, feature.slug)
+                if 'zxx' in feature.name:
+                    fname = feature.name['zxx']
+                else:
+                    fname = feature.name.get(self.locale, feature.name['en'])
+                fname = normalized(fname)
+                self._feature_data[fname] = (feature.id, feature.slug)
 
         # Select the Feature ID and slug
-        if name not in self._feature_data:
-            feature_id = '_' + name
+        if nname not in self._feature_data:
+            feature_id = '_' + nname
             attempt = 0
             feature_slug = None
-            plain_name = name.replace('<code>', '').replace('</code>', '')
             while not feature_slug:
-                base_slug = self.feature.slug + '_' + plain_name
+                base_slug = self.feature.slug + '_' + nname
                 feature_slug = slugify(base_slug, suffix=attempt)
                 if Feature.objects.filter(slug=feature_slug).exists():
                     attempt += 1
                     feature_slug = ''
-            self._feature_data[name] = (feature_id, feature_slug)
+            self._feature_data[nname] = (feature_id, feature_slug)
 
-        return self._feature_data[name]
+        return self._feature_data[nname]
 
     def cell_to_feature(self, cell):
         # name = cell['content']
