@@ -57,6 +57,9 @@ window.WPC = {
         if (trans === null || trans === undefined) {
             return null;
         }
+        if (typeof trans === 'string') {
+            return "<code>" + trans + "</code>";
+        }
         if (trans.hasOwnProperty(lang)) {
             return trans[lang];
         }

@@ -69,7 +69,8 @@ compat_row = tr_open _ compat_row_cells _ "</tr>" _
 compat_row_cells = compat_row_cell+
 compat_row_cell = td_open _ compat_cell _ "</td>" _
 compat_cell = compat_cell_item+
-compat_cell_item = (cell_tag / cell_break / code_block / cell_other)
+compat_cell_item = (cell_tag / cell_break / code_block / cell_p_open /
+    cell_p_close / cell_other)
 cell_tag = kuma_esc_start _ cell_kuma_func _ kuma_esc_end _
 cell_kuma_func = kuma_name kuma_arglist?
 kuma_name = ~r"(?P<content>.*?(?=((}})|\()))"s
@@ -79,6 +80,8 @@ kuma_arg_rest = kuma_func_arg kuma_arg
 cell_break = "<" _ "br" _ ("/>" / ">") _
 code_block = "<code>" _ code_text _ "</code>" _
 code_text = ~r"(?P<content>.*?(?=</code>))"s
+cell_p_open = "<p>" _
+cell_p_close = "</p>" _
 cell_other = ~r"(?P<content>[^{<]+)"s
 compat_footnotes = ~r"(?P<content>.*?(?=<h2))"s
 
@@ -249,7 +252,7 @@ class PageVisitor(NodeVisitor):
             feature['canonical'] = True
             name = name_bits[0][6:-7]  # Trim out surrounding <code>xx</code>
         else:
-            name = ' '.join(name_bits)
+            name = ' '.join(name_bits).replace('</code> ,', '</code>,')
         f_id, slug = self.feature_id_and_slug(name)
         feature['name'] = name
         feature['id'] = f_id
@@ -390,6 +393,45 @@ class PageVisitor(NodeVisitor):
         compat_body = children[2]
         assert isinstance(compat_body, dict), type(compat_body)
         return compat_body
+
+    re_h2 = re.compile(r'''(?x)(?s)     # Be verbose, and . matches newline
+    <h2[^>]*>           # Look for h2 open tag
+    (?P<title>[^<]+)    # Capture the h2 title
+    </h2>               # The h2 close tag
+    ''')
+
+    def detect_missed_h2(self, section_node, children):
+        sections = {
+            'browser compatibility': 'compat_section',
+            'specifications': 'spec_section'
+        }
+
+        for h2 in self.re_h2.finditer(section_node.text):
+            title = h2.group('title')
+            section = sections.get(title.lower().strip())
+            if section:
+                # Failed to parse an <h2>.  Add an error
+                start = section_node.start + h2.start()
+                # end = section_node.end + h2.end()
+                text = section_node.text[h2.start():]
+                grammar = Grammar(page_grammar)
+                try:
+                    grammar[section].parse(text)
+                except ParseError as pe:
+                    rule = pe.expr
+                    description = (
+                        'Section <h2>%s</h2> was not parsed, because rule'
+                        ' "%s" failed to match.  Definition:'
+                        % (title, rule.name))
+                    error = (
+                        pe.pos + start, end_of_line(pe.text, pe.pos) + start,
+                        description, rule.as_rule())
+                    self.errors.append(error)
+                else:  # pragma: nocover
+                    raise Exception('Failed to detect parse mistake!')
+
+    visit_other_section = detect_missed_h2
+    visit_last_section = detect_missed_h2
 
     def visit_compat_body(self, node, children):
         compat_headers = children[2]
@@ -599,6 +641,20 @@ class PageVisitor(NodeVisitor):
     def visit_cell_break(self, node, children):
         return {
             'type': 'break',
+            'start': node.start,
+            'end': node.end
+        }
+
+    def visit_cell_p_open(self, node, children):
+        return {
+            'type': 'p_open',
+            'start': node.start,
+            'end': node.end
+        }
+
+    def visit_cell_p_close(self, node, children):
+        return {
+            'type': 'p_close',
             'start': node.start,
             'end': node.end
         }
@@ -831,6 +887,10 @@ def scrape_feature_page(fp):
         for f in table['features']:
             if str(f['id']).startswith('_'):
                 # Fake feature
+                if f.get('canonical'):
+                    fname = f['name']
+                else:
+                    fname = {'en': f['name']}
                 feature_content = OrderedDict((
                     ('id', f['id']),
                     ('slug', f['slug']),
@@ -839,7 +899,7 @@ def scrape_feature_page(fp):
                     ('standardized', f.get('standardized', True)),
                     ('stable', f.get('stable', True)),
                     ('obsolete', f.get('obsolete', False)),
-                    ('name', {'en': f['name']}),
+                    ('name', fname),
                     ('links', OrderedDict((
                         ('sections', []),
                         ('supports', []),

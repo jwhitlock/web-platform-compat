@@ -450,6 +450,23 @@ class TestPageVisitor(ScrapeTestCase):
         feature = self.visitor.cell_to_feature(cell)
         self.assertEqual(expected_feature, feature)
 
+    def test_compat_row_cell_feature_code_sequence(self):
+        # <code> split by commas is special cased
+        text = (
+            '<td><code>none</code>, <code>inline</code> and'
+            ' <code>block</code></td>')
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        cell = self.visitor.visit(parsed)
+        expected_feature = {
+            'id': '_none, inline and block',
+            'name': (
+                '<code>none</code>, <code>inline</code> and'
+                ' <code>block</code>'),
+            'slug': 'web-css-background-size_none_inline_and_block'
+        }
+        feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(expected_feature, feature)
+
     def test_compat_row_cell_feature_canonical(self):
         text = '<td><code>list-item</code></td>'
         parsed = self.grammar['compat_row_cell'].parse(text)
@@ -566,6 +583,56 @@ class TestPageVisitor(ScrapeTestCase):
             'content': '2.3',
             'start': 66,
             'end': 69
+        }]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        feature = {
+            'id': '_feature',
+            'name': 'feature',
+            'slug': 'feature_slug',
+        }
+        browser = {
+            'id': '_browser',
+            'name': 'Browser',
+            'slug': 'browser_slug',
+        }
+        versions, supports = self.visitor.cell_to_support(
+            cell, feature, browser)
+        # TODO: Extract real data
+        self.assertEqual([], versions)
+        self.assertEqual([], supports)
+
+    def test_compat_row_cell_support_p_tags(self):
+        text = '<td><p>4.0</p><p>Removed in 32</p></td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        expected_cell = [{
+            'type': 'td',
+        }, {
+            'type': 'p_open',
+            'start': 4,
+            'end': 7,
+        }, {
+            'type': 'text',
+            'content': '4.0',
+            'start': 7,
+            'end': 10
+        }, {
+            'type': 'p_close',
+            'start': 10,
+            'end': 14,
+        }, {
+            'type': 'p_open',
+            'start': 14,
+            'end': 17,
+        }, {
+            'type': 'text',
+            'content': 'Removed in 32',
+            'start': 17,
+            'end': 30
+        }, {
+            'type': 'p_close',
+            'start': 30,
+            'end': 34,
         }]
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
@@ -907,7 +974,7 @@ class TestScrape(ScrapeTestCase):
             'web-css-background-size_basic_support1',
             actual['compat'][0]['features'][0]['slug'])
 
-    def test_parse_error(self):
+    def test_incomplete_parse_error(self):
         page = self.simple_page.replace("</h2>", "</h3")
         expected = {
             'locale': 'en',
@@ -919,6 +986,26 @@ class TestScrape(ScrapeTestCase):
                 (24, 52,
                  'Unable to finish parsing MDN page, starting at this'
                  ' position.')
+            ]
+        }
+        self.assertScrape(page, expected)
+
+    def test_unable_to_parse_compat(self):
+        good = '<td>{{CompatGeckoDesktop("1")}}</td>'
+        bad = '<td><kuma>CompatGeckoDesktop("1")</kuma></td>'
+        self.assertTrue(good in self.simple_compat_section)
+        page = self.simple_compat_section.replace(good, bad)
+        expected = {
+            'locale': 'en',
+            'specs': [],
+            'compat': [],
+            'footnotes': None,
+            'issues': [],
+            'errors': [
+                (377, 418,
+                 'Section <h2>Browser compatibility</h2> was not parsed,'
+                 ' because rule "compat_cell" failed to match.  Definition:',
+                 'compat_cell = compat_cell_item+')
             ]
         }
         self.assertScrape(page, expected)
@@ -1066,6 +1153,37 @@ class TestScrapeFeaturePage(ScrapeTestCase):
         self.assertEqual(
             ["<pre>No &lt;h2&gt; found in page</pre>"],
             fp.data['meta']['scrape']['errors'])
+
+    def test_scrape_canonical_feature(self):
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        old_name = '<td>Basic support</td>'
+        new_name = '<td><code>basic-support</code></td>'
+        self.assertTrue(old_name in en_content.raw)
+        en_content.raw = en_content.raw.replace(old_name, new_name)
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        expected = [{
+            'id': '_basic-support',
+            'slug': 'web-css-background-size_basic-support',
+            'mdn_uri': None,
+            'experimental': False,
+            'standardized': True,
+            'stable': True,
+            'obsolete': False,
+            'name': 'basic-support',
+            'links': {
+                'children': [],
+                'parent': str(self.page.feature.id),
+                'sections': [],
+                'supports': [],
+            }}]
+        self.assertDataEqual(expected, fp.data['linked']['features'])
 
 
 class TestRangeErrorToHtml(ScrapeTestCase):
