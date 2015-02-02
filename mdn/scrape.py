@@ -11,11 +11,13 @@ from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from webplatformcompat.models import Browser, Feature, Section, Specification
+from webplatformcompat.models import (
+    Browser, Feature, Section, Specification, Support, Version)
 
 
 # Parsimonious grammar for an MDN page
-page_grammar = r"""
+page_grammar = (
+    r"""
 doc = other_text other_section* spec_section? compat_section?
     other_section* last_section?
 
@@ -70,7 +72,7 @@ compat_row_cells = compat_row_cell+
 compat_row_cell = td_open _ compat_cell _ "</td>" _
 compat_cell = compat_cell_item+
 compat_cell_item = (cell_tag / cell_break / code_block / cell_p_open /
-    cell_p_close / cell_other)
+    cell_p_close / cell_version / cell_footnote / cell_other)
 cell_tag = kuma_esc_start _ cell_kuma_func _ kuma_esc_end _
 cell_kuma_func = kuma_name kuma_arglist?
 kuma_name = ~r"(?P<content>.*?(?=((}})|\()))"s
@@ -82,7 +84,11 @@ code_block = "<code>" _ code_text _ "</code>" _
 code_text = ~r"(?P<content>.*?(?=</code>))"s
 cell_p_open = "<p>" _
 cell_p_close = "</p>" _
-cell_other = ~r"(?P<content>[^{<]+)"s
+cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
+    r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
+cell_footnote = ~r"\[(?P<footnote>\d+)\]\s*"s
+
+cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 compat_footnotes = ~r"(?P<content>.*?(?=<h2))"s
 
 kuma_esc_start = _ "{{" _
@@ -108,7 +114,7 @@ double_quoted_text = ~r'"(?P<content>[^"]*)"'
 single_quoted_text = ~r"'(?P<content>[^']*)'"
 
 _ = ~r"[ \t\r\n]*"s
-"""
+""")
 
 
 def end_of_line(text, pos):
@@ -141,7 +147,12 @@ def scrape_page(mdn_page, feature, locale='en'):
             'Unable to finish parsing MDN page, starting at this position.')
         data['errors'].append(error)
         return data
-    except ParseError as pe:  # pragma: no cover - usually skips section
+    except ParseError as pe:  # pragma: no cover
+        # TODO: Add a test once we know how to trigger
+        # Because the rules include optional sections, parse issues mostly
+        # appear as IncompleteParseError or skipping a section.  A small
+        # change to the rules may turn these into ParseErrors instead.
+        # PageVisitor.detect_missed_h2() handles skipped sections.
         rule = pe.expr
         error = (
             pe.pos, end_of_line(pe.text, pe.pos),
@@ -172,16 +183,8 @@ class PageVisitor(NodeVisitor):
         self.errors = []
         self.compat = []
         self.footnotes = None
-        self._browser_ids = None
+        self._browser_data = None
         self._feature_data = None
-
-    @property
-    def browser_ids(self):
-        if not self._browser_ids:
-            self._browser_ids = {}
-            for browser in Browser.objects.all():
-                self._browser_ids[browser.name[self.locale]] = browser.pk
-        return self._browser_ids
 
     browser_name_fixes = {
         'Firefox (Gecko)': 'Firefox',
@@ -191,6 +194,25 @@ class PageVisitor(NodeVisitor):
         'IE Phone': 'IE Mobile',
     }
 
+    def browser_id_name_and_slug(self, name):
+        # Normalize the name
+        nname = self.cleanup_whitespace(name)
+        fixed_name = self.browser_name_fixes.get(nname, nname)
+
+        # Load existing browser data
+        if self._browser_data is None:
+            self._browser_data = {}
+            for browser in Browser.objects.all():
+                key = browser.name[self.locale]
+                self._browser_data[key] = (browser.pk, key, browser.slug)
+
+        # Select the Browser ID and slug
+        if fixed_name not in self._browser_data:
+            browser_id = '_' + nname
+            self._browser_data[fixed_name] = (
+                browser_id, fixed_name, browser_id)
+        return self._browser_data[fixed_name]
+
     def feature_id_and_slug(self, name):
         """Get or create the feature ID and slug given a name."""
         def normalized(n):
@@ -198,7 +220,7 @@ class PageVisitor(NodeVisitor):
         nname = normalized(name)
 
         # Initialize Feature IDs
-        if not self._feature_data:
+        if self._feature_data is None:
             self._feature_data = {}
             for feature in Feature.objects.filter(parent=self.feature):
                 if 'zxx' in feature.name:
@@ -241,10 +263,13 @@ class PageVisitor(NodeVisitor):
                     assert 'experimental' not in feature
                     feature['experimental'] = True
                 else:
+                    if item['args']:
+                        args = '(' + ', '.join(item['args']) + ')'
+                    else:
+                        args = ''
                     self.errors.append((
                         item['start'], item['end'],
-                        'Unknown kuma function %s(%s)' % (
-                            item['name'], ', '.join(item['args']))))
+                        'Unknown kuma function %s%s' % (item['name'], args)))
             else:
                 raise ValueError("Unknown item!", item)
         assert name_bits
@@ -259,13 +284,201 @@ class PageVisitor(NodeVisitor):
         feature['slug'] = slug
         return feature
 
+    def version_id_and_name(self, raw_version, browser):
+        version = None
+
+        # Version is format 'x.0', 'x.y', or '' (unknown)
+        if not raw_version:
+            clean_version = ''
+        elif '.' in raw_version:
+            clean_version = raw_version
+        else:
+            clean_version = raw_version + '.0'
+        if not str(browser['id']).startswith('_'):
+            # Might be known version
+            try:
+                version = Version.objects.get(
+                    browser=browser['id'], version=clean_version)
+            except Version.DoesNotExist:
+                pass
+        if version:
+            # Known version
+            version_id = version.id
+            version_name = version.version
+        else:
+            # New version
+            version_id = "_%s-%s" % (browser['name'], clean_version)
+            version_name = clean_version or ''
+
+        return version_id, version_name
+
+    def support_id(self, version_id, feature_id):
+        support = None
+        real_version = not str(version_id).startswith('_')
+        real_feature = not str(feature_id).startswith('_')
+        if real_version and real_feature:
+            # Might be known version
+            try:
+                support = Support.objects.get(
+                    version=version_id, feature=feature_id)
+            except Support.DoesNotExist:
+                pass
+        if support:
+            # Known support
+            support_id = support.id
+        else:
+            # New support
+            support_id = "_%s-%s" % (feature_id, version_id)
+        return support_id
+
+    # From https://developer.mozilla.org/en-US/docs/Template:CompatGeckoDesktop
+    geckodesktop_to_firefox = {
+        '1': '1.0',
+        '1.0': '1.0',
+        '1.7 or earlier': '1.0',
+        '1.7': '1.0',
+        '1.8': '1.5',
+        '1.8.1': '2.0',
+        '1.9': '3.0',
+        '1.9.1': '3.5',
+        '1.9.1.4': '3.5.4',
+        '1.9.2': '3.6',
+        '1.9.2.4': '3.6.4',
+        '1.9.2.5': '3.6.5',
+        '1.9.2.9': '3.6.9',
+        '2': '4.0',
+        '2.0': '4.0',
+    }
+
     def cell_to_support(self, cell, feature, browser):
         assert feature
         assert browser
+
         versions = []
         supports = []
-        # TODO: actuall process support
+        version = {'browser': browser['id']}
+        support = {}
+        p_depth = 0
+
+        assert cell[0]['type'] == 'td'
+        for item in cell[1:]:
+            version_found = None
+            version_name = version.get('name')
+            if item['type'] == 'version':
+                version_found = item['version']
+            elif item['type'] == 'footnote':
+                assert 'footnote_id' not in support
+                support['footnote_id'] = item['footnote']
+            elif item['type'] == 'kuma':
+                # See https://developer.mozilla.org/en-US/docs/Template:<name>
+                if item['name'] == 'CompatVersionUnknown':
+                    version_found = ''
+                elif item['name'] == 'CompatUnknown':
+                    # Could use support = unknown, but don't bother
+                    pass
+                elif item['name'] == 'CompatNo':
+                    version_found = ''
+                    support['support'] = 'no'
+                elif item['name'] == 'property_prefix':
+                    support['prefix'] = self.unquote(item['args'][0])
+                elif item['name'] == 'CompatGeckoDesktop':
+                    gversion = self.unquote(item['args'][0])
+                    version_found = self.geckodesktop_to_firefox.get(gversion)
+                    if not version_found:
+                        try:
+                            nversion = float(gversion)
+                        except ValueError:
+                            nversion = 0
+                        if nversion >= 5:
+                            version_found = str(nversion)
+                        else:
+                            version_found = None
+                            self.errors.append((
+                                item['start'], item['end'],
+                                'Unknown Gecko version "%s"' % gversion))
+                elif item['name'] == 'CompatGeckoMobile':
+                    gversion = self.unquote(item['args'][0])
+                    version_found = gversion.split('.', 1)[0]
+                    if version_found == '2':
+                        version_found = '4'
+                else:
+                    if item['args']:
+                        args = '(' + ', '.join(item['args']) + ')'
+                    else:
+                        args = ''
+                    self.errors.append((
+                        item['start'], item['end'],
+                        'Unknown kuma function %s%s' % (item['name'], args)))
+            elif item['type'] == 'p_open':
+                p_depth += 1
+                if p_depth > 1:
+                    self.errors.append((
+                        item['start'], item['end'],
+                        'Nested <p> tags not supported'))
+            elif item['type'] == 'p_close' and p_depth > 1:
+                # No support for nested <p> tags
+                p_depth -= 1
+                version = {}
+                support = {}
+            elif item['type'] == 'break' or (
+                    item['type'] == 'p_close' and p_depth == 1):
+                # Multi-support cell?
+                if version.get('id') and support.get('id'):
+                    # We have a complete version and support
+                    versions.append(version)
+                    supports.append(support)
+                    version = {'browser': browser['id']}
+                    support = {}
+                else:
+                    # We don't have a complete version and support
+                    assert not version.get('id')
+                    assert not support.get('id')
+                if item['type'] == 'p_close':
+                    p_depth = 0
+            elif item['type'] == 'text':
+                # Inline text requires human intervention to move to a
+                #  footnote, convert to a normal version, or remove entirely.
+                self.errors.append((
+                    item['start'], item['end'],
+                    'Unknown support text "%s"' % item['content']))
+            else:
+                raise ValueError("Unknown item", item)
+
+            # Attempt to find the version in the existing verisons
+            if version_found is not None:
+                version_id, version_name = self.version_id_and_name(
+                    version_found, browser)
+                unknown_version = str(version_id).startswith('_')
+                unknown_browser = str(browser['id']).startswith('_')
+                if unknown_version and not unknown_browser:
+                    self.errors.append((
+                        item['start'], item['end'],
+                        'Unknown version "%s" for browser "%s"'
+                        ' (id %d, slug "%s")' % (
+                            version_found, browser['name'], browser['id'],
+                            browser.get('slug', '<not loaded>'))))
+                version['id'] = version_id
+                version['version'] = version_name
+                support_id = self.support_id(version_id, feature['id'])
+                support['id'] = support_id
+                support.setdefault('support', 'yes')
+                support['version'] = version_id
+                support['feature'] = feature['id']
+
+        if version.get('id') and support.get('id'):
+            versions.append(version)
+            supports.append(support)
+        else:
+            assert not version.get('id')
+            assert not support.get('id')
+            if versions and supports:
+                versions[-1].update(version)
+                supports[-1].update(support)
         return versions, supports
+
+    def unquote(self, text):
+        assert text.startswith('"') and text.endswith('"')
+        return text[1:-1]
 
     def generic_visit(self, node, visited_children):
         return visited_children or node
@@ -428,6 +641,7 @@ class PageVisitor(NodeVisitor):
                         description, rule.as_rule())
                     self.errors.append(error)
                 else:  # pragma: nocover
+                    # Not sure how we'd get here, so halt
                     raise Exception('Failed to detect parse mistake!')
 
     visit_other_section = detect_missed_h2
@@ -483,17 +697,16 @@ class PageVisitor(NodeVisitor):
                     feature_id = table[row][0]
                     assert feature_id
                     feature = features[feature_id]
-                    browser = columns[col]
+                    browser_id = columns[col]
+                    browser = browsers[browser_id]
                     cell_versions, cell_supports = self.cell_to_support(
                         cell, feature, browser)
                     cell_id = []
-                    assert not cell_versions
-                    assert not cell_supports
-                    # for version in cell_versions:
-                    #     versions[version['id']] = version
-                    # for support in supports:
-                    #     cell_id.append(support['id'])
-                    #     supports[support['id']] = support
+                    for version in cell_versions:
+                        versions[version['id']] = version
+                    for support in cell_supports:
+                        cell_id.append(support['id'])
+                        supports[support['id']] = support
                 # Insert IDs into table
                 for r in range(rowspan):
                     for c in range(colspan):
@@ -540,17 +753,14 @@ class PageVisitor(NodeVisitor):
         name = node.match.group('content')
         assert isinstance(name, text_type), type(name)
 
-        nname = self.cleanup_whitespace(name)
-        fixed_name = self.browser_name_fixes.get(nname, nname)
-        browser_id = self.browser_ids.get(fixed_name)
-        if not browser_id:
+        b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
+        if str(b_id).startswith('_'):
             self.errors.append(
                 (node.start, node.end, 'Unknown Browser "%s"' % name))
-            browser_id = "_" + nname
-
         return {
-            'name': fixed_name,
-            'id': browser_id,
+            'name': b_name,
+            'id': b_id,
+            'slug': b_slug,
         }
 
     def visit_compat_rows(self, node, children):
@@ -659,6 +869,23 @@ class PageVisitor(NodeVisitor):
             'end': node.end
         }
 
+    def visit_cell_version(self, node, children):
+        return {
+            'type': 'version',
+            'version': node.match.group('version'),
+            'eng_version': node.match.group('eng_version'),
+            'start': node.start,
+            'end': node.end,
+        }
+
+    def visit_cell_footnote(self, node, children):
+        return {
+            'type': 'footnote',
+            'footnote': node.match.group('footnote'),
+            'start': node.start,
+            'end': node.end,
+        }
+
     def visit_cell_other(self, node, children):
         text = self.cleanup_whitespace(node.text)
         assert 'td>' not in text
@@ -765,9 +992,9 @@ def scrape_feature_page(fp):
     fp_data['meta']['scrape']['raw'] = data
 
     # Load specification section data
-    specifications = OrderedDict()
-    maturities = OrderedDict()
-    sections = OrderedDict()
+    specifications = {}
+    maturities = {}
+    sections = {}
     for row in data['specs']:
         # Load Specifications and Maturity
         spec_id = row['specification.id']
@@ -789,16 +1016,10 @@ def scrape_feature_page(fp):
             specifications[spec_id] = spec_content
 
             mat = spec.maturity
-            spec_ids = [
-                str(s_id) for s_id in mat.specifications.values_list(
-                    'id', flat=True)]
             mat_content = OrderedDict((
                 ('id', str(mat.id)),
                 ('slug', mat.slug),
-                ('name', mat.name),
-                ('links', OrderedDict((
-                    ('specifications', spec_ids),
-                )))))
+                ('name', mat.name)))
             maturities[mat.id] = mat_content
         else:
             spec_id = '_' + row['specification.mdn_key']
@@ -816,10 +1037,9 @@ def scrape_feature_page(fp):
                 ('slug', ''),
                 ('name', {'en': 'Unknown'}),
                 ('links', {'specifications': []}))))
-            mat['links']['specifications'].append(spec_id)
             maturities['_unknown'] = mat
 
-        # Load Section
+        # Load (specification) Section
         section_id = row['section.id']
         if section_id:
             section = Section.objects.get(id=section_id)
@@ -835,8 +1055,7 @@ def scrape_feature_page(fp):
                 ('subpath', section.subpath),
                 ('note', section.note),
                 ('links', OrderedDict((
-                    ('specification', spec_id),
-                    ('features', feature_ids))))))
+                    ('specification', str(spec_id)),)))))
         else:
             section_id = str(spec_id) + '_' + row['section.subpath']
             section_content = OrderedDict((
@@ -846,8 +1065,7 @@ def scrape_feature_page(fp):
                 ('subpath', OrderedDict()),
                 ('note', OrderedDict()),
                 ('links', OrderedDict((
-                    ('specification', spec_id),
-                    ('features', [main_feature_id]))))))
+                    ('specification', str(spec_id)),)))))
         section_content['name']['en'] = row['section.name']
         section_content['subpath']['en'] = row['section.subpath']
         section_content['note']['en'] = row['section.note']
@@ -855,17 +1073,23 @@ def scrape_feature_page(fp):
         fp_data['features']['links']['sections'].append(str(section_id))
 
     tabs = []
-    browsers = OrderedDict()
-    versions = OrderedDict()
-    features = OrderedDict()
-    supports = OrderedDict()
+    browsers = {}
+    versions = {}
+    features = {}
+    supports = {}
     compat_table_supports = OrderedDict(((str(fp.feature.id), {}),))
     # Load compatibility section
+    tab_name = {
+        'desktop': 'Desktop Browsers',
+        'mobile': 'Mobile Browsers',
+    }
     for table in data['compat']:
         tab = OrderedDict((
-            ("name", {"en": table['name'].title()}),
+            ("name",
+             {"en": tab_name.get(table['name'], 'Other Environments')}),
             ("browsers", []),
         ))
+        # Load Browsers (first row)
         for b in table['browsers']:
             if str(b['id']).startswith('_'):
                 browser_content = OrderedDict((
@@ -884,6 +1108,8 @@ def scrape_feature_page(fp):
                 ))
             browsers[b['id']] = browser_content
             tab['browsers'].append(browser_content['id'])
+
+        # Load Features (first column)
         for f in table['features']:
             if str(f['id']).startswith('_'):
                 # Fake feature
@@ -912,7 +1138,7 @@ def scrape_feature_page(fp):
                     feature.sections.values_list('pk', flat=True)]
                 support_ids = [
                     str(s_id) for s_id in
-                    feature.supports.values_list('pk', flat=True)]
+                    sorted(feature.supports.values_list('pk', flat=True))]
                 parent_id = (
                     str(feature.parent_id) if feature.parent_id else None)
                 children_ids = [
@@ -921,7 +1147,7 @@ def scrape_feature_page(fp):
                 feature_content = OrderedDict((
                     ('id', str(f['id'])),
                     ('slug', feature.slug),
-                    ('mdn_uri', feature.mdn_uri),
+                    ('mdn_uri', feature.mdn_uri or None),
                     ('experimental', feature.experimental),
                     ('standardized', feature.standardized),
                     ('stable', feature.stable),
@@ -934,16 +1160,102 @@ def scrape_feature_page(fp):
                         ('children', children_ids))))))
             features.setdefault(f['id'], feature_content)
             compat_table_supports.setdefault(f['id'], OrderedDict())
+
+        # Load Versions
+        for v in table['versions']:
+            if str(v['id']).startswith('_'):
+                # New Version
+                version_content = OrderedDict((
+                    ('id', v['id']),
+                    ('version', v['version']),
+                    ('release_day', None),
+                    ('retirement_day', None),
+                    ('status', 'unknown'),
+                    ('release_notes_uri', None),
+                    ('note', None),
+                    ('links', OrderedDict((
+                        ('browser', str(v['browser'])),)))))
+            else:
+                # Existing Version
+                version = Version.objects.get(id=v['id'])
+                version_content = OrderedDict((
+                    ('id', str(v['id'])),
+                    ('version', version.version),
+                    ('release_day', date_to_iso(version.release_day)),
+                    ('retirement_day', date_to_iso(version.retirement_day)),
+                    ('status', version.status),
+                    ('release_notes_uri', version.release_notes_uri or None),
+                    ('note', version.note or None),
+                    ('order', version._order),
+                    ('links', OrderedDict((
+                        ('browser', str(version.browser_id)),)))))
+            versions.setdefault(v['id'], version_content)
+
+        # Load Supports
+        for s in table['supports']:
+            if str(s['id']).startswith('_'):
+                # New support
+                support_content = OrderedDict((
+                    ('id', s['id']),
+                    ('support', s['support']),
+                    ('prefix', s.get('prefix')),
+                    ('prefix_mandatory', bool(s.get('prefix', False))),
+                    ('alternate_name', s.get('alternate_name')),
+                    ('alternate_mandatory',
+                     s.get('alternate_mandatory', False)),
+                    ('requires_config', s.get('requires_config')),
+                    ('default_config', s.get('default_config')),
+                    ('protected', s.get('protected', False)),
+                    ('note', s.get('note')),
+                    ('footnote', s.get('footnote')),
+                    ('links', OrderedDict((
+                        ('version', str(s['version'])),
+                        ('feature', str(s['feature'])))))))
+                version_id = s['version']
+                feature_id = s['feature']
+            else:
+                # Existing support
+                support = Support.objects.get(id=s['id'])
+                support_content = OrderedDict((
+                    ('id', str(support.id)),
+                    ('support', support.support),
+                    ('prefix', support.prefix or None),
+                    ('prefix_mandatory', support.prefix_mandatory),
+                    ('alternate_name', support.alternate_name or None),
+                    ('alternate_mandatory', support.alternate_mandatory),
+                    ('requires_config', support.requires_config or None),
+                    ('default_config', support.default_config or None),
+                    ('protected', support.protected),
+                    ('note', support.note or None),
+                    ('footnote', support.footnote or None),
+                    ('links', OrderedDict((
+                        ('version', str(support.version_id)),
+                        ('feature', str(support.feature_id)))))))
+                version_id = support.version_id
+                feature_id = support.feature_id
+            supports.setdefault(s['id'], support_content)
+
+            # Set the meta lookup
+            version = versions[version_id]
+            browser_id = version['links']['browser']
+            compat_table_supports[feature_id].setdefault(browser_id, [])
+            compat_table_supports[feature_id][browser_id].append(str(s['id']))
+
         tabs.append(tab)
 
     # Add linked data, meta
-    fp_data['linked']['specifications'] = list(specifications.values())
-    fp_data['linked']['maturities'] = list(maturities.values())
-    fp_data['linked']['sections'] = list(sections.values())
-    fp_data['linked']['browsers'] = list(browsers.values())
-    fp_data['linked']['versions'] = list(versions.values())
-    fp_data['linked']['features'] = list(features.values())
-    fp_data['linked']['supports'] = list(supports.values())
+    def sorted_values(d):
+        int_keys = sorted([k for k in d.keys() if isinstance(k, int)])
+        nonint_keys = sorted([k for k in d.keys() if not isinstance(k, int)])
+        return list(d[k] for k in chain(int_keys, nonint_keys))
+
+    fp_data['linked']['specifications'] = sorted_values(specifications)
+    fp_data['linked']['maturities'] = sorted_values(maturities)
+    fp_data['linked']['sections'] = sorted_values(sections)
+    fp_data['linked']['browsers'] = sorted_values(browsers)
+    fp_data['linked']['versions'] = sorted_values(versions)
+    fp_data['linked']['features'] = sorted_values(features)
+    fp_data['linked']['supports'] = sorted_values(supports)
     languages = fp_data['features']['mdn_uri'].keys()
     fp_data['meta']['compat_table']['languages'] = list(languages)
     fp_data['meta']['compat_table']['tabs'] = tabs
@@ -978,3 +1290,11 @@ def slugify(word, length=50, suffix=""):
     suffix = str(suffix) if suffix else ""
     with_suffix = slugged[slice(length - len(suffix))] + suffix
     return with_suffix
+
+
+def date_to_iso(date):
+    """Convert a datetime.Date to the ISO 8601 format, or None"""
+    if date:
+        return date.isoformat()
+    else:
+        return None

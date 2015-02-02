@@ -1,16 +1,17 @@
 # coding: utf-8
 """Test mdn.scrape."""
 from __future__ import unicode_literals
+from datetime import date
 from json import dumps
 
 from parsimonious.grammar import Grammar
 
 from mdn.models import FeaturePage, TranslatedContent
 from mdn.scrape import (
-    end_of_line, page_grammar, range_error_to_html, scrape_page,
+    date_to_iso, end_of_line, page_grammar, range_error_to_html, scrape_page,
     scrape_feature_page, slugify, PageVisitor)
 from webplatformcompat.models import (
-    Browser, Feature, Maturity, Section, Specification)
+    Browser, Feature, Maturity, Section, Specification, Support, Version)
 from webplatformcompat.tests.base import TestCase
 
 
@@ -36,6 +37,30 @@ class TestGrammar(TestCase):
         capture = parsed.children[2]
         self.assertEqual(
             'Defines <code>right</code> as animatable.', capture.text)
+
+    def assert_cell_version(self, text, version, eng_version=None):
+        match = self.grammar['cell_version'].parse(text).match.groupdict()
+        expected = {'version': version, 'eng_version': eng_version}
+        self.assertEqual(expected, match)
+
+    def test_cell_version_number(self):
+        self.assert_cell_version("1", version="1")
+
+    def test_cell_version_number_dotted(self):
+        self.assert_cell_version("1.0", version="1.0")
+
+    def test_cell_version_number_spaces(self):
+        self.assert_cell_version("1 ", version="1")
+
+    def test_cell_version_number_dotted_spaces(self):
+        self.assert_cell_version("1.0\n\t", version="1.0")
+
+    def test_cell_version_number_with_engine(self):
+        self.assert_cell_version("1.0 (85)", version="1.0", eng_version="85")
+
+    def test_cell_version_number_with_dotted_engine(self):
+        self.assert_cell_version(
+            "5.0 (532.5)", version="5.0", eng_version="532.5")
 
 
 class ScrapeTestCase(TestCase):
@@ -299,6 +324,38 @@ Block formatting context</a></li>
             self.browsers[slug] = self.create(
                 Browser, slug=slug, name={"en": name})
 
+        versions = (
+            ('android', ''),
+            ('android', '1.0'),
+            ('android', '2.3'),
+            ('chrome', '1.0'),
+            ('chrome', '3.0'),
+            ('firefox', '1.0'),
+            ('firefox', '3.6'),
+            ('firefox', '4.0'),
+            ('firefox', '8.0'),
+            ('firefox-mobile', '1.0'),
+            ('firefox-mobile', '4.0'),
+            ('firefox-mobile', '8.0'),
+            ('ie', '4.0'),
+            ('ie', '9.0'),
+            ('ie-mobile', '6.0'),
+            ('opera', '10.0'),
+            ('opera', '7.0'),
+            ('opera', '9.5'),
+            ('opera-mobile', '6.0'),
+            ('safari', '1.0'),
+            ('safari', '3.0'),
+            ('safari', '4.1'),
+            ('safari-mobile', '1.0'),
+            ('safari-mobile', '5.1'),
+        )
+        self.versions = dict()
+        for browser_slug, version in versions:
+            browser = self.browsers[browser_slug]
+            self.versions[(browser_slug, version)] = self.create(
+                Version, browser=browser, version=version)
+
         if not hasattr(self, 'features'):
             self.add_compat_features()
 
@@ -413,33 +470,15 @@ class TestPageVisitor(ScrapeTestCase):
             '<td> Support for<br>\n     <code>contain</code> and'
             ' <code>cover</code> </td>')
         parsed = self.grammar['compat_row_cell'].parse(text)
-        expected_cell = [{
-            'type': 'td',
-        }, {
-            'type': 'text',
-            'content': 'Support for',
-            'start': 5,
-            'end': 16
-        }, {
-            'type': 'break',
-            'start': 16,
-            'end': 26
-        }, {
-            'type': 'code_block',
-            'content': 'contain',
-            'start': 26,
-            'end': 47
-        }, {
-            'type': 'text',
-            'content': 'and',
-            'start': 47,
-            'end': 51
-        }, {
-            'type': 'code_block',
-            'content': 'cover',
-            'start': 51,
-            'end': 70
-        }]
+        expected_cell = [
+            {'type': 'td'},
+            {'type': 'text', 'content': 'Support for', 'start': 5, 'end': 16},
+            {'type': 'break', 'start': 16, 'end': 26},
+            {'type': 'code_block', 'content': 'contain', 'start': 26,
+             'end': 47},
+            {'type': 'text', 'content': 'and', 'start': 47, 'end': 51},
+            {'type': 'code_block', 'content': 'cover', 'start': 51, 'end': 70},
+        ]
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
         expected_feature = {
@@ -521,30 +560,39 @@ class TestPageVisitor(ScrapeTestCase):
     def test_compat_row_cell_feature_unknown_kuma(self):
         text = '<td>feature foo {{bar}}</td>'
         parsed = self.grammar['compat_row_cell'].parse(text)
-        expected_cell = [{
-            'type': 'td',
-        }, {
-            'type': 'text',
-            'content': 'feature foo',
-            'start': 4,
-            'end': 16
-        }, {
-            'type': 'kuma',
-            'name': 'bar',
-            'args': [],
-            'start': 16,
-            'end': 23
-        }]
+        expected_cell = [
+            {'type': 'td'},
+            {'type': 'text', 'content': 'feature foo', 'start': 4, 'end': 16},
+            {'type': 'kuma', 'name': 'bar', 'args': [], 'start': 16,
+             'end': 23},
+        ]
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
         expected_feature = {
-            'id': '_feature foo',
-            'name': 'feature foo',
+            'id': '_feature foo', 'name': 'feature foo',
             'slug': 'web-css-background-size_feature_foo',
         }
         feature = self.visitor.cell_to_feature(cell)
         self.assertEqual(expected_feature, feature)
-        expected_error = [(16, 23, 'Unknown kuma function bar()')]
+        expected_error = [(16, 23, 'Unknown kuma function bar')]
+        self.assertEqual(expected_error, self.visitor.errors)
+
+    def test_compat_row_cell_feature_unknown_kuma_with_args(self):
+        text = '<td>foo {{bar("baz")}}</td>'
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        expected_cell = [
+            {'type': 'td'},
+            {'type': 'text', 'content': 'foo', 'start': 4, 'end': 8},
+            {'type': 'kuma', 'name': 'bar', 'args': ['"baz"'], 'start': 8,
+             'end': 22},
+        ]
+        cell = self.visitor.visit(parsed)
+        self.assertEqual(expected_cell, cell)
+        expected_feature = {
+            'id': '_foo', 'name': 'foo', 'slug': 'web-css-background-size_foo'}
+        feature = self.visitor.cell_to_feature(cell)
+        self.assertEqual(expected_feature, feature)
+        expected_error = [(8, 22, 'Unknown kuma function bar("baz")')]
         self.assertEqual(expected_error, self.visitor.errors)
 
     def test_cell_to_feature_unknown_item(self):
@@ -555,102 +603,276 @@ class TestPageVisitor(ScrapeTestCase):
         }]
         self.assertRaises(ValueError, self.visitor.cell_to_feature, bad_cell)
 
-    def test_compat_row_cell_support_complex(self):
-        text = (
-            '<td>{{CompatVersionUnknown}}{{property_prefix("-webkit")}}<br>\n'
-            '   2.3</td>')
+    def test_cell_to_support_unknown_item(self):
+        feature = {'id': '_feature', 'name': 'feature', 'slug': 'feature_slug'}
+        browser = {'id': '_browser', 'name': 'Browser', 'slug': 'browser'}
+        bad_cell = [{'type': 'td'}, {'type': 'other'}]
+        self.assertRaises(
+            ValueError, self.visitor.cell_to_support, bad_cell, feature,
+            browser)
+
+    def test_compat_row_cell_support_matched_version(self):
+        browser = self.create(Browser, name={'en': 'Browser'}, slug='browser')
+        version = self.create(Version, version='1.0', browser=browser)
+        feature = self.create(
+            Feature, name={'en': 'feature'}, slug='feature_slug',
+            parent=self.features['web-css-background-size'])
+
+        feature_rep = {
+            'id': feature.id,
+            'name': 'feature',
+            'slug': 'feature_slug',
+        }
+        browser_rep = {
+            'id': browser.id,
+            'name': 'Browser',
+            'slug': 'browser',
+        }
+        text = "<td>1.0</td>"
         parsed = self.grammar['compat_row_cell'].parse(text)
-        expected_cell = [{
-            'type': 'td',
-        }, {
-            'type': 'kuma',
-            'name': 'CompatVersionUnknown',
-            'args': [],
-            'start': 4,
-            'end': 28
-        }, {
-            'type': 'kuma',
-            'name': 'property_prefix',
-            'args': ['"-webkit"'],
-            'start': 28,
-            'end': 58
-        }, {
-            'type': 'break',
-            'start': 58,
-            'end': 66
-        }, {
-            'type': 'text',
-            'content': '2.3',
-            'start': 66,
-            'end': 69
-        }]
         cell = self.visitor.visit(parsed)
-        self.assertEqual(expected_cell, cell)
-        feature = {
+        versions, supports = self.visitor.cell_to_support(
+            cell, feature_rep, browser_rep)
+        expected_versions = [{
+            'id': version.id,
+            'version': version.version,
+            'browser': browser.id,
+        }]
+        self.assertEqual(expected_versions, versions)
+        expected_supports = [{
+            'id': '_%s-%s' % (feature.id, version.id),
+            'support': "yes",
+            'version': version.id,
+            'feature': feature.id
+        }]
+        self.assertEqual(expected_supports, supports)
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual([], self.visitor.errors)
+
+    def test_compat_row_cell_support_unknown_version(self):
+        browser = self.create(Browser, name={'en': 'Browser'}, slug='browser')
+
+        feature_rep = {
             'id': '_feature',
             'name': 'feature',
             'slug': 'feature_slug',
         }
-        browser = {
-            'id': '_browser',
+        browser_rep = {
+            'id': browser.id,
             'name': 'Browser',
-            'slug': 'browser_slug',
+            'slug': 'browser',
         }
+        text = "<td>1.0</td>"
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        cell = self.visitor.visit(parsed)
+        versions, supports = self.visitor.cell_to_support(
+            cell, feature_rep, browser_rep)
+        expected_versions = [{
+            'id': '_Browser-1.0',
+            'version': '1.0',
+            'browser': browser.id,
+        }]
+        self.assertEqual(expected_versions, versions)
+        expected_supports = [{
+            'id': '__feature-_Browser-1.0',
+            'support': "yes",
+            'version': '_Browser-1.0',
+            'feature': '_feature'
+        }]
+        self.assertEqual(expected_supports, supports)
+        self.assertEqual([], self.visitor.issues)
+        expected_errors = [
+            (4, 7,
+             'Unknown version "1.0" for browser "Browser" (id %d, slug "%s")'
+             % (browser.id, 'browser'))]
+        self.assertEqual(expected_errors, self.visitor.errors)
+
+    def test_compat_row_cell_support_matched_support(self):
+        browser = self.create(Browser, name={'en': 'Browser'}, slug='browser')
+        version = self.create(Version, version='1.0', browser=browser)
+        feature = self.create(
+            Feature, name={'en': 'feature'}, slug='feature_slug',
+            parent=self.features['web-css-background-size'])
+        support = self.create(Support, version=version, feature=feature)
+
+        feature_rep = {
+            'id': feature.id, 'name': 'feature', 'slug': 'feature_slug'}
+        browser_rep = {
+            'id': browser.id, 'name': 'Browser', 'slug': 'browser'}
+        text = "<td>1.0</td>"
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        cell = self.visitor.visit(parsed)
+        versions, supports = self.visitor.cell_to_support(
+            cell, feature_rep, browser_rep)
+        expected_versions = [{
+            'id': version.id,
+            'version': version.version,
+            'browser': browser.id,
+        }]
+        self.assertEqual(expected_versions, versions)
+        expected_supports = [{
+            'id': support.id,
+            'support': "yes",
+            'version': version.id,
+            'feature': feature.id
+        }]
+        self.assertEqual(expected_supports, supports)
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual([], self.visitor.errors)
+
+    def test_compat_row_cell_support_compatversionunknown_vmatch(self):
+        browser = self.create(Browser, name={'en': 'Browser'}, slug='browser')
+        version = self.create(Version, version='', browser=browser)
+        feature = self.create(
+            Feature, name={'en': 'feature'}, slug='feature_slug',
+            parent=self.features['web-css-background-size'])
+        feature_rep = {'id': feature.id, 'name': 'feature', 'slug': 'f_slug'}
+        browser_rep = {'id': browser.id, 'name': 'Browser', 'slug': 'b_slug'}
+        text = "<td>{{CompatVersionUnknown}}</td>"
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        cell = self.visitor.visit(parsed)
+        versions, supports = self.visitor.cell_to_support(
+            cell, feature_rep, browser_rep)
+        expected_versions = [{
+            'id': version.id,
+            'browser': browser.id,
+            'version': '',
+        }]
+        self.assertEqual(expected_versions, versions)
+        expected_supports = [{
+            'id': '_%s-%s' % (feature.id, version.id),
+            'version': version.id,
+            'feature': feature.id,
+            'support': "yes",
+        }]
+        self.assertEqual(expected_supports, supports)
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual([], self.visitor.errors)
+
+    def assert_compat_row_cell_support(
+            self, contents, expected_versions=[], expected_supports=[],
+            expected_issues=[], expected_errors=[]):
+        """Generic tests for compat_row_cell visitor"""
+        feature = {'id': '_feature', 'name': 'feature', 'slug': 'feature_slug'}
+        browser = {'id': '_browser', 'name': 'Browser', 'slug': 'browser'}
+        text = "<td>%s</td>" % contents
+        parsed = self.grammar['compat_row_cell'].parse(text)
+        cell = self.visitor.visit(parsed)
         versions, supports = self.visitor.cell_to_support(
             cell, feature, browser)
-        # TODO: Extract real data
-        self.assertEqual([], versions)
-        self.assertEqual([], supports)
+        for ev in expected_versions:
+            assert 'id' not in ev
+            assert 'browser' not in ev
+            ev['id'] = '_%s-%s' % (browser['name'], ev['version'])
+            ev['browser'] = browser['id']
+        self.assertEqual(expected_versions, versions)
+        for i, es in enumerate(expected_supports):
+            version = expected_versions[i]
+            assert 'id' not in es
+            assert 'version' not in es
+            assert 'feature' not in es
+            es['id'] = '_%s-%s' % (feature['id'], version['id'])
+            es['version'] = version['id']
+            es['feature'] = feature['id']
+        self.assertEqual(expected_supports, supports)
+        self.assertEqual(expected_issues, self.visitor.issues)
+        self.assertEqual(expected_errors, self.visitor.errors)
+
+    def test_compat_row_cell_support_version(self):
+        self.assert_compat_row_cell_support(
+            '1.0',
+            [{'version': '1.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatno(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatNo}}',
+            [{'version': ''}], [{'support': 'no'}])
+
+    def test_compat_row_cell_support_compatversionunknown(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatVersionUnknown}}',
+            [{'version': ''}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatunknown(self):
+        self.assert_compat_row_cell_support('{{CompatUnknown}}', [], [])
+
+    def test_compat_row_cell_support_compatgeckodesktop_10(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("1")}}',
+            [{'version': '1.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckodesktop_8(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("8.0")}}',
+            [{'version': '8.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckodesktop_bad_text(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("Yep")}}',
+            expected_errors=[(4, 33, 'Unknown Gecko version "Yep"')])
+
+    def test_compat_row_cell_support_compatgeckodesktop_bad_num(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("1.1")}}',
+            expected_errors=[(4, 33, 'Unknown Gecko version "1.1"')])
+
+    def test_compat_row_cell_support_compatgeckomobile_1(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoMobile("1")}}',
+            [{'version': '1.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckomobile_1_11(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoMobile("1.11")}}',
+            [{'version': '1.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckomobile_2(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoMobile("2")}}',
+            [{'version': '4.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_unknown_kuma(self):
+        self.assert_compat_row_cell_support(
+            '{{UnknownKuma}}',
+            expected_errors=[(4, 19, "Unknown kuma function UnknownKuma")])
+
+    def test_compat_row_cell_support_unknown_kuma_args(self):
+        self.assert_compat_row_cell_support(
+            '{{UnknownKuma("foo")}}',
+            expected_errors=[
+                (4, 26, 'Unknown kuma function UnknownKuma("foo")')])
+
+    def test_compat_row_cell_support_nested_p(self):
+        self.assert_compat_row_cell_support(
+            '<p><p>4.0</p></p>',
+            expected_errors=[
+                (7, 10, 'Nested <p> tags not supported')])
+
+    def test_compat_row_cell_support_with_prefix_and_break(self):
+        self.assert_compat_row_cell_support(
+            ('{{CompatVersionUnknown}}{{property_prefix("-webkit")}}<br>\n'
+             '   2.3'),
+            [{'version': ''}, {'version': '2.3'}],
+            [{'support': 'yes', 'prefix': '-webkit'}, {'support': 'yes'}])
 
     def test_compat_row_cell_support_p_tags(self):
-        text = '<td><p>4.0</p><p>Removed in 32</p></td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
-        expected_cell = [{
-            'type': 'td',
-        }, {
-            'type': 'p_open',
-            'start': 4,
-            'end': 7,
-        }, {
-            'type': 'text',
-            'content': '4.0',
-            'start': 7,
-            'end': 10
-        }, {
-            'type': 'p_close',
-            'start': 10,
-            'end': 14,
-        }, {
-            'type': 'p_open',
-            'start': 14,
-            'end': 17,
-        }, {
-            'type': 'text',
-            'content': 'Removed in 32',
-            'start': 17,
-            'end': 30
-        }, {
-            'type': 'p_close',
-            'start': 30,
-            'end': 34,
-        }]
-        cell = self.visitor.visit(parsed)
-        self.assertEqual(expected_cell, cell)
-        feature = {
-            'id': '_feature',
-            'name': 'feature',
-            'slug': 'feature_slug',
-        }
-        browser = {
-            'id': '_browser',
-            'name': 'Browser',
-            'slug': 'browser_slug',
-        }
-        versions, supports = self.visitor.cell_to_support(
-            cell, feature, browser)
-        # TODO: Extract real data
-        self.assertEqual([], versions)
-        self.assertEqual([], supports)
+        self.assert_compat_row_cell_support(
+            '<p>4.0</p><p>32</p>',
+            [{'version': '4.0'}, {'version': '32.0'}],
+            [{'support': 'yes'}, {'support': 'yes'}])
+
+    def test_compat_row_cell_two_line_note(self):
+        self.assert_compat_row_cell_support(
+            '18<br>\n(behind a pref) [1]',
+            [{'version': '18.0'}], [{'support': 'yes', 'footnote_id': '1'}],
+            expected_errors=[
+                (11, 27, 'Unknown support text "(behind a pref)"')])
+
+    def test_compat_row_cell_support_unmatched_free_text(self):
+        self.assert_compat_row_cell_support(
+            'Removed in 32',
+            expected_errors=[
+                (4, 17, 'Unknown support text "Removed in 32"')])
 
 
 class TestScrape(ScrapeTestCase):
@@ -722,57 +944,100 @@ class TestScrape(ScrapeTestCase):
             'compat': [{
                 'name': 'desktop',
                 'browsers': [
-                    {
-                        'name': 'Chrome',
-                        'id': '_Chrome',
-                    }, {
-                        'name': 'Firefox',
-                        'id': '_Firefox (Gecko)',
-                    }, {
-                        'name': 'Internet Explorer',
-                        'id': '_Internet Explorer',
-                    }, {
-                        'name': 'Opera',
-                        'id': '_Opera',
-                    }, {
-                        'name': 'Safari',
-                        'id': '_Safari',
-                    }],
+                    {'id': '_Chrome',
+                     'name': 'Chrome', 'slug': '_Chrome'},
+                    {'id': '_Firefox (Gecko)',
+                     'name': 'Firefox', 'slug': '_Firefox (Gecko)'},
+                    {'id': '_Internet Explorer',
+                     'name': 'Internet Explorer',
+                     'slug': '_Internet Explorer'},
+                    {'id': '_Opera', 'name': 'Opera', 'slug': '_Opera'},
+                    {'id': '_Safari', 'name': 'Safari', 'slug': '_Safari'},
+                ],
                 'features': [
-                    {
-                        'name': 'Basic support',
-                        'id': '_basic support',
-                        'slug': 'web-css-background-size_basic_support',
-                    }],
-                'supports': [],
-                'versions': [],
+                    {'name': 'Basic support', 'id': '_basic support',
+                     'slug': 'web-css-background-size_basic_support'},
+                ],
+                'versions': [
+                    {'version': '1.0', 'browser': '_Chrome',
+                     'id': '_Chrome-1.0'},
+                    {'version': '1.0', 'browser': '_Firefox (Gecko)',
+                     'id': '_Firefox-1.0'},
+                    {'version': '4.0', 'browser': '_Internet Explorer',
+                     'id': '_Internet Explorer-4.0'},
+                    {'version': '7.0', 'browser': '_Opera',
+                     'id': '_Opera-7.0'},
+                    {'version': '1.0', 'browser': '_Safari',
+                     'id': '_Safari-1.0'},
+                ],
+                'supports': [
+                    {'id': '__basic support-_Chrome-1.0',
+                     'feature': '_basic support', 'version': '_Chrome-1.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_Firefox-1.0',
+                     'feature': '_basic support', 'version': '_Firefox-1.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_Internet Explorer-4.0',
+                     'feature': '_basic support',
+                     'version': '_Internet Explorer-4.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_Opera-7.0',
+                     'feature': '_basic support', 'version': '_Opera-7.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_Safari-1.0',
+                     'feature': '_basic support', 'version': '_Safari-1.0',
+                     'support': 'yes'},
+                ],
             }, {
                 'name': 'mobile',
                 'browsers': [
-                    {
-                        'name': 'Android',
-                        'id': '_Android',
-                    }, {
-                        'name': 'Firefox Mobile',
-                        'id': '_Firefox Mobile (Gecko)',
-                    }, {
-                        'name': 'IE Mobile',
-                        'id': '_IE Mobile',
-                    }, {
-                        'name': 'Opera Mobile',
-                        'id': '_Opera Mobile',
-                    }, {
-                        'name': 'Safari Mobile',
-                        'id': '_Safari Mobile',
-                    }],
+                    {'id': '_Android', 'name': 'Android', 'slug': '_Android'},
+                    {'id': '_Firefox Mobile (Gecko)',
+                     'name': 'Firefox Mobile',
+                     'slug': '_Firefox Mobile (Gecko)'},
+                    {'id': '_IE Mobile', 'name': 'IE Mobile',
+                     'slug': '_IE Mobile'},
+                    {'id': '_Opera Mobile', 'name': 'Opera Mobile',
+                     'slug': '_Opera Mobile'},
+                    {'id': '_Safari Mobile',
+                     'name': 'Safari Mobile', 'slug': '_Safari Mobile'},
+                ],
                 'features': [
-                    {
-                        'name': 'Basic support',
-                        'id': '_basic support',
-                        'slug': 'web-css-background-size_basic_support',
-                    }],
-                'supports': [],
-                'versions': [],
+                    {'name': 'Basic support', 'id': '_basic support',
+                     'slug': 'web-css-background-size_basic_support'}
+                ],
+                'versions': [
+                    {'version': '1.0', 'browser': '_Android',
+                     'id': '_Android-1.0'},
+                    {'version': '1.0', 'browser': '_Firefox Mobile (Gecko)',
+                     'id': '_Firefox Mobile-1.0'},
+                    {'version': '6.0', 'browser': '_IE Mobile',
+                     'id': '_IE Mobile-6.0'},
+                    {'version': '6.0', 'browser': '_Opera Mobile',
+                     'id': '_Opera Mobile-6.0'},
+                    {'version': '1.0', 'browser': '_Safari Mobile',
+                     'id': '_Safari Mobile-1.0'},
+                ],
+                'supports': [
+                    {'id': '__basic support-_Android-1.0',
+                     'feature': '_basic support', 'version': '_Android-1.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_Firefox Mobile-1.0',
+                     'feature': '_basic support',
+                     'version': '_Firefox Mobile-1.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_IE Mobile-6.0',
+                     'feature': '_basic support', 'version': '_IE Mobile-6.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_Opera Mobile-6.0',
+                     'feature': '_basic support',
+                     'version': '_Opera Mobile-6.0',
+                     'support': 'yes'},
+                    {'id': '__basic support-_Safari Mobile-1.0',
+                     'feature': '_basic support',
+                     'version': '_Safari Mobile-1.0',
+                     'support': 'yes'},
+                ],
             }],
             'footnotes': None,
             'issues': [],
@@ -792,82 +1057,10 @@ class TestScrape(ScrapeTestCase):
         }
         self.assertScrape(self.simple_page, expected)
 
-    def test_simple_page_with_data(self):
-        """Test with a simple page and data."""
-        self.add_models()
-        expected = {
-            'locale': 'en',
-            'specs': [{
-                'specification.mdn_key': 'CSS3 Backgrounds',
-                'specification.id': self.spec.id,
-                'section.subpath': '#the-background-size',
-                'section.name': 'background-size',
-                'section.note': '',
-                'section.id': self.section.id,
-            }],
-            'compat': [{
-                'name': 'desktop',
-                'browsers': [
-                    {
-                        'name': 'Chrome',
-                        'id': self.browsers['chrome'].pk,
-                    }, {
-                        'name': 'Firefox',
-                        'id': self.browsers['firefox'].pk,
-                    }, {
-                        'name': 'Internet Explorer',
-                        'id': self.browsers['ie'].pk,
-                    }, {
-                        'name': 'Opera',
-                        'id': self.browsers['opera'].pk,
-                    }, {
-                        'name': 'Safari',
-                        'id': self.browsers['safari'].pk,
-                    }],
-                'features': [
-                    {
-                        'name': 'Basic support',
-                        'id': '_basic support',
-                        'slug': 'web-css-background-size_basic_support',
-                    }],
-                'supports': [],
-                'versions': [],
-            }, {
-                'name': 'mobile',
-                'browsers': [
-                    {
-                        'name': 'Android',
-                        'id': self.browsers['android'].pk,
-                    }, {
-                        'name': 'Firefox Mobile',
-                        'id': self.browsers['firefox-mobile'].pk,
-                    }, {
-                        'name': 'IE Mobile',
-                        'id': self.browsers['ie-mobile'].pk,
-                    }, {
-                        'name': 'Opera Mobile',
-                        'id': self.browsers['opera-mobile'].pk,
-                    }, {
-                        'name': 'Safari Mobile',
-                        'id': self.browsers['safari-mobile'].pk,
-                    }],
-                'features': [
-                    {
-                        'name': 'Basic support',
-                        'id': '_basic support',
-                        'slug': 'web-css-background-size_basic_support',
-                    }],
-                'supports': [],
-                'versions': [],
-            }],
-            'footnotes': None,
-            'issues': [],
-            'errors': [],
-        }
-        self.assertScrape(self.simple_page, expected)
-
     def test_complex_page_with_data(self):
         self.add_models()
+        bs_id = '__basic support-%s'
+        cc_id = '__support for contain and cover-%s'
         expected = {
             'locale': 'en',
             'specs': [{
@@ -881,81 +1074,199 @@ class TestScrape(ScrapeTestCase):
             'compat': [{
                 'name': 'desktop',
                 'browsers': [
-                    {
-                        'name': 'Chrome',
-                        'id': self.browsers['chrome'].pk,
-                    }, {
-                        'name': 'Firefox',
-                        'id': self.browsers['firefox'].pk,
-                    }, {
-                        'name': 'Internet Explorer',
-                        'id': self.browsers['ie'].pk,
-                    }, {
-                        'name': 'Opera',
-                        'id': self.browsers['opera'].pk,
-                    }, {
-                        'name': 'Safari',
-                        'id': self.browsers['safari'].pk,
-                    }],
+                    {'id': self.browsers['chrome'].pk,
+                     'name': 'Chrome', 'slug': 'chrome'},
+                    {'id': self.browsers['firefox'].pk,
+                     'name': 'Firefox', 'slug': 'firefox'},
+                    {'id': self.browsers['ie'].pk,
+                     'name': 'Internet Explorer', 'slug': 'ie'},
+                    {'id': self.browsers['opera'].pk,
+                     'name': 'Opera', 'slug': 'opera'},
+                    {'id': self.browsers['safari'].pk,
+                     'name': 'Safari', 'slug': 'safari'},
+                ],
                 'features': [
-                    {
-                        'name': 'Basic support',
-                        'id': '_basic support',
-                        'slug': 'web-css-background-size_basic_support',
-                    }, {
-                        'id': '_support for contain and cover',
-                        'name': (
-                            'Support for <code>contain</code> and'
-                            ' <code>cover</code>'),
-                        'slug': (
-                            'web-css-background-size_support_for_contain'
-                            '_and_co'),
-                    }, {
-                        'name': 'Support for SVG backgrounds',
-                        'id': '_support for svg backgrounds',
-                        'slug': (
-                            'web-css-background-size_support_for_svg_'
-                            'background'),
-                    }],
-                'supports': [],
-                'versions': [],
+                    {'name': 'Basic support', 'id': '_basic support',
+                     'slug': 'web-css-background-size_basic_support'},
+                    {'id': '_support for contain and cover',
+                     'name': ('Support for <code>contain</code> and'
+                              ' <code>cover</code>'),
+                     'slug': ('web-css-background-size_support_for_contain'
+                              '_and_co')},
+                    {'name': 'Support for SVG backgrounds',
+                     'id': '_support for svg backgrounds',
+                     'slug': ('web-css-background-size_support_for_svg_'
+                              'background')},
+                ],
+                'versions': [
+                    {'id': self.versions[('chrome', '1.0')].pk,
+                     'browser': self.browsers['chrome'].pk, 'version': '1.0'},
+                    {'id': self.versions[('firefox', '3.6')].pk,
+                     'browser': self.browsers['firefox'].pk, 'version': '3.6'},
+                    {'id': self.versions[('ie', '9.0')].pk,
+                     'browser': self.browsers['ie'].pk, 'version': '9.0'},
+                    {'id': self.versions[('opera', '9.5')].pk,
+                     'browser': self.browsers['opera'].pk, 'version': '9.5'},
+                    {'id': self.versions[('safari', '3.0')].pk,
+                     'browser': self.browsers['safari'].pk,
+                     'version': '3.0'},
+                    {'id': self.versions[('chrome', '3.0')].pk,
+                     'browser': self.browsers['chrome'].pk,
+                     'version': '3.0'},
+                    {'id': self.versions[('firefox', '4.0')].pk,
+                     'browser': self.browsers['firefox'].pk,
+                     'version': '4.0'},
+                    {'id': self.versions[('opera', '10.0')].pk,
+                     'browser': self.browsers['opera'].pk,
+                     'version': '10.0'},
+                    {'id': self.versions[('safari', '4.1')].pk,
+                     'browser': self.browsers['safari'].pk,
+                     'version': '4.1'},
+                    {'id': self.versions[('firefox', '8.0')].pk,
+                     'browser': self.browsers['firefox'].pk,
+                     'version': '8.0'},
+                ],
+                'supports': [
+                    {'id': bs_id % self.versions[('chrome', '1.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('chrome', '1.0')].pk,
+                     'support': 'yes', 'prefix': '-webkit',
+                     'footnote_id': '2'},
+                    {'id': bs_id % self.versions[('firefox', '3.6')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('firefox', '3.6')].pk,
+                     'support': 'yes', 'prefix': '-moz', 'footnote_id': '4'},
+                    {'id': bs_id % self.versions[('ie', '9.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('ie', '9.0')].pk,
+                     'support': 'yes', 'footnote_id': '5'},
+                    {'id': bs_id % self.versions[('opera', '9.5')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('opera', '9.5')].pk,
+                     'support': 'yes', 'prefix': '-o', 'footnote_id': '1'},
+                    {'id': bs_id % self.versions[('safari', '3.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('safari', '3.0')].pk,
+                     'support': 'yes', 'prefix': '-webkit',
+                     'footnote_id': '2'},
+                    {'id': bs_id % self.versions[('chrome', '3.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('chrome', '3.0')].pk,
+                     'support': 'yes'},
+                    {'id': bs_id % self.versions[('firefox', '4.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('firefox', '4.0')].pk,
+                     'support': 'yes'},
+                    {'id': bs_id % self.versions[('opera', '10.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('opera', '10.0')].pk,
+                     'support': 'yes'},
+                    {'id': bs_id % self.versions[('safari', '4.1')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('safari', '4.1')].pk,
+                     'support': 'yes'},
+                    {'id': cc_id % self.versions[('chrome', '3.0')].pk,
+                     'feature': '_support for contain and cover',
+                     'version': self.versions[('chrome', '3.0')].pk,
+                     'support': 'yes'},
+                    {'id': cc_id % self.versions[('firefox', '3.6')].pk,
+                     'feature': '_support for contain and cover',
+                     'version': self.versions[('firefox', '3.6')].pk,
+                     'support': 'yes'},
+                    {'id': cc_id % self.versions[('ie', '9.0')].pk,
+                     'feature': '_support for contain and cover',
+                     'version': self.versions[('ie', '9.0')].pk,
+                     'support': 'yes', 'footnote_id': '5'},
+                    {'id': cc_id % self.versions[('opera', '10.0')].pk,
+                     'feature': '_support for contain and cover',
+                     'version': self.versions[('opera', '10.0')].pk,
+                     'support': 'yes'},
+                    {'id': cc_id % self.versions[('safari', '4.1')].pk,
+                     'feature': '_support for contain and cover',
+                     'version': self.versions[('safari', '4.1')].pk,
+                     'support': 'yes'},
+                    {'id': '__support for svg backgrounds-%s' % (
+                        self.versions[('firefox', '8.0')].pk),
+                     'feature': '_support for svg backgrounds',
+                     'version': self.versions[('firefox', '8.0')].pk,
+                     'support': 'yes'},
+                ],
             }, {
                 'name': 'mobile',
                 'browsers': [
-                    {
-                        'name': 'Android',
-                        'id': self.browsers['android'].pk,
-                    }, {
-                        'name': 'Firefox Mobile',
-                        'id': self.browsers['firefox-mobile'].pk,
-                    }, {
-                        'name': 'IE Mobile',
-                        'id': self.browsers['ie-mobile'].pk,
-                    }, {
-                        'name': 'Opera Mobile',
-                        'id': self.browsers['opera-mobile'].pk,
-                    }, {
-                        'name': 'Safari Mobile',
-                        'id': self.browsers['safari-mobile'].pk,
-                    }],
+                    {'id': self.browsers['android'].pk,
+                     'name': 'Android', 'slug': 'android'},
+                    {'id': self.browsers['firefox-mobile'].pk,
+                     'name': 'Firefox Mobile', 'slug': 'firefox-mobile'},
+                    {'id': self.browsers['ie-mobile'].pk,
+                     'name': 'IE Mobile', 'slug': 'ie-mobile'},
+                    {'id': self.browsers['opera-mobile'].pk,
+                     'name': 'Opera Mobile', 'slug': 'opera-mobile'},
+                    {'id': self.browsers['safari-mobile'].pk,
+                     'name': 'Safari Mobile', 'slug': 'safari-mobile'},
+                ],
                 'features': [
-                    {
-                        'name': 'Basic support',
-                        'id': '_basic support',
-                        'slug': 'web-css-background-size_basic_support',
-                    }, {
-                        'name': 'Support for SVG backgrounds',
-                        'id': '_support for svg backgrounds',
-                        'slug': (
-                            'web-css-background-size_support_for_svg_'
-                            'background'),
-                    }],
-                'supports': [],
-                'versions': [],
+                    {'name': 'Basic support', 'id': '_basic support',
+                     'slug': 'web-css-background-size_basic_support'},
+                    {'name': 'Support for SVG backgrounds',
+                     'id': '_support for svg backgrounds',
+                     'slug': ('web-css-background-size_support_for_svg_'
+                              'background')},
+                ],
+                'versions': [
+                    {'id': self.versions[('android', '')].pk,
+                     'browser': self.browsers['android'].pk, 'version': ''},
+                    {'id': self.versions[('android', '2.3')].pk,
+                     'browser': self.browsers['android'].pk, 'version': '2.3'},
+                    {'id': self.versions[('firefox-mobile', '1.0')].pk,
+                     'browser': self.browsers['firefox-mobile'].pk,
+                     'version': '1.0'},
+                    {'id': self.versions[('firefox-mobile', '4.0')].pk,
+                     'browser': self.browsers['firefox-mobile'].pk,
+                     'version': '4.0'},
+                    {'id': self.versions[('safari-mobile', '5.1')].pk,
+                     'browser': self.browsers['safari-mobile'].pk,
+                     'version': '5.1'},
+                    {'id': self.versions[('firefox-mobile', '8.0')].pk,
+                     'browser': self.browsers['firefox-mobile'].pk,
+                     'version': '8.0'},
+                ],
+                'supports': [
+                    {'id': bs_id % self.versions[('android', '')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('android', '')].pk,
+                     'support': 'yes', 'prefix': '-webkit'},
+                    {'id': bs_id % self.versions[('android', '2.3')].pk,
+                     'feature': '_basic support', 'version': '_Android-2.3',
+                     'version': self.versions[('android', '2.3')].pk,
+                     'support': 'yes'},
+                    {'id': bs_id % self.versions[('firefox-mobile', '1.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('firefox-mobile', '1.0')].pk,
+                     'support': 'yes', 'prefix': '-moz'},
+                    {'id': bs_id % self.versions[('firefox-mobile', '4.0')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('firefox-mobile', '4.0')].pk,
+                     'support': 'yes'},
+                    {'id': bs_id % self.versions[('safari-mobile', '5.1')].pk,
+                     'feature': '_basic support',
+                     'version': self.versions[('safari-mobile', '5.1')].pk,
+                     'support': 'yes'},
+                    {'id': '__support for svg backgrounds-%s' % (
+                        self.versions[('firefox-mobile', '8.0')].pk),
+                     'feature': '_support for svg backgrounds',
+                     'version': self.versions[('firefox-mobile', '8.0')].pk,
+                     'support': 'yes'},
+                ],
             }],
             'footnotes': self.complex_compat_footnotes,
             'issues': [],
-            'errors': [],
+            'errors': [
+                (1689, 1704, 'Unknown support text "with some bugs"'),
+                (1770, 1799,
+                 'Unknown support text "but from an older CSS3 draft"'),
+                (2918, 2933, 'Unknown support text "(maybe earlier)"'),
+            ]
         }
         self.assertScrape(self.complex_page, expected)
 
@@ -1126,7 +1437,7 @@ class TestScrapeFeaturePage(ScrapeTestCase):
         expected = '<div><p>Unknown Browser &quot;Chromium&quot;</p>'
         self.assertTrue(err.startswith(expected))
         desktop_browsers = fp.data['meta']['compat_table']['tabs'][0]
-        self.assertEqual('Desktop', desktop_browsers['name']['en'])
+        self.assertEqual('Desktop Browsers', desktop_browsers['name']['en'])
         self.assertEqual('_Chromium', desktop_browsers['browsers'][0])
 
     def test_with_existing_feature(self):
@@ -1139,6 +1450,22 @@ class TestScrapeFeaturePage(ScrapeTestCase):
         self.assertFalse(fp.has_issues)
         supports = fp.data['meta']['compat_table']['supports']
         self.assertTrue(str(basic.id) in supports)
+
+    def test_with_existing_support(self):
+        basic = self.create(
+            Feature, slug=self.page.feature.slug + '-basic-support',
+            name={'en': 'Basic support'}, parent=self.page.feature)
+        browser = self.browsers['firefox']
+        version = self.versions[('firefox', '1.0')]
+        support = self.create(Support, version=version, feature=basic)
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertFalse(fp.has_issues)
+        supports = fp.data['meta']['compat_table']['supports']
+        basic_support = supports[str(basic.id)][str(browser.id)]
+        self.assertTrue(str(support.id) in basic_support)
 
     def test_scrape_almost_empty_page(self):
         en_content = TranslatedContent.objects.get(
@@ -1244,3 +1571,11 @@ class TestSlugify(TestCase):
 
     def test_num_suffix(self):
         self.assertEqual('slug13', slugify('slug', suffix=13))
+
+
+class TestDateToIso(TestCase):
+    def test_date(self):
+        self.assertEqual('2015-02-02', date_to_iso(date(2015, 2, 2)))
+
+    def test_none(self):
+        self.assertEqual(None, date_to_iso(''))
