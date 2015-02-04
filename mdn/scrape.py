@@ -472,6 +472,11 @@ class PageVisitor(NodeVisitor):
                 support['version'] = version_id
                 support['feature'] = feature['id']
 
+            # Footnote + prefix => support=partial
+            if (support.get('support') == 'yes' and
+                    support.get('prefix') and support.get('footnote_id')):
+                support['support'] = 'partial'
+
         if version.get('id') and support.get('id'):
             versions.append(version)
             supports.append(support)

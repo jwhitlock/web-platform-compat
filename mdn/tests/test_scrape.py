@@ -875,6 +875,13 @@ class TestPageVisitor(ScrapeTestCase):
             expected_errors=[
                 (4, 17, 'Unknown support text "Removed in 32"')])
 
+    def test_compat_row_cell_support_prefix_plus_footnote(self):
+        self.assert_compat_row_cell_support(
+            '18{{property_prefix("-webkit")}} [1]',
+            [{'version': '18.0'}],
+            [{'support': 'partial', 'prefix': '-webkit',
+              'footnote_id': ('1', 37, 40)}])
+
     def test_complex_footnotes_empty(self):
         text = "\n"
         parsed = self.grammar['compat_footnotes'].parse(text)
@@ -1251,12 +1258,12 @@ class TestScrape(ScrapeTestCase):
                     {'id': bs_id % self.versions[('chrome', '1.0')].pk,
                      'feature': '_basic support',
                      'version': self.versions[('chrome', '1.0')].pk,
-                     'support': 'yes', 'prefix': '-webkit',
+                     'support': 'partial', 'prefix': '-webkit',
                      'footnote_id': ('2', 1525, 1528), 'footnote': fn_2},
                     {'id': bs_id % self.versions[('firefox', '3.6')].pk,
                      'feature': '_basic support',
                      'version': self.versions[('firefox', '3.6')].pk,
-                     'support': 'yes', 'prefix': '-moz',
+                     'support': 'partial', 'prefix': '-moz',
                      'footnote_id': ('4', 1601, 1604), 'footnote': fn_4},
                     {'id': bs_id % self.versions[('ie', '9.0')].pk,
                      'feature': '_basic support',
