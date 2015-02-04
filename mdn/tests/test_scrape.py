@@ -864,7 +864,8 @@ class TestPageVisitor(ScrapeTestCase):
     def test_compat_row_cell_two_line_note(self):
         self.assert_compat_row_cell_support(
             '18<br>\n(behind a pref) [1]',
-            [{'version': '18.0'}], [{'support': 'yes', 'footnote_id': '1'}],
+            [{'version': '18.0'}],
+            [{'support': 'yes', 'footnote_id': ('1', 27, 30)}],
             expected_errors=[
                 (11, 27, 'Unknown support text "(behind a pref)"')])
 
@@ -873,6 +874,88 @@ class TestPageVisitor(ScrapeTestCase):
             'Removed in 32',
             expected_errors=[
                 (4, 17, 'Unknown support text "Removed in 32"')])
+
+    def test_complex_footnotes_empty(self):
+        text = "\n"
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {}
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_footnotes_simple(self):
+        text = "<p>[1] A footnote.</p>"
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {'1': ('A footnote.', 0, 22)}
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_footnotes_multi_paragraph(self):
+        text = "<p>[1] Footnote line 1.</p><p>Footnote line 2.</p>"
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {
+            '1': ('<p>Footnote line 1.</p>\n<p>Footnote line 2.</p>', 0, 50)}
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_footnotes_multiple_footnotes(self):
+        text = "<p>[1] Footnote 1.</p><p>[2] Footnote 2.</p>"
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {
+            '1': ('Footnote 1.', 0, 22),
+            '2': ('Footnote 2.', 22, 44),
+        }
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_footnotes_kuma_cssxref(self):
+        text = '<p>[1] Use {{cssxref("-moz-border-image")}}</p>'
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {
+            '1': ('Use <code>-moz-border-image</code>', 0, 47),
+        }
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_footnotes_unknown_kumascript(self):
+        text = "<p>[1] Footnote {{UnknownKuma}}</p>"
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {'1': ('Footnote ', 0, 35)}
+        self.assertEqual(expected, self.visitor.visit(parsed))
+        expected_errors = [
+            (16, 31, "Unknown footnote kuma function UnknownKuma")]
+        self.assertEqual(expected_errors, self.visitor.errors)
+
+    def test_compat_footnotes_unknown_kumascript_with_args(self):
+        text = '<p>[1] Footnote {{UnknownKuma("arg")}}</p>'
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {'1': ('Footnote ', 0, 42)}
+        self.assertEqual(expected, self.visitor.visit(parsed))
+        expected_errors = [
+            (16, 38, 'Unknown footnote kuma function UnknownKuma("arg")')]
+        self.assertEqual(expected_errors, self.visitor.errors)
+
+    def test_compat_footnotes_pre_section(self):
+        text = '<p>[1] Here\'s some code:</p><pre>foo = bar</pre>'
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {
+            '1': ("<p>Here's some code:</p>\n<pre>foo = bar</pre>", 0, 48)}
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_footnotes_pre_with_attrs_section(self):
+        text = (
+            '<p>[1] Here\'s some code:</p>\n'
+            '<pre class="brush:css">\n'
+            '.foo {background-image: url(bg-image.png);}\n'
+            '</pre>')
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        expected = {
+            '1': (
+                "<p>Here's some code:</p>\n<pre class=\"brush:css\">\n"
+                ".foo {background-image: url(bg-image.png);}\n</pre>",
+                0, 103),
+        }
+        self.assertEqual(expected, self.visitor.visit(parsed))
+
+    def test_compat_footnotes_complex_page(self):
+        text = self.complex_compat_footnotes
+        parsed = self.grammar['compat_footnotes'].parse(text)
+        # Full return is in TestScrape.test_complex_page_with_data
+        self.assertEqual(5, len(self.visitor.visit(parsed)))
 
 
 class TestScrape(ScrapeTestCase):
@@ -1039,7 +1122,7 @@ class TestScrape(ScrapeTestCase):
                      'support': 'yes'},
                 ],
             }],
-            'footnotes': None,
+            'footnotes': {},
             'issues': [],
             'errors': [
                 (902, 986, 'Unknown Specification "CSS3 Backgrounds"'),
@@ -1061,6 +1144,44 @@ class TestScrape(ScrapeTestCase):
         self.add_models()
         bs_id = '__basic support-%s'
         cc_id = '__support for contain and cover-%s'
+        fn_1 = (
+            "Opera 9.5's computation of the background positioning area is"
+            " incorrect for fixed backgrounds.\xa0 Opera 9.5 also interprets"
+            " the two-value form as a horizontal scaling factor and, from"
+            " appearances, a vertical <em>clipping</em> dimension. This has"
+            " been fixed in Opera 10.")
+        fn_2 = (
+            'WebKit-based browsers originally implemented an older draft of'
+            ' CSS3<code> background-size </code>in which an omitted second'
+            ' value is treated as <em>duplicating</em> the first value; this'
+            ' draft does not include the<code> contain </code>or<code> cover'
+            ' </code>keywords.')
+        fn_3 = (
+            'Konqueror 3.5.4 supports<code> -khtml-background-size</code>.')
+        fn_4 = """\
+<p>While this property is new in Gecko 1.9.2 (Firefox 3.6), it\
+ is possible to stretch a image fully over the background in\
+ Firefox 3.5 by using <code>-moz-border-image</code>.</p>
+<pre class="brush:css">.foo {
+  background-image: url(bg-image.png);
+
+  -webkit-background-size: 100% 100%;           /* Safari 3.0 */
+     -moz-background-size: 100% 100%;           /* Gecko 1.9.2 (Firefox 3.6) */
+       -o-background-size: 100% 100%;           /* Opera 9.5 */
+          background-size: 100% 100%;           /* Gecko 2.0 (Firefox 4.0) and\
+ other CSS3-compliant browsers */
+
+  -moz-border-image: url(bg-image.png) 0;    /* Gecko 1.9.1 (Firefox 3.5) */
+}</pre>"""
+        fn_5 = """\
+<p>Though Internet Explorer 8 doesn\'t support the <code>background-size\
+</code> property, it is possible to emulate some of its functionality using\
+ the non-standard <code>-ms-filter</code> function:</p>
+<pre class="brush:css">-ms-filter: "progid:DXImageTransform.Microsoft\
+.AlphaImageLoader(src=\'path_relative_to_the_HTML_file\',\
+ sizingMethod=\'scale\')";</pre>
+<p>This simulates the value <code>cover</code>.</p>"""
+
         expected = {
             'locale': 'en',
             'specs': [{
@@ -1131,24 +1252,27 @@ class TestScrape(ScrapeTestCase):
                      'feature': '_basic support',
                      'version': self.versions[('chrome', '1.0')].pk,
                      'support': 'yes', 'prefix': '-webkit',
-                     'footnote_id': '2'},
+                     'footnote_id': ('2', 1525, 1528), 'footnote': fn_2},
                     {'id': bs_id % self.versions[('firefox', '3.6')].pk,
                      'feature': '_basic support',
                      'version': self.versions[('firefox', '3.6')].pk,
-                     'support': 'yes', 'prefix': '-moz', 'footnote_id': '4'},
+                     'support': 'yes', 'prefix': '-moz',
+                     'footnote_id': ('4', 1601, 1604), 'footnote': fn_4},
                     {'id': bs_id % self.versions[('ie', '9.0')].pk,
                      'feature': '_basic support',
                      'version': self.versions[('ie', '9.0')].pk,
-                     'support': 'yes', 'footnote_id': '5'},
+                     'support': 'yes',
+                     'footnote_id': ('5', 1634, 1637), 'footnote': fn_5},
                     {'id': bs_id % self.versions[('opera', '9.5')].pk,
                      'feature': '_basic support',
                      'version': self.versions[('opera', '9.5')].pk,
-                     'support': 'yes', 'prefix': '-o', 'footnote_id': '1'},
+                     'support': 'yes', 'prefix': '-o',
+                     'footnote_id': ('1', 1704, 1707), 'footnote': fn_1},
                     {'id': bs_id % self.versions[('safari', '3.0')].pk,
                      'feature': '_basic support',
                      'version': self.versions[('safari', '3.0')].pk,
                      'support': 'yes', 'prefix': '-webkit',
-                     'footnote_id': '2'},
+                     'footnote_id': ('2', 1799, 1802), 'footnote': fn_2},
                     {'id': bs_id % self.versions[('chrome', '3.0')].pk,
                      'feature': '_basic support',
                      'version': self.versions[('chrome', '3.0')].pk,
@@ -1176,7 +1300,8 @@ class TestScrape(ScrapeTestCase):
                     {'id': cc_id % self.versions[('ie', '9.0')].pk,
                      'feature': '_support for contain and cover',
                      'version': self.versions[('ie', '9.0')].pk,
-                     'support': 'yes', 'footnote_id': '5'},
+                     'support': 'yes',
+                     'footnote_id': ('5', 2095, 2098), 'footnote': fn_5},
                     {'id': cc_id % self.versions[('opera', '10.0')].pk,
                      'feature': '_support for contain and cover',
                      'version': self.versions[('opera', '10.0')].pk,
@@ -1259,13 +1384,14 @@ class TestScrape(ScrapeTestCase):
                      'support': 'yes'},
                 ],
             }],
-            'footnotes': self.complex_compat_footnotes,
+            'footnotes': {'3': (fn_3, 3757, 3830)},
             'issues': [],
             'errors': [
                 (1689, 1704, 'Unknown support text "with some bugs"'),
                 (1770, 1799,
                  'Unknown support text "but from an older CSS3 draft"'),
                 (2918, 2933, 'Unknown support text "(maybe earlier)"'),
+                (3757, 3830, 'Footnote [3] not used')
             ]
         }
         self.assertScrape(self.complex_page, expected)
@@ -1354,6 +1480,23 @@ class TestScrape(ScrapeTestCase):
             ],
         }
         self.assertScrape(page, expected)
+
+    def test_with_bad_footnote_reference(self):
+        self.add_compat_models()
+        good_support = "<td>9.0 [5]</td>"
+        bad_support = "<td>9.0 [50]</td>"
+        self.assertEqual(1, self.complex_compat_section.count(good_support))
+        page = self.complex_compat_section.replace(good_support, bad_support)
+        page += self.complex_compat_footnotes
+        actual = scrape_page(page, self.features['web-css-background-size'])
+        expected_errors = [
+            (620, 635, 'Unknown support text "with some bugs"'),
+            (701, 730, 'Unknown support text "but from an older CSS3 draft"'),
+            (1850, 1865, 'Unknown support text "(maybe earlier)"'),
+            (1026, 1030, 'Footnote [50] not found'),
+            (2689, 2762, 'Footnote [3] not used'),
+        ]
+        self.assertEqual(expected_errors, actual['errors'])
 
 
 class TestScrapeFeaturePage(ScrapeTestCase):
@@ -1511,6 +1654,28 @@ class TestScrapeFeaturePage(ScrapeTestCase):
                 'supports': [],
             }}]
         self.assertDataEqual(expected, fp.data['linked']['features'])
+
+    def test_scrape_with_footnote(self):
+        orig = "<td>4.0</td>"
+        new = "<td>4.0 [1]</td>"
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        assert orig in self.simple_compat_section
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section.replace(orig, new) +
+            "<p>[1] Footnote</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        version = self.versions[('ie', '4.0')]
+        expected = {'__basic support-%d' % version.id: 1}
+        self.assertDataEqual(
+            expected, fp.data['meta']['compat_table']['footnotes'])
 
 
 class TestRangeErrorToHtml(ScrapeTestCase):

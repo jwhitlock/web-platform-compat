@@ -72,7 +72,7 @@ compat_row_cells = compat_row_cell+
 compat_row_cell = td_open _ compat_cell _ "</td>" _
 compat_cell = compat_cell_item+
 compat_cell_item = (cell_tag / cell_break / code_block / cell_p_open /
-    cell_p_close / cell_version / cell_footnote / cell_other)
+    cell_p_close / cell_version / cell_footnote_id / cell_other)
 cell_tag = kuma_esc_start _ cell_kuma_func _ kuma_esc_end _
 cell_kuma_func = kuma_name kuma_arglist?
 kuma_name = ~r"(?P<content>.*?(?=((}})|\()))"s
@@ -86,10 +86,16 @@ cell_p_open = "<p>" _
 cell_p_close = "</p>" _
 cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
     r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
-cell_footnote = ~r"\[(?P<footnote>\d+)\]\s*"s
-
+cell_footnote_id = ~r"\[(?P<footnote_id>\d+)\]\s*"s
 cell_other = ~r"(?P<content>[^{<[]+)\s*"s
-compat_footnotes = ~r"(?P<content>.*?(?=<h2))"s
+
+compat_footnotes = footnote_item* _
+footnote_item = (footnote_p / footnote_pre)
+footnote_p = "<p>" _ footnote_id? _ footnote_p_text "</p>" _
+footnote_id = "[" ~r"(?P<content>\d+)" "]"
+footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
+footnote_pre = "<pre" attrs? ">" footnote_pre_text "</pre>" _
+footnote_pre_text = ~r"(?P<content>.*?(?=</pre>))"s
 
 kuma_esc_start = _ "{{" _
 kuma_func_start = "(" _
@@ -366,9 +372,10 @@ class PageVisitor(NodeVisitor):
             version_name = version.get('name')
             if item['type'] == 'version':
                 version_found = item['version']
-            elif item['type'] == 'footnote':
+            elif item['type'] == 'footnote_id':
                 assert 'footnote_id' not in support
-                support['footnote_id'] = item['footnote']
+                support['footnote_id'] = (
+                    item['footnote_id'], item['start'], item['end'])
             elif item['type'] == 'kuma':
                 # See https://developer.mozilla.org/en-US/docs/Template:<name>
                 if item['name'] == 'CompatVersionUnknown':
@@ -582,13 +589,38 @@ class PageVisitor(NodeVisitor):
 
     def visit_compat_section(self, node, children):
         compat_divs = children[5]
-        compat_footnotes = children[6]
+        footnotes = children[6][0]
 
         assert isinstance(compat_divs, list), type(compat_divs)
         for div in compat_divs:
             assert isinstance(div, dict), type(div)
+        assert isinstance(footnotes, OrderedDict), type(footnotes)
+
+        # Merge footnotes into supports
+        used_footnotes = set()
+        for div in compat_divs:
+            for support in div['supports']:
+                if 'footnote_id' in support:
+                    f_id, f_start, f_end = support['footnote_id']
+                    try:
+                        text, start, end = footnotes[f_id]
+                    except KeyError:
+                        self.errors.append(
+                            (f_start, f_end,
+                             'Footnote [%s] not found' % f_id))
+                    else:
+                        support['footnote'] = text
+                        used_footnotes.add(f_id)
+
+        for f_id in used_footnotes:
+            del footnotes[f_id]
+
+        for f_id, (text, start, end) in footnotes.items():
+            self.errors.append(
+                (start, end, 'Footnote [%s] not used' % f_id))
+
         self.compat = compat_divs
-        self.footnotes = compat_footnotes[0].text or None
+        self.footnotes = footnotes
 
     def visit_compat_div(self, node, children):
         compat_div_id = children[6][0]
@@ -878,10 +910,10 @@ class PageVisitor(NodeVisitor):
             'end': node.end,
         }
 
-    def visit_cell_footnote(self, node, children):
+    def visit_cell_footnote_id(self, node, children):
         return {
-            'type': 'footnote',
-            'footnote': node.match.group('footnote'),
+            'type': 'footnote_id',
+            'footnote_id': node.match.group('footnote_id'),
             'start': node.start,
             'end': node.end,
         }
@@ -894,6 +926,142 @@ class PageVisitor(NodeVisitor):
             'content': text,
             'start': node.start,
             'end': node.end
+        }
+
+    def format_footnote(self, footnote):
+        if len(footnote) == 1 and footnote[0]['type'] in ('p',):
+            return footnote[0]['content']
+        else:
+            bits = []
+            fmt = "%(tag)s%(content)s</%(type)s>"
+            for item in footnote:
+                i = item.copy()
+                if i.get('attributes'):
+                    attrs = " ".join(
+                        '%s="%s"' % a for a in i['attributes'].items())
+                    i['tag'] = '<%s %s>' % (i['type'], attrs)
+                else:
+                    i['tag'] = '<%s>' % i['type']
+                bits.append(fmt % i)
+            return "\n".join(bits)
+
+    def visit_compat_footnotes(self, node, children):
+        items = children[0]
+        if isinstance(items, Node):
+            assert items.start == items.end  # Empty
+            return OrderedDict()
+        assert isinstance(items, list), type(items)
+        for item in items:
+            assert isinstance(item, dict), type(item)
+
+        footnotes = OrderedDict()
+        footnote = []
+
+        def add_footnote(footnote):
+            f_id = footnote[0]['footnote_id']
+            start = footnote[0]['start']
+            end = footnote[-1]['end']
+            assert f_id not in footnotes
+            text = self.format_footnote(footnote)
+            footnotes[f_id] = (text, start, end)
+
+        for item in items:
+            if not footnote:
+                # First should be a footnote
+                assert 'footnote_id' in item
+                footnote.append(item)
+            elif item.get('footnote_id'):
+                # New footnote
+                add_footnote(footnote)
+                footnote = [item]
+            else:
+                # Continue footnote
+                footnote.append(item)
+
+        assert footnote
+        add_footnote(footnote)
+        return footnotes
+
+    def visit_footnote_item(self, node, children):
+        item = children[0]
+        assert isinstance(item, dict), type(item)
+        return item
+
+    re_kuma = re.compile(r'''(?x)(?s)  # Be verbose, . include newlines
+    {{\s*               # Kuma start, with optional whitespace
+    (?P<name>\w+)       # Function name, optionally followed by...
+      (\((?P<args>\s*   # Open parens and whitespace,
+       [^)]+            # Stuff in front of the parens,
+       )\))?            # Closing parens
+    \s*}}               # Whitespace and Kuma close
+    ''')
+
+    def render_footnote_kuma(self, text, start):
+        rendered = text
+        for match in self.re_kuma.finditer(text):
+            name = match.group('name')
+            kuma = ''
+            if match.group('args'):
+                arglist = match.group('args').split(',')
+            else:
+                arglist = []
+
+            if name == 'cssxref':
+                # https://developer.mozilla.org/en-US/docs/Template:cssxref
+                # The MDN version does a lookup and creates a link
+                # This version just turns it into a code block
+                kuma = "<code>%s</code>" % self.unquote(arglist[0])
+            else:
+                rendered = (
+                    rendered[:match.start()] + rendered[match.end() + 1:])
+                if arglist:
+                    args = '(' + ', '.join(arglist) + ')'
+                else:
+                    args = ''
+                self.errors.append((
+                    start + match.start(), start + match.end(),
+                    "Unknown footnote kuma function %s%s" % (name, args)))
+            rendered = (
+                rendered[:match.start()] + kuma + rendered[match.end():])
+        return rendered
+
+    def visit_footnote_p(self, node, children):
+        footnote_id = children[2]
+        text = children[4]
+        assert isinstance(text, text_type), type(text)
+        fixed = self.render_footnote_kuma(text, node.children[4].start)
+        data = {
+            'type': 'p',
+            'content': fixed,
+            'start': node.start,
+            'end': node.end,
+        }
+        if isinstance(footnote_id, list):
+            data['footnote_id'] = footnote_id[0]
+        return data
+
+    def visit_footnote_id(self, node, children):
+        footnote_id = children[1].match.group('content')
+        return footnote_id
+
+    def visit_footnote_pre(self, node, children):
+        attrs_node = children[1]
+        if isinstance(attrs_node, Node):
+            attrs = []
+        else:
+            assert isinstance(attrs_node, list), type(attrs_node)
+            assert len(attrs_node) == 1
+            attrs = attrs_node[0]
+        assert isinstance(attrs, list), type(attrs)
+
+        text = children[3]
+        assert isinstance(text, text_type), type(text)
+        return {
+            'type': 'pre',
+            'attributes': dict(attrs),
+            'content': text,
+            'start': node.start,
+            'end': node.end,
         }
 
     def visit_generic_open(self, node, children, tag, expected):
@@ -938,6 +1106,8 @@ class PageVisitor(NodeVisitor):
     visit_compat_feature = generic_visit_content
     visit_compat_support = generic_visit_content
     visit_kuma_name = generic_visit_content
+    visit_footnote_p_text = generic_visit_content
+    visit_footnote_pre_text = generic_visit_content
 
 
 def range_error_to_html(page, start, end, reason, rule=None):
@@ -966,7 +1136,7 @@ def range_error_to_html(page, start, end, reason, rule=None):
             err_line_count += 1
             if err_line_count > ctx_end_line:
                 break
-        elif p < start or p > end:
+        elif p < start or p >= end:
             err_page_bits.append(' ')
         else:
             err_page_bits.append('^')
@@ -1078,6 +1248,7 @@ def scrape_feature_page(fp):
     features = {}
     supports = {}
     compat_table_supports = OrderedDict(((str(fp.feature.id), {}),))
+    footnotes = OrderedDict()
     # Load compatibility section
     tab_name = {
         'desktop': 'Desktop Browsers',
@@ -1207,10 +1378,12 @@ def scrape_feature_page(fp):
                     ('default_config', s.get('default_config')),
                     ('protected', s.get('protected', False)),
                     ('note', s.get('note')),
-                    ('footnote', s.get('footnote')),
+                    ('footnote', None),
                     ('links', OrderedDict((
                         ('version', str(s['version'])),
                         ('feature', str(s['feature'])))))))
+                if s.get('footnote'):
+                    support_content['footnote'] = {'en': s['footnote']}
                 version_id = s['version']
                 feature_id = s['feature']
             else:
@@ -1234,6 +1407,8 @@ def scrape_feature_page(fp):
                 version_id = support.version_id
                 feature_id = support.feature_id
             supports.setdefault(s['id'], support_content)
+            if support_content['footnote']:
+                footnotes[str(s['id'])] = len(footnotes) + 1
 
             # Set the meta lookup
             version = versions[version_id]
@@ -1260,6 +1435,7 @@ def scrape_feature_page(fp):
     fp_data['meta']['compat_table']['languages'] = list(languages)
     fp_data['meta']['compat_table']['tabs'] = tabs
     fp_data['meta']['compat_table']['supports'] = compat_table_supports
+    fp_data['meta']['compat_table']['footnotes'] = footnotes
     fp.data = fp_data
 
     # Add issues
