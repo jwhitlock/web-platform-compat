@@ -136,13 +136,14 @@ window.WPC = {
         return null;
     },
     generate_browser_tables: function (resources, lang) {
-        var idPrefix, tabs, tabCnt, tabIdx, tab, panel, tabList, tabContent,
-            tabListItem, tabContentItem, tabId, a, table, thead, tr, th,
-            browserCnt, browserIdx, browserId, browser, tbody, supportMap,
-            featureId, browserMap, feature, td, supports, supportCnt, supportIdx,
-            supportId, support, versionId, version, releaseUri, versionLink,
-            prefix, note, noteTxt, footnoteNum, footnoteId, footnote, backlink,
-            footnoteArray, footnoteDiv, footnoteCnt, footnoteIdx;
+        var a, backlink, browser, browserCnt, browserId, browserIdx,
+            browserMap, feature, featureId, footnote, footnoteArray,
+            footnoteCnt, footnoteDiv, footnoteId, footnoteIdx, footnoteNum,
+            footnoteSup, idPrefix, nosupport, note, noteTxt, panel, prefix,
+            releaseUri, span1, span2, support, supportCnt, supportId,
+            supportIdx, supportMap, supports, tab, tabCnt, tabContent,
+            tabContentItem, tabId, tabIdx, tabList, tabListItem, table, tabs,
+            tbody, td, th, thead, tr, unknown, version, versionId, versionLink;
         if (resources.meta.compat_table.tabs) {
             idPrefix = 'wpc-compat-' + resources.data.id;
             tabs = resources.meta.compat_table.tabs;
@@ -215,6 +216,20 @@ window.WPC = {
                         tr = document.createElement('tr');
                         td = document.createElement('td');
                         td.appendChild(this.trans_span(feature.name, lang));
+                        if (feature.experimental) {
+                            span1 = document.createElement('span');
+                            span1.setAttribute('class', 'glyphicon glyphicon-fire');
+                            span1.setAttribute('style', 'color: #09d;');
+                            span1.setAttribute('aria-hidden', 'true');
+                            span1.setAttribute('data-toggle', 'tooltip');
+                            span1.setAttribute('data-placement', 'top');
+                            span1.setAttribute('title', 'This is an experimental API that should not be used in production code.');
+                            span2 = document.createElement('span');
+                            span2.setAttribute('class', 'sr-only');
+                            span2.appendChild(document.createTextNode('This is an experimental API that should not be used in production code.'));
+                            td.appendChild(span1);
+                            td.appendChild(span2);
+                        }
                         tr.appendChild(td);
 
                         for (browserIdx = 0; browserIdx < browserCnt; browserIdx += 1) {
@@ -247,17 +262,21 @@ window.WPC = {
                                         } else {
                                             td.appendChild(document.createTextNode(version.version));
                                         }
-                                        if (support.support !== 'yes') {
-                                            td.appendChild(document.createTextNode(' (' + support.support + ')'));
-                                        }
-                                    } else {
-                                        td.appendChild(document.createTextNode('(' + support.support + ')'));
+                                    }
+                                    if (support.support === 'no') {
+                                        nosupport = document.createElement('span');
+                                        nosupport.setAttribute('style', 'color: #f00;');
+                                        nosupport.appendChild(document.createTextNode('Not supported'));
+                                        td.appendChild(nosupport);
+                                    } else if (support.support !== 'yes' || (!version.version)) {
+                                        td.appendChild(document.createTextNode(' (' + support.support + ')'));
                                     }
 
                                     // Prefix
                                     if (support.prefix && support.prefix_mandatory) {
                                         td.appendChild(document.createTextNode(' '));
                                         prefix = document.createElement('code');
+                                        prefix.setAttribute('style', 'white-space: nowrap;');
                                         prefix.appendChild(document.createTextNode(support.prefix));
                                         td.appendChild(prefix);
                                     } else {
@@ -280,17 +299,23 @@ window.WPC = {
                                         td.appendChild(document.createTextNode(' '));
                                         footnoteNum = resources.meta.compat_table.footnotes[supportId];
                                         footnoteId = 'wpc-compat-' + resources.data.id + '-footnote-' + footnoteNum;
+                                        footnoteSup = document.createElement('sup');
                                         footnote = document.createElement('a');
                                         footnote.setAttribute('id', footnoteId + '-back');
                                         footnote.setAttribute('href', '#' + footnoteId);
-                                        footnote.appendChild(document.createTextNode(footnoteNum));
-                                        td.appendChild(footnote);
+                                        footnote.appendChild(document.createTextNode("[" + footnoteNum + "]"));
+                                        footnoteSup.appendChild(footnote);
+                                        td.appendChild(footnoteSup);
                                     } else {
                                         footnote = null;
                                     }
                                 }
                             } else {
-                                td.appendChild(document.createTextNode('?'));
+                                unknown = document.createElement('span');
+                                unknown.setAttribute('style', 'color: rgb(255, 153, 0);');
+                                unknown.setAttribute('title', "Compatibility unknown; please update this.");
+                                unknown.appendChild(document.createTextNode('?'));
+                                td.appendChild(unknown);
                             }
                             tr.appendChild(td);
                         }
