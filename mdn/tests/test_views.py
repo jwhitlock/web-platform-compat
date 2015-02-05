@@ -103,18 +103,18 @@ class TestFeaturePageSearch(TestCase):
     def test_post_found(self):
         fp = FeaturePage.objects.create(
             url=self.mdn_url, feature_id=741, data='{"foo": "bar"}')
-        response = self.client.post(self.url, {'url': self.mdn_url})
+        response = self.client.get(self.url, {'url': self.mdn_url})
         next_url = reverse('feature_page_detail', kwargs={'pk': fp.id})
         self.assertRedirects(response, next_url)
 
     def test_not_found_with_perms(self):
         self.login_superuser()
-        response = self.client.post(self.url, {'url': self.mdn_url})
+        response = self.client.get(self.url, {'url': self.mdn_url})
         next_url = reverse('feature_page_create') + '?url=' + self.mdn_url
         self.assertRedirects(response, next_url)
 
     def test_not_found_without_perms(self):
-        response = self.client.post(self.url, {'url': self.mdn_url})
+        response = self.client.get(self.url, {'url': self.mdn_url})
         next_url = reverse('feature_page_list')
         self.assertRedirects(response, next_url)
 

@@ -1,12 +1,13 @@
 {% extends "webplatformcompat/base.jinja2" %}
+{% set method=method or "post" %}
 
 {% block head_title %}MDN Importer - {{action | default("Add MDN Page")}}{% endblock %}
 
 {% block body_title %}MDN Importer - {{action | default("Add MDN Page")}}{% endblock %}
 
 {% block content %}
-<form {% if action_url %}action="{{action_url}}"{% endif %} method="post">
-{{ csrf() }}
+<form {% if action_url %}action="{{action_url}}"{% endif %} method="{{method}}">
+{% if method != 'get'%}{{ csrf() }}{% endif %}
 {{ form.as_p() }}
 <input class="btn btn-primary" type="submit" value="{{action | default("Add MDN Page")}}">
 <a class="btn btn-default" href="{{back_url | default(url('feature_page_list'))}}">{{back | default("Back to List")}}</a>

@@ -5,8 +5,7 @@
 {% block body_title %}MDN Importer{% endblock %}
 
 {% block content %}
-<form class="form-inline" action="{{url("feature_page_search")}}" method="POST">
-  {{ csrf() }}
+<form class="form-inline" action="{{url("feature_page_search")}}" method="GET">
   <div class="form-group">
     <label class="sr-only" for="id-url">MDN URL</label>
     <input type="url" class="form-control" id="id-url" name="url"

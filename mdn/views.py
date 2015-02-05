@@ -7,9 +7,10 @@ from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, JsonResponse
-from django.views.generic import DetailView, FormView, ListView
+from django.views.generic import DetailView, ListView
+from django.views.generic.base import TemplateResponseMixin, View
 from django.views.generic.detail import BaseDetailView
-from django.views.generic.edit import CreateView, UpdateView
+from django.views.generic.edit import CreateView, FormMixin, UpdateView
 
 from .models import FeaturePage, validate_mdn_url
 from .tasks import start_crawl, parse_page
@@ -84,14 +85,29 @@ class SearchForm(forms.Form):
         return data
 
 
-class FeaturePageSearch(FormView):
+class FeaturePageSearch(TemplateResponseMixin, View, FormMixin):
+    """Search for a MDN URI via GET"""
     form_class = SearchForm
     template_name = "mdn/feature_page_form.jinja2"
+
+    def get_form_kwargs(self):
+        kwargs = super(FeaturePageSearch, self).get_form_kwargs()
+        kwargs.setdefault('data', {}).update(self.request.GET.dict())
+        return kwargs
+
+    def get(self, request, *args, **kwargs):
+        form_class = self.get_form_class()
+        form = self.get_form(form_class)
+        if form.is_valid():
+            return self.form_valid(form)
+        else:
+            return self.form_invalid(form)
 
     def get_context_data(self, **kwargs):
         ctx = super(FeaturePageSearch, self).get_context_data(**kwargs)
         ctx['action'] = "Search by URL"
         ctx['action_url'] = reverse('feature_page_search')
+        ctx['method'] = 'get'
         return ctx
 
     def form_valid(self, form):
