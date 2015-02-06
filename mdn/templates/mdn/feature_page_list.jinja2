@@ -14,6 +14,7 @@
   <input id="fp-search" class="btn btn-primary" type="submit" value="Search by URL">
 </form>
 {% if page_obj %}
+{{ pagination_control(page_obj, url('feature_page_list')) }}
 <table class="table table-condensed">
   <thead>
     <tr>
@@ -45,6 +46,7 @@
     {% endfor %}
   </tbody>
 </table>
+{{ pagination_control(page_obj, url('feature_page_list')) }}
 {% else %}
 <p><i>No pages imported yet.</i></p>
 {% endif %}
