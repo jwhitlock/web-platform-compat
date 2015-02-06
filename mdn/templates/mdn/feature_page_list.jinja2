@@ -1,8 +1,11 @@
 {% extends "webplatformcompat/base.jinja2" %}
 
 {% block head_title %}MDN Importer{% endblock %}
-
 {% block body_title %}MDN Importer{% endblock %}
+
+{% block quick_nav %}
+<p><em>back to <a href="{{ url('home') }}">home</a></em></p>
+{% endblock %}
 
 {% block content %}
 <form class="form-inline" action="{{url("feature_page_search")}}" method="GET">
