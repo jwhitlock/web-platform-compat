@@ -38,7 +38,7 @@ from webplatformcompat.models import (
 
 
 # Parsimonious grammar for an MDN page
-page_grammar = (
+page_grammar = Grammar(
     r"""
 # A whole raw MDN page
 doc = other_text other_section* spec_section? compat_section?
@@ -240,9 +240,8 @@ class PageVisitor(NodeVisitor):
                 start = section_node.start + h2.start()
                 # end = section_node.end + h2.end()
                 text = section_node.text[h2.start():]
-                grammar = Grammar(page_grammar)
                 try:
-                    grammar[section].parse(text)
+                    page_grammar[section].parse(text)
                 except ParseError as pe:
                     rule = pe.expr
                     description = (
@@ -1136,9 +1135,8 @@ def scrape_page(mdn_page, feature, locale='en'):
         data['errors'].append('No <h2> found in page')
         return data
 
-    grammar = Grammar(page_grammar)
     try:
-        page_parsed = grammar.parse(mdn_page)
+        page_parsed = page_grammar.parse(mdn_page)
     except IncompleteParseError as ipe:
         error = (
             ipe.pos, end_of_line(ipe.text, ipe.pos),

@@ -4,8 +4,6 @@ from __future__ import unicode_literals
 from datetime import date
 from json import dumps
 
-from parsimonious.grammar import Grammar
-
 from mdn.models import FeaturePage, TranslatedContent
 from mdn.scrape import (
     date_to_iso, end_of_line, page_grammar, range_error_to_html, scrape_page,
@@ -16,30 +14,27 @@ from webplatformcompat.tests.base import TestCase
 
 
 class TestGrammar(TestCase):
-    def setUp(self):
-        self.grammar = Grammar(page_grammar)
-
     def test_specdesc_td_empty(self):
         text = '<td></td>'
-        parsed = self.grammar['specdesc_td'].parse(text)
+        parsed = page_grammar['specdesc_td'].parse(text)
         capture = parsed.children[2]
         self.assertEqual('', capture.text)
 
     def test_specdesc_td_plain_text(self):
         text = '<td>Plain Text</td>'
-        parsed = self.grammar['specdesc_td'].parse(text)
+        parsed = page_grammar['specdesc_td'].parse(text)
         capture = parsed.children[2]
         self.assertEqual('Plain Text', capture.text)
 
     def test_specdesc_td_html(self):
         text = "<td>Defines <code>right</code> as animatable.</td>"
-        parsed = self.grammar['specdesc_td'].parse(text)
+        parsed = page_grammar['specdesc_td'].parse(text)
         capture = parsed.children[2]
         self.assertEqual(
             'Defines <code>right</code> as animatable.', capture.text)
 
     def assert_cell_version(self, text, version, eng_version=None):
-        match = self.grammar['cell_version'].parse(text).match.groupdict()
+        match = page_grammar['cell_version'].parse(text).match.groupdict()
         expected = {'version': version, 'eng_version': eng_version}
         self.assertEqual(expected, match)
 
@@ -389,7 +384,6 @@ class TestEndOfLine(ScrapeTestCase):
 class TestPageVisitor(ScrapeTestCase):
     def setUp(self):
         self.add_compat_features()
-        self.grammar = Grammar(page_grammar)
         self.visitor = PageVisitor(self.features['web-css-background-size'])
 
     def test_cleanup_whitespace(self):
@@ -403,7 +397,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_row_cell_feature_with_rowspan(self):
         text = '<td rowspan="2">Some Feature</td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
             'rowspan': '2',
@@ -425,7 +419,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_row_cell_with_unknown_attr(self):
         text = '<td class="freaky">Some Feature</td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
         }, {
@@ -448,7 +442,7 @@ class TestPageVisitor(ScrapeTestCase):
         expected_id = '_some feature'
         expected_slug = 'web-css-background-size_some_feature'
         for text in texts:
-            parsed = self.grammar['compat_row_cell'].parse(text)
+            parsed = page_grammar['compat_row_cell'].parse(text)
             cell = self.visitor.visit(parsed)
             feature = self.visitor.cell_to_feature(cell)
             self.assertEqual(expected_id, feature['id'], text)
@@ -459,7 +453,7 @@ class TestPageVisitor(ScrapeTestCase):
             Feature, parent=self.visitor.feature,
             name={'zxx': 'feature'}, slug='feature-slug')
         text = '<td><code>feature</code></td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         cell = self.visitor.visit(parsed)
         parsed_feature = self.visitor.cell_to_feature(cell)
         self.assertEqual(parsed_feature['id'], feature.id)
@@ -469,7 +463,7 @@ class TestPageVisitor(ScrapeTestCase):
         text = (
             '<td> Support for<br>\n     <code>contain</code> and'
             ' <code>cover</code> </td>')
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [
             {'type': 'td'},
             {'type': 'text', 'content': 'Support for', 'start': 5, 'end': 16},
@@ -494,7 +488,7 @@ class TestPageVisitor(ScrapeTestCase):
         text = (
             '<td><code>none</code>, <code>inline</code> and'
             ' <code>block</code></td>')
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         cell = self.visitor.visit(parsed)
         expected_feature = {
             'id': '_none, inline and block',
@@ -508,7 +502,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_row_cell_feature_canonical(self):
         text = '<td><code>list-item</code></td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
         }, {
@@ -530,7 +524,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_row_cell_feature_experimental(self):
         text = '<td><code>grid</code> {{experimental_inline}}</td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
         }, {
@@ -559,7 +553,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_row_cell_feature_unknown_kuma(self):
         text = '<td>feature foo {{bar}}</td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [
             {'type': 'td'},
             {'type': 'text', 'content': 'feature foo', 'start': 4, 'end': 16},
@@ -579,7 +573,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_row_cell_feature_unknown_kuma_with_args(self):
         text = '<td>foo {{bar("baz")}}</td>'
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [
             {'type': 'td'},
             {'type': 'text', 'content': 'foo', 'start': 4, 'end': 8},
@@ -629,7 +623,7 @@ class TestPageVisitor(ScrapeTestCase):
             'slug': 'browser',
         }
         text = "<td>1.0</td>"
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         cell = self.visitor.visit(parsed)
         versions, supports = self.visitor.cell_to_support(
             cell, feature_rep, browser_rep)
@@ -663,7 +657,7 @@ class TestPageVisitor(ScrapeTestCase):
             'slug': 'browser',
         }
         text = "<td>1.0</td>"
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         cell = self.visitor.visit(parsed)
         versions, supports = self.visitor.cell_to_support(
             cell, feature_rep, browser_rep)
@@ -700,7 +694,7 @@ class TestPageVisitor(ScrapeTestCase):
         browser_rep = {
             'id': browser.id, 'name': 'Browser', 'slug': 'browser'}
         text = "<td>1.0</td>"
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         cell = self.visitor.visit(parsed)
         versions, supports = self.visitor.cell_to_support(
             cell, feature_rep, browser_rep)
@@ -729,7 +723,7 @@ class TestPageVisitor(ScrapeTestCase):
         feature_rep = {'id': feature.id, 'name': 'feature', 'slug': 'f_slug'}
         browser_rep = {'id': browser.id, 'name': 'Browser', 'slug': 'b_slug'}
         text = "<td>{{CompatVersionUnknown}}</td>"
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         cell = self.visitor.visit(parsed)
         versions, supports = self.visitor.cell_to_support(
             cell, feature_rep, browser_rep)
@@ -756,7 +750,7 @@ class TestPageVisitor(ScrapeTestCase):
         feature = {'id': '_feature', 'name': 'feature', 'slug': 'feature_slug'}
         browser = {'id': '_browser', 'name': 'Browser', 'slug': 'browser'}
         text = "<td>%s</td>" % contents
-        parsed = self.grammar['compat_row_cell'].parse(text)
+        parsed = page_grammar['compat_row_cell'].parse(text)
         cell = self.visitor.visit(parsed)
         versions, supports = self.visitor.cell_to_support(
             cell, feature, browser)
@@ -884,26 +878,26 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_complex_footnotes_empty(self):
         text = "\n"
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {}
         self.assertEqual(expected, self.visitor.visit(parsed))
 
     def test_compat_footnotes_simple(self):
         text = "<p>[1] A footnote.</p>"
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {'1': ('A footnote.', 0, 22)}
         self.assertEqual(expected, self.visitor.visit(parsed))
 
     def test_compat_footnotes_multi_paragraph(self):
         text = "<p>[1] Footnote line 1.</p><p>Footnote line 2.</p>"
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {
             '1': ('<p>Footnote line 1.</p>\n<p>Footnote line 2.</p>', 0, 50)}
         self.assertEqual(expected, self.visitor.visit(parsed))
 
     def test_compat_footnotes_multiple_footnotes(self):
         text = "<p>[1] Footnote 1.</p><p>[2] Footnote 2.</p>"
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {
             '1': ('Footnote 1.', 0, 22),
             '2': ('Footnote 2.', 22, 44),
@@ -912,7 +906,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_footnotes_kuma_cssxref(self):
         text = '<p>[1] Use {{cssxref("-moz-border-image")}}</p>'
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {
             '1': ('Use <code>-moz-border-image</code>', 0, 47),
         }
@@ -920,7 +914,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_footnotes_unknown_kumascript(self):
         text = "<p>[1] Footnote {{UnknownKuma}}</p>"
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {'1': ('Footnote ', 0, 35)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
@@ -929,7 +923,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_footnotes_unknown_kumascript_with_args(self):
         text = '<p>[1] Footnote {{UnknownKuma("arg")}}</p>'
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {'1': ('Footnote ', 0, 42)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
@@ -938,7 +932,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_footnotes_pre_section(self):
         text = '<p>[1] Here\'s some code:</p><pre>foo = bar</pre>'
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {
             '1': ("<p>Here's some code:</p>\n<pre>foo = bar</pre>", 0, 48)}
         self.assertEqual(expected, self.visitor.visit(parsed))
@@ -949,7 +943,7 @@ class TestPageVisitor(ScrapeTestCase):
             '<pre class="brush:css">\n'
             '.foo {background-image: url(bg-image.png);}\n'
             '</pre>')
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {
             '1': (
                 "<p>Here's some code:</p>\n<pre class=\"brush:css\">\n"
@@ -960,7 +954,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_footnotes_complex_page(self):
         text = self.complex_compat_footnotes
-        parsed = self.grammar['compat_footnotes'].parse(text)
+        parsed = page_grammar['compat_footnotes'].parse(text)
         # Full return is in TestScrape.test_complex_page_with_data
         self.assertEqual(5, len(self.visitor.visit(parsed)))
 
