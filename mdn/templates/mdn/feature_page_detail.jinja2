@@ -38,7 +38,7 @@
       {% endif %}
     </dd>
 </dl>
-{% if request.user.is_staff %}
+{% if can_refresh_mdn_import(request.user) %}
 <h3>Refresh Import</h3>
 <div>
 <form action="{{url('feature_page_reset', pk=object.pk)}}" method="post">

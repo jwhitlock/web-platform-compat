@@ -6,6 +6,8 @@ This file is loaded by jingo and must be named helpers.py
 from jinja2 import contextfunction, Markup
 from jingo import register
 
+from .views import can_create, can_refresh
+
 
 def page_list(page_obj):
     """Determine list of pages for pagination control.
@@ -108,3 +110,15 @@ def pagination_control(context, page_obj, url):
   </ul>
 </nav>
 """.format(previous_nav=previous_nav, page_nav=page_nav, next_nav=next_nav))
+
+
+@register.function
+@contextfunction
+def can_create_mdn_import(context, user):
+    return can_create(user)
+
+
+@register.function
+@contextfunction
+def can_refresh_mdn_import(context, user):
+    return can_refresh(user)

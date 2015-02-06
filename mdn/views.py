@@ -20,6 +20,10 @@ def can_create(user):
     return user.is_authenticated and user.is_staff
 
 
+def can_refresh(user):
+    return True
+
+
 class FeaturePageListView(ListView):
     model = FeaturePage
     template_name = "mdn/feature_page_list.jinja2"
@@ -191,7 +195,7 @@ feature_page_detail = FeaturePageDetailView.as_view()
 feature_page_json = FeaturePageJSONView.as_view()
 feature_page_search = FeaturePageSearch.as_view()
 feature_page_list = FeaturePageListView.as_view()
-feature_page_reset = user_passes_test(can_create)(
+feature_page_reset = user_passes_test(can_refresh)(
     FeaturePageReset.as_view())
-feature_page_reparse = user_passes_test(can_create)(
+feature_page_reparse = user_passes_test(can_refresh)(
     FeaturePageReParse.as_view())

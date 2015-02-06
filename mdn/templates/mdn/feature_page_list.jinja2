@@ -51,7 +51,7 @@
 <p><i>No pages imported yet.</i></p>
 {% endif %}
 
-{% if request.user.is_staff %}
+{% if can_create_mdn_import(request.user) %}
 <a class="btn btn-primary" href="{{url('feature_page_create')}}">Import a new page</a>
 {% endif %}
 
