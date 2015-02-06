@@ -26,7 +26,7 @@ class FeaturePageListView(ListView):
     paginate_by = 50
 
     def get_queryset(self):
-        return FeaturePage.objects.order_by('modified')
+        return FeaturePage.objects.order_by('feature_id')
 
     def get_context_data(self, **kwargs):
         ctx = super(FeaturePageListView, self).get_context_data(**kwargs)
