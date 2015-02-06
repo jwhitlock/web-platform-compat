@@ -82,7 +82,7 @@ class TestFeaturePageJSONView(TestCase):
     def test_get(self):
         feature_page = FeaturePage.objects.create(
             url="https://developer.mozilla.org/en-US/docs/Web/CSS/float",
-            feature_id=741, data='{"foo": "bar"}')
+            feature_id=741, data={"foo": "bar"})
         url = reverse('feature_page_json', kwargs={'pk': feature_page.id})
         response = self.client.get(url)
         self.assertEqual(200, response.status_code)

@@ -1,7 +1,4 @@
 """Views for MDN migration app."""
-from collections import OrderedDict
-from json import loads
-
 from django import forms
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
@@ -74,7 +71,7 @@ class FeaturePageJSONView(BaseDetailView):
 
     def render_to_response(self, context):
         obj = context['object']
-        return JsonResponse(loads(obj.data, object_pairs_hook=OrderedDict))
+        return JsonResponse(obj.data)
 
 
 class SearchForm(forms.Form):
