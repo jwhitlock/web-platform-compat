@@ -1,4 +1,26 @@
-"""Parsing Expression Grammar for MDN pages."""
+"""Parsing Expression Grammar for MDN pages.
+
+This code is messy. Parsing is messy. This may be related. It also, hopefully,
+temporary, and will be jettisoned when the MDN data is imported.
+
+The workflow is:
+1. scrape_featurepage() takes a FeaturePage, which links an API Feature with
+   an MDN page.  It passes the English raw page [1] plus the feature to:
+2. scrape_page(), which extracts the specification and compatibility data
+   from the page, by parsing it into a node tree with:
+3. page_grammar, a parsing expression grammar in the Parsimonious [2] syntax,
+   which is then passed to:
+4. PageVisitor, which "visits" each node, extracting data, rendering
+   KumaScript, matching to existing API features, and detecting errors.
+5. The extracted data is returned to scrape_featurepage, which turns it into
+   JSON-API in the view_feature format [3], with scrape-specific metadata.
+6. The JSON can be used to view the scraped data, plan fixes to the MDN page,
+   or be fed back into the API.
+
+[1] https://developer.mozilla.org/en-US/docs/Web/API/CSSMediaRule?raw
+[2] https://github.com/erikrose/parsimonious
+[3] api/v1/view_features/1.json
+"""
 from __future__ import unicode_literals
 from collections import OrderedDict
 from itertools import chain
@@ -18,14 +40,19 @@ from webplatformcompat.models import (
 # Parsimonious grammar for an MDN page
 page_grammar = (
     r"""
+# A whole raw MDN page
 doc = other_text other_section* spec_section? compat_section?
     other_section* last_section?
 
+# Sections that we don't care about
 other_text = ~r".*?(?=<h2)"s
 other_section = _ !(spec_h2 / compat_h2) other_h2 _ other_text
 other_h2 = "<h2 " _ attrs? _ ">" _ bare_text _ "</h2>"
 last_section = _ other_h2 _ ~r".*(?!=<h2)"s
 
+#
+# Specifications section
+#
 spec_section = _ spec_h2 _ spec_table
 spec_h2 = "<h2 " _ attrs? _ ">" _ "Specifications" _ "</h2>"
 spec_table = "<table class=\"standard-table\">" _ spec_head _ spec_body
@@ -34,8 +61,6 @@ spec_table = "<table class=\"standard-table\">" _ spec_head _ spec_body
 spec_head = "<thead>" _ "<tr>" _ th_elems _ "</tr>" _ "</thead>"
 th_elems = th_elem+
 th_elem = "<th scope=\"col\">" _ (!"</th>" bare_text) _ "</th>" _
-old_th_elem = "<th scope=\"col\">" _ inside_th _ "</th>" _
-inside_th = !"</th>" bare_text
 
 spec_body = "<tbody>" _ spec_rows "</tbody>"
 spec_rows = spec_row+
@@ -48,6 +73,9 @@ spec2_td = "<td>" kuma_esc_start "Spec2" kuma_func_start qtext
 specdesc_td = "<td>" _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
+#
+# Browser Compatibility section
+#
 compat_section = _ compat_h2 _ compat_kuma _ compat_divs compat_footnotes?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
@@ -70,6 +98,12 @@ compat_rows = compat_row* _
 compat_row = tr_open _ compat_row_cells _ "</tr>" _
 compat_row_cells = compat_row_cell+
 compat_row_cell = td_open _ compat_cell _ "</td>" _
+
+#
+# A cell in the Compat table
+#   Due to rowspan and colspan usage, we won't know if a cell is a feature
+#   or a support until we visit the table.
+#
 compat_cell = compat_cell_item+
 compat_cell_item = (cell_tag / cell_break / code_block / cell_p_open /
     cell_p_close / cell_version / cell_footnote_id / cell_other)
@@ -89,6 +123,9 @@ cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
 cell_footnote_id = ~r"\[(?P<footnote_id>\d+)\]\s*"s
 cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 
+#
+# Optional footnotes after the Browser Compatibility Tables
+#
 compat_footnotes = footnote_item* _
 footnote_item = (footnote_p / footnote_pre)
 footnote_p = "<p>" _ footnote_id? _ footnote_p_text "</p>" _
@@ -97,6 +134,9 @@ footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
 footnote_pre = "<pre" attrs? ">" footnote_pre_text "</pre>" _
 footnote_pre_text = ~r"(?P<content>.*?(?=</pre>))"s
 
+#
+# Common tokens
+#
 kuma_esc_start = _ "{{" _
 kuma_func_start = "(" _
 kuma_func_arg = _ "," _
@@ -119,66 +159,29 @@ bare_text = ~r"(?P<content>[^<]*)"
 double_quoted_text = ~r'"(?P<content>[^"]*)"'
 single_quoted_text = ~r"'(?P<content>[^']*)'"
 
+# Whitespace
 _ = ~r"[ \t\r\n]*"s
 """)
 
 
-def end_of_line(text, pos):
-    """Get the position of the end of the line from pos"""
-    try:
-        return text.index('\n', pos)
-    except ValueError:
-        return len(text)
-
-
-def scrape_page(mdn_page, feature, locale='en'):
-    data = OrderedDict((
-        ('locale', locale),
-        ('specs', []),
-        ('compat', []),
-        ('footnotes', None),
-        ('issues', []),
-        ('errors', []),
-    ))
-    if '<h2' not in mdn_page:
-        data['errors'].append('No <h2> found in page')
-        return data
-
-    grammar = Grammar(page_grammar)
-    try:
-        page_parsed = grammar.parse(mdn_page)
-    except IncompleteParseError as ipe:
-        error = (
-            ipe.pos, end_of_line(ipe.text, ipe.pos),
-            'Unable to finish parsing MDN page, starting at this position.')
-        data['errors'].append(error)
-        return data
-    except ParseError as pe:  # pragma: no cover
-        # TODO: Add a test once we know how to trigger
-        # Because the rules include optional sections, parse issues mostly
-        # appear as IncompleteParseError or skipping a section.  A small
-        # change to the rules may turn these into ParseErrors instead.
-        # PageVisitor.detect_missed_h2() handles skipped sections.
-        rule = pe.expr
-        error = (
-            pe.pos, end_of_line(pe.text, pe.pos),
-            'Rule "%s" failed to match.  Rule definition:' % rule.name,
-            rule.as_rule())
-        data['errors'].append(error)
-        return data
-    page_data = PageVisitor(feature).visit(page_parsed)
-
-    data['specs'] = page_data.get('specs', [])
-    data['compat'] = page_data.get('compat', [])
-    data['issues'] = page_data.get('issues', [])
-    data['errors'] = page_data.get('errors', [])
-    data['footnotes'] = page_data.get('footnotes', None)
-    return data
-
-
 class PageVisitor(NodeVisitor):
-    """Extract and validate data from a parsed Specification section."""
+    """Extract and validate data from a parsed MDN page.
 
+    visit_<rule> is the function called when a node matching a rule is
+    visited.  For reference, visit_* functions are roughly in the order
+    they appear in page_grammar.
+
+    When visiting a full document, the desired output is a dictionary
+    with the keys:
+
+    - 'locale': The locale of the page (passed in)
+    - 'specs': Data scraped from Specifications section
+    - 'compat': Data scraped from the Browser Compatibility table
+    - 'footnotes': Footnotes appearing after the Browser Compatibility table,
+      but not referenced in the table
+    - 'issues': Ignorable issues with the parsed page
+    - 'errors': Problems that a human should deal with.
+    """
     def __init__(self, feature, locale='en'):
         super(PageVisitor, self).__init__()
         self.feature = feature
@@ -192,6 +195,576 @@ class PageVisitor(NodeVisitor):
         self._browser_data = None
         self._feature_data = None
 
+    def generic_visit(self, node, visited_children):
+        """Visitor when none is specified."""
+        return visited_children or node
+
+    def _visit_content(self, node, args):
+        """Vistor for re nodes with a named (?P<content>) section."""
+        return node.match.group('content')
+
+    def visit_doc(self, node, children):
+        """At the top level, return all the collected data."""
+        return {
+            'specs': self.specs,
+            'locale': self.locale,
+            'issues': self.issues,
+            'errors': self.errors,
+            'compat': self.compat,
+            'footnotes': self.footnotes,
+        }
+
+    re_h2 = re.compile(r'''(?x)(?s)     # Be verbose, and don't stop at newline
+    <h2[^>]*>           # Look for h2 open tag
+    (?P<title>[^<]+)    # Capture the h2 title
+    </h2>               # The h2 close tag
+    ''')
+
+    def visit_other_section(self, section_node, children):
+        """Find "other" sections that should have been parsed.
+
+        Because spec_section and compat_section are optional,
+        unexpected elements cause them to be treated as other sections.
+        This turns these into errors for further cleanp.
+        """
+        sections = {
+            'browser compatibility': 'compat_section',
+            'specifications': 'spec_section'
+        }
+
+        for h2 in self.re_h2.finditer(section_node.text):
+            title = h2.group('title')
+            section = sections.get(title.lower().strip())
+            if section:
+                # Failed to parse an <h2>.  Add an error
+                start = section_node.start + h2.start()
+                # end = section_node.end + h2.end()
+                text = section_node.text[h2.start():]
+                grammar = Grammar(page_grammar)
+                try:
+                    grammar[section].parse(text)
+                except ParseError as pe:
+                    rule = pe.expr
+                    description = (
+                        'Section <h2>%s</h2> was not parsed, because rule'
+                        ' "%s" failed to match.  Definition:'
+                        % (title, rule.name))
+                    error = (
+                        pe.pos + start, end_of_line(pe.text, pe.pos) + start,
+                        description, rule.as_rule())
+                    self.errors.append(error)
+                else:  # pragma: nocover
+                    # Not sure how we'd get here, so halt
+                    raise Exception('Failed to detect parse mistake!')
+
+    visit_last_section = visit_other_section
+
+    #
+    # Specification section
+    #
+    def visit_spec_h2(self, node, children):
+        attrs_list = children[2][0]
+        attrs = dict(attrs_list)
+        h2_id = attrs.get('id')
+        if h2_id != 'Specifications':
+            self.issues.append(
+                (node.start, node.end,
+                 ('In Specifications section, expected <h2'
+                  ' id="Specifications">, actual id="%s"' % h2_id)))
+
+        h2_name = attrs.get('name')
+        if h2_name is not None and h2_name != 'Specifications':
+            self.issues.append(
+                (node.start, node.end,
+                 ('In Specifications section, expected <h2'
+                  ' name="Specifications"> or no name attribute,'
+                  ' actual name="%s"' % h2_name)))
+
+    def visit_spec_row(self, node, children):
+        specname = children[2]
+        assert isinstance(specname, tuple), type(specname)
+        key, spec_id, path, name = specname
+
+        spec2_key = children[4]
+        assert isinstance(spec2_key, text_type), spec2_key
+        assert spec2_key == key, (spec2_key, key)
+
+        desc = children[6]
+        assert isinstance(desc, text_type)
+
+        section_id = None
+        if spec_id:
+            for section in Section.objects.filter(specification_id=spec_id):
+                if section.subpath.get(self.locale) == path:
+                    section_id = section.id
+                    break
+        self.specs.append({
+            'specification.mdn_key': key,
+            'specification.id': spec_id,
+            'section.subpath': path,
+            'section.name': name,
+            'section.note': desc,
+            'section.id': section_id})
+
+    def visit_specname_td(self, node, children):
+        key = children[4][0]
+        subpath = children[6][0]
+        name = children[8][0]
+        assert isinstance(key, text_type), type(key)
+        assert isinstance(subpath, text_type), type(subpath)
+        assert isinstance(name, text_type), type(name)
+        try:
+            spec = Specification.objects.get(mdn_key=key)
+        except Specification.DoesNotExist:
+            spec_id = None
+            self.errors.append(
+                (node.start, node.end, 'Unknown Specification "%s"' % key))
+        else:
+            spec_id = spec.id
+        return (key, spec_id, subpath, name)
+
+    def visit_spec2_td(self, node, children):
+        key = children[4][0]
+        assert isinstance(key, text_type), type(key)
+        return key
+
+    def visit_specdesc_td(self, node, children):
+        text = children[2]
+        assert isinstance(text, text_type), type(text)
+        return text
+
+    visit_inner_td = _visit_content
+
+    #
+    # Browser Compatibility section
+    #
+    def visit_compat_section(self, node, children):
+        compat_divs = children[5]
+        footnotes = children[6][0]
+
+        assert isinstance(compat_divs, list), type(compat_divs)
+        for div in compat_divs:
+            assert isinstance(div, dict), type(div)
+        assert isinstance(footnotes, OrderedDict), type(footnotes)
+
+        # Merge footnotes into supports
+        used_footnotes = set()
+        for div in compat_divs:
+            for support in div['supports']:
+                if 'footnote_id' in support:
+                    f_id, f_start, f_end = support['footnote_id']
+                    try:
+                        text, start, end = footnotes[f_id]
+                    except KeyError:
+                        self.errors.append(
+                            (f_start, f_end,
+                             'Footnote [%s] not found' % f_id))
+                    else:
+                        support['footnote'] = text
+                        used_footnotes.add(f_id)
+
+        for f_id in used_footnotes:
+            del footnotes[f_id]
+
+        for f_id, (text, start, end) in footnotes.items():
+            self.errors.append(
+                (start, end, 'Footnote [%s] not used' % f_id))
+
+        self.compat = compat_divs
+        self.footnotes = footnotes
+
+    def visit_compat_div(self, node, children):
+        compat_div_id = children[6][0]
+        compat_table = children[9]
+
+        pre, div_id = compat_div_id.split('-', 1)
+        assert isinstance(div_id, text_type), type(div_id)
+        assert isinstance(compat_table, dict), type(compat_table)
+
+        div = compat_table.copy()
+        div['name'] = div_id
+        return div
+
+    def visit_compat_table(self, node, children):
+        compat_body = children[2]
+        assert isinstance(compat_body, dict), type(compat_body)
+        return compat_body
+
+    def visit_compat_body(self, node, children):
+        compat_headers = children[2]
+        compat_rows = children[4][0]
+
+        assert isinstance(compat_headers, list), type(compat_headers)
+        for header in compat_headers:
+            assert isinstance(header, dict), type(header)
+        assert isinstance(compat_rows, list), type(compat_rows)
+        for row in compat_rows:
+            assert isinstance(row, dict), type(row)
+
+        browsers = OrderedDict()
+        features = OrderedDict()
+        versions = OrderedDict()
+        supports = OrderedDict()
+
+        # Gather the browsers and determine # of columns
+        columns = [None]
+        for browser in compat_headers:
+            colspan = int(browser.pop('colspan', 1))
+            browser_id = browser['id']
+            browsers[browser_id] = browser
+            for i in range(colspan):
+                columns.append(browser_id)
+
+        # Create an empty row grid
+        table = []
+        for row in range(len(compat_rows)):
+            table_row = []
+            for col in range(len(columns)):
+                table_row.append(None)
+            table.append(table_row)
+
+        # Parse the rows for features and supports
+        for row, compat_row in enumerate(compat_rows):
+            for cell in compat_row['cells']:
+                td = cell[0]
+                col = table[row].index(None)
+                rowspan = int(td.get('rowspan', 1))
+                colspan = int(td.get('colspan', 1))
+                if col == 0:
+                    # Insert as feature
+                    feature = self.cell_to_feature(cell)
+                    cell_id = feature['id']
+                    features[feature['id']] = feature
+                else:
+                    # Insert as support
+                    feature_id = table[row][0]
+                    assert feature_id
+                    feature = features[feature_id]
+                    browser_id = columns[col]
+                    browser = browsers[browser_id]
+                    cell_versions, cell_supports = self.cell_to_support(
+                        cell, feature, browser)
+                    cell_id = []
+                    for version in cell_versions:
+                        versions[version['id']] = version
+                    for support in cell_supports:
+                        cell_id.append(support['id'])
+                        supports[support['id']] = support
+                # Insert IDs into table
+                for r in range(rowspan):
+                    for c in range(colspan):
+                        table[row + r][col + c] = cell_id
+
+        return {
+            'browsers': list(browsers.values()),
+            'versions': list(versions.values()),
+            'features': list(features.values()),
+            'supports': list(supports.values()),
+        }
+
+    def visit_compat_headers(self, node, children):
+        compat_client_cells = children[4]
+        assert isinstance(compat_client_cells, list), type(compat_client_cells)
+        for cell in compat_client_cells:
+            assert isinstance(cell, dict), type(cell)
+        return compat_client_cells
+
+    def visit_compat_client_cell(self, node, children):
+        th_open = children[0]
+        compat_client_name = children[2]
+        assert isinstance(th_open, dict), type(th_open)
+        assert isinstance(compat_client_name, dict), type(compat_client_name)
+        client = compat_client_name.copy()
+        client.update(th_open)
+        return client
+
+    def visit_compat_client_name(self, node, children):
+        name = node.match.group('content')
+        assert isinstance(name, text_type), type(name)
+
+        b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
+        if str(b_id).startswith('_'):
+            self.errors.append(
+                (node.start, node.end, 'Unknown Browser "%s"' % name))
+        return {
+            'name': b_name,
+            'id': b_id,
+            'slug': b_slug,
+        }
+
+    def visit_compat_rows(self, node, children):
+        compat_rows = children[0]
+
+        assert isinstance(compat_rows, list), type(compat_rows)
+        for row in compat_rows:
+            assert isinstance(row, dict), type(row)
+        return compat_rows
+
+    def visit_compat_row(self, node, children):
+        tr_open = children[0]
+        compat_row_cells = children[2]
+
+        assert isinstance(tr_open, dict), type(tr_open)
+        assert isinstance(compat_row_cells, list), type(compat_row_cells)
+        for cell_list in compat_row_cells:
+            assert isinstance(cell_list, list), type(cell_list)
+            for cell in cell_list:
+                assert isinstance(cell, dict), type(cell)
+        row_dict = {
+            'cells': compat_row_cells,
+        }
+        row_dict.update(tr_open)
+        return row_dict
+
+    def visit_compat_row_cell(self, node, children):
+        td_open = children[0]
+        compat_cell = children[2]
+
+        assert isinstance(td_open, dict), type(td_open)
+        assert isinstance(compat_cell, list), type(compat_cell)
+        for item in compat_cell:
+            assert isinstance(item, dict)
+        td_open['type'] = 'td'
+        compat_cell.insert(0, td_open)
+        return compat_cell
+
+    #
+    # Browser Compatibility table cells
+    #  Due to rowspan and colspan usage, we won't know if a cell is a feature
+    #  or a support until visit_compat_body
+
+    def visit_compat_cell_item(self, node, children):
+        item = children[0]
+        assert isinstance(item, dict), type(item)
+        return item
+
+    def visit_cell_tag(self, node, children):
+        func = children[2]
+        assert isinstance(func, dict), type(func)
+        func['start'] = node.start
+        func['end'] = node.end
+        return func
+
+    def visit_cell_kuma_func(self, node, children):
+        name = children[0]
+        argslist = children[1]
+        if isinstance(argslist, Node):
+            assert argslist.start == argslist.end
+            args = []
+        else:
+            assert isinstance(argslist, list), type(argslist)
+            assert len(argslist) == 1
+            args = argslist[0]
+        assert isinstance(name, text_type), type(name)
+        assert isinstance(args, list), type(args)
+        return {'type': 'kuma', 'name': name, 'args': args}
+
+    visit_kuma_name = _visit_content
+
+    def visit_kuma_arglist(self, node, children):
+        arg0 = children[1]
+        argrest = children[2]
+        args = []
+        assert arg0.text
+        args.append(arg0.text)
+        assert argrest.start == argrest.end
+        return args
+
+    def visit_cell_break(self, node, children):
+        return {'type': 'break', 'start': node.start, 'end': node.end}
+
+    def visit_code_block(self, node, children):
+        text = children[2].text
+        assert isinstance(text, text_type), type(text)
+        return {
+            'type': 'code_block',
+            'content': self.cleanup_whitespace(text),
+            'start': node.start, 'end': node.end}
+
+    def visit_cell_p_open(self, node, children):
+        return {'type': 'p_open', 'start': node.start, 'end': node.end}
+
+    def visit_cell_p_close(self, node, children):
+        return {'type': 'p_close', 'start': node.start, 'end': node.end}
+
+    def visit_cell_version(self, node, children):
+        return {
+            'type': 'version',
+            'version': node.match.group('version'),
+            'eng_version': node.match.group('eng_version'),
+            'start': node.start, 'end': node.end}
+
+    def visit_cell_footnote_id(self, node, children):
+        return {
+            'type': 'footnote_id',
+            'footnote_id': node.match.group('footnote_id'),
+            'start': node.start, 'end': node.end}
+
+    def visit_cell_other(self, node, children):
+        text = self.cleanup_whitespace(node.text)
+        assert 'td>' not in text
+        return {
+            'type': 'text', 'content': text,
+            'start': node.start, 'end': node.end}
+
+    #
+    # Optional footnotes after the Browser Compatibility Tables
+    #
+    def visit_compat_footnotes(self, node, children):
+        items = children[0]
+        if isinstance(items, Node):
+            assert items.start == items.end  # Empty
+            return OrderedDict()
+        assert isinstance(items, list), type(items)
+        for item in items:
+            assert isinstance(item, dict), type(item)
+
+        footnotes = OrderedDict()
+        footnote = []
+
+        def add_footnote(footnote):
+            f_id = footnote[0]['footnote_id']
+            start = footnote[0]['start']
+            end = footnote[-1]['end']
+            assert f_id not in footnotes
+            text = self.format_footnote(footnote)
+            footnotes[f_id] = (text, start, end)
+
+        for item in items:
+            if not footnote:
+                # First should be a footnote
+                assert 'footnote_id' in item
+                footnote.append(item)
+            elif item.get('footnote_id'):
+                # New footnote
+                add_footnote(footnote)
+                footnote = [item]
+            else:
+                # Continue footnote
+                footnote.append(item)
+
+        assert footnote
+        add_footnote(footnote)
+        return footnotes
+
+    def visit_footnote_item(self, node, children):
+        item = children[0]
+        assert isinstance(item, dict), type(item)
+        return item
+
+    def visit_footnote_p(self, node, children):
+        footnote_id = children[2]
+        text = children[4]
+        assert isinstance(text, text_type), type(text)
+        fixed = self.render_footnote_kuma(text, node.children[4].start)
+        data = {
+            'type': 'p', 'content': fixed,
+            'start': node.start, 'end': node.end}
+        if isinstance(footnote_id, list):
+            data['footnote_id'] = footnote_id[0]
+        return data
+
+    def visit_footnote_id(self, node, children):
+        footnote_id = children[1].match.group('content')
+        return footnote_id
+
+    visit_footnote_p_text = _visit_content
+
+    def visit_footnote_pre(self, node, children):
+        attrs_node = children[1]
+        if isinstance(attrs_node, Node):
+            attrs = []
+        else:
+            assert isinstance(attrs_node, list), type(attrs_node)
+            assert len(attrs_node) == 1
+            attrs = attrs_node[0]
+        assert isinstance(attrs, list), type(attrs)
+
+        text = children[3]
+        assert isinstance(text, text_type), type(text)
+        return {
+            'type': 'pre', 'attributes': dict(attrs), 'content': text,
+            'start': node.start, 'end': node.end}
+
+    visit_footnote_pre_text = _visit_content
+
+    #
+    # Other visitors
+    #
+    def visit_attrs(self, node, children):
+        return children  # Even if empty list
+
+    visit_opt_attrs = visit_attrs
+
+    def visit_attr(self, node, children):
+        ident = children[1]
+        value = children[5][0]
+
+        assert isinstance(ident, text_type), type(ident)
+        assert isinstance(value, text_type), type(value)
+
+        return (ident, value)
+
+    visit_ident = _visit_content
+    visit_bare_text = _visit_content
+    visit_single_quoted_text = _visit_content
+    visit_double_quoted_text = _visit_content
+
+    def _visit_open(self, node, children, tag, expected):
+        """Parse an opening tag with an expected attributes list"""
+        attrs = children[2]
+        assert isinstance(attrs, list), type(attrs)
+        for attr in attrs:
+            assert len(attr) == 2, attr
+
+        # Filter attributes
+        attr_dict = {}
+        for name, value in attrs:
+            if name not in expected:
+                self.issues.append((
+                    node.start, node.end,
+                    "Unexpected attribute <%s %s=\"%s\">" % (
+                        tag, name, value)))
+            else:
+                attr_dict[name] = value
+        return attr_dict
+
+    def visit_td_open(self, node, children):
+        expected = ('rowspan', 'colspan')
+        return self._visit_open(node, children, 'td', expected)
+
+    def visit_th_open(self, node, children):
+        expected = ('colspan',)
+        return self._visit_open(node, children, 'th', expected)
+
+    def visit_tr_open(self, node, children):
+        expected = []
+        return self._visit_open(node, children, 'tr', expected)
+
+    #
+    # Utility methods
+    #
+    re_whitespace = re.compile(r'''(?x)  # Be verbose
+    (\s|                # Any whitespace, or
+     (<\s*br\s*/?>)|    # A variant of <br>, or
+     \xa0|              # Unicode non-breaking space, or
+     (\&nbsp;)          # HTML nbsp character
+    )+                  # One or more in a row
+    ''')
+
+    def cleanup_whitespace(self, text):
+        """Normalize whitespace"""
+        normal = self.re_whitespace.sub(' ', text)
+        assert '  ' not in normal
+        return normal.strip()
+
+    def unquote(self, text):
+        assert text.startswith('"') and text.endswith('"')
+        return text[1:-1]
+
+    #
+    # API lookup methods
+    #
     browser_name_fixes = {
         'Firefox (Gecko)': 'Firefox',
         'Firefox Mobile (Gecko)': 'Firefox Mobile',
@@ -251,45 +824,6 @@ class PageVisitor(NodeVisitor):
 
         return self._feature_data[nname]
 
-    def cell_to_feature(self, cell):
-        # name = cell['content']
-        # cell_id, feature_slug = self.feature_id_and_slug(name)
-        name_bits = []
-        feature = {}
-        assert cell[0]['type'] == 'td'
-        for item in cell[1:]:
-            if item['type'] == 'break':
-                pass  # Discard breaks in feature names
-            elif item['type'] == 'text':
-                name_bits.append(item['content'])
-            elif item['type'] == 'code_block':
-                name_bits.append('<code>%s</code>' % item['content'])
-            elif item['type'] == 'kuma':
-                if item['name'] == 'experimental_inline':
-                    assert 'experimental' not in feature
-                    feature['experimental'] = True
-                else:
-                    if item['args']:
-                        args = '(' + ', '.join(item['args']) + ')'
-                    else:
-                        args = ''
-                    self.errors.append((
-                        item['start'], item['end'],
-                        'Unknown kuma function %s%s' % (item['name'], args)))
-            else:
-                raise ValueError("Unknown item!", item)
-        assert name_bits
-        if len(name_bits) == 1 and name_bits[0].startswith('<code>'):
-            feature['canonical'] = True
-            name = name_bits[0][6:-7]  # Trim out surrounding <code>xx</code>
-        else:
-            name = ' '.join(name_bits).replace('</code> ,', '</code>,')
-        f_id, slug = self.feature_id_and_slug(name)
-        feature['name'] = name
-        feature['id'] = f_id
-        feature['slug'] = slug
-        return feature
-
     def version_id_and_name(self, raw_version, browser):
         version = None
 
@@ -337,6 +871,47 @@ class PageVisitor(NodeVisitor):
             support_id = "_%s-%s" % (feature_id, version_id)
         return support_id
 
+    #
+    # Cell parsing
+    #
+    def cell_to_feature(self, cell):
+        """Parse cell items as a feature (first column)"""
+        name_bits = []
+        feature = {}
+        assert cell[0]['type'] == 'td'
+        for item in cell[1:]:
+            if item['type'] == 'break':
+                pass  # Discard breaks in feature names
+            elif item['type'] == 'text':
+                name_bits.append(item['content'])
+            elif item['type'] == 'code_block':
+                name_bits.append('<code>%s</code>' % item['content'])
+            elif item['type'] == 'kuma':
+                if item['name'] == 'experimental_inline':
+                    assert 'experimental' not in feature
+                    feature['experimental'] = True
+                else:
+                    if item['args']:
+                        args = '(' + ', '.join(item['args']) + ')'
+                    else:
+                        args = ''
+                    self.errors.append((
+                        item['start'], item['end'],
+                        'Unknown kuma function %s%s' % (item['name'], args)))
+            else:
+                raise ValueError("Unknown item!", item)
+        assert name_bits
+        if len(name_bits) == 1 and name_bits[0].startswith('<code>'):
+            feature['canonical'] = True
+            name = name_bits[0][6:-7]  # Trim out surrounding <code>xx</code>
+        else:
+            name = ' '.join(name_bits).replace('</code> ,', '</code>,')
+        f_id, slug = self.feature_id_and_slug(name)
+        feature['name'] = name
+        feature['id'] = f_id
+        feature['slug'] = slug
+        return feature
+
     # From https://developer.mozilla.org/en-US/docs/Template:CompatGeckoDesktop
     geckodesktop_to_firefox = {
         '1': '1.0',
@@ -357,6 +932,7 @@ class PageVisitor(NodeVisitor):
     }
 
     def cell_to_support(self, cell, feature, browser):
+        """Parse a cell as a support (middle cell)."""
         assert feature
         assert browser
 
@@ -488,451 +1064,9 @@ class PageVisitor(NodeVisitor):
                 supports[-1].update(support)
         return versions, supports
 
-    def unquote(self, text):
-        assert text.startswith('"') and text.endswith('"')
-        return text[1:-1]
-
-    def generic_visit(self, node, visited_children):
-        return visited_children or node
-
-    def visit_doc(self, node, children):
-        return {
-            'specs': self.specs,
-            'locale': self.locale,
-            'issues': self.issues,
-            'errors': self.errors,
-            'compat': self.compat,
-            'footnotes': self.footnotes,
-        }
-
-    visit_spec_section = visit_doc
-
-    def visit_specname_td(self, node, children):
-        key = children[4][0]
-        subpath = children[6][0]
-        name = children[8][0]
-        assert isinstance(key, text_type), type(key)
-        assert isinstance(subpath, text_type), type(subpath)
-        assert isinstance(name, text_type), type(name)
-        try:
-            spec = Specification.objects.get(mdn_key=key)
-        except Specification.DoesNotExist:
-            spec_id = None
-            self.errors.append(
-                (node.start, node.end, 'Unknown Specification "%s"' % key))
-        else:
-            spec_id = spec.id
-        return (key, spec_id, subpath, name)
-
-    def visit_spec2_td(self, node, children):
-        key = children[4][0]
-        assert isinstance(key, text_type), type(key)
-        return key
-
-    def visit_specdesc_td(self, node, children):
-        text = children[2]
-        assert isinstance(text, text_type), type(text)
-        return text
-
-    def visit_spec_row(self, node, children):
-        specname = children[2]
-        assert isinstance(specname, tuple), type(specname)
-        key, spec_id, path, name = specname
-
-        spec2_key = children[4]
-        assert isinstance(spec2_key, text_type), spec2_key
-        assert spec2_key == key, (spec2_key, key)
-
-        desc = children[6]
-        assert isinstance(desc, text_type)
-
-        section_id = None
-        if spec_id:
-            for section in Section.objects.filter(specification_id=spec_id):
-                if section.subpath.get(self.locale) == path:
-                    section_id = section.id
-                    break
-        self.specs.append({
-            'specification.mdn_key': key,
-            'specification.id': spec_id,
-            'section.subpath': path,
-            'section.name': name,
-            'section.note': desc,
-            'section.id': section_id})
-
-    def visit_attr(self, node, children):
-        ident = children[1]
-        value = children[5][0]
-
-        assert isinstance(ident, text_type), type(ident)
-        assert isinstance(value, text_type), type(value)
-
-        return (ident, value)
-
-    def visit_attrs(self, node, children):
-        return children
-
-    visit_opt_attrs = visit_attrs
-
-    def visit_spec_h2(self, node, children):
-        attrs_list = children[2][0]
-        attrs = dict(attrs_list)
-        h2_id = attrs.get('id')
-        if h2_id != 'Specifications':
-            self.issues.append(
-                (node.start, node.end,
-                 ('In Specifications section, expected <h2'
-                  ' id="Specifications">, actual id="%s"' % h2_id)))
-
-        h2_name = attrs.get('name')
-        if h2_name is not None and h2_name != 'Specifications':
-            self.issues.append(
-                (node.start, node.end,
-                 ('In Specifications section, expected <h2'
-                  ' name="Specifications"> or no name attribute,'
-                  ' actual name="%s"' % h2_name)))
-
-    def visit_compat_section(self, node, children):
-        compat_divs = children[5]
-        footnotes = children[6][0]
-
-        assert isinstance(compat_divs, list), type(compat_divs)
-        for div in compat_divs:
-            assert isinstance(div, dict), type(div)
-        assert isinstance(footnotes, OrderedDict), type(footnotes)
-
-        # Merge footnotes into supports
-        used_footnotes = set()
-        for div in compat_divs:
-            for support in div['supports']:
-                if 'footnote_id' in support:
-                    f_id, f_start, f_end = support['footnote_id']
-                    try:
-                        text, start, end = footnotes[f_id]
-                    except KeyError:
-                        self.errors.append(
-                            (f_start, f_end,
-                             'Footnote [%s] not found' % f_id))
-                    else:
-                        support['footnote'] = text
-                        used_footnotes.add(f_id)
-
-        for f_id in used_footnotes:
-            del footnotes[f_id]
-
-        for f_id, (text, start, end) in footnotes.items():
-            self.errors.append(
-                (start, end, 'Footnote [%s] not used' % f_id))
-
-        self.compat = compat_divs
-        self.footnotes = footnotes
-
-    def visit_compat_div(self, node, children):
-        compat_div_id = children[6][0]
-        compat_table = children[9]
-
-        pre, div_id = compat_div_id.split('-', 1)
-        assert isinstance(div_id, text_type), type(div_id)
-        assert isinstance(compat_table, dict), type(compat_table)
-
-        div = compat_table.copy()
-        div['name'] = div_id
-        return div
-
-    def visit_compat_table(self, node, children):
-        compat_body = children[2]
-        assert isinstance(compat_body, dict), type(compat_body)
-        return compat_body
-
-    re_h2 = re.compile(r'''(?x)(?s)     # Be verbose, and . matches newline
-    <h2[^>]*>           # Look for h2 open tag
-    (?P<title>[^<]+)    # Capture the h2 title
-    </h2>               # The h2 close tag
-    ''')
-
-    def detect_missed_h2(self, section_node, children):
-        sections = {
-            'browser compatibility': 'compat_section',
-            'specifications': 'spec_section'
-        }
-
-        for h2 in self.re_h2.finditer(section_node.text):
-            title = h2.group('title')
-            section = sections.get(title.lower().strip())
-            if section:
-                # Failed to parse an <h2>.  Add an error
-                start = section_node.start + h2.start()
-                # end = section_node.end + h2.end()
-                text = section_node.text[h2.start():]
-                grammar = Grammar(page_grammar)
-                try:
-                    grammar[section].parse(text)
-                except ParseError as pe:
-                    rule = pe.expr
-                    description = (
-                        'Section <h2>%s</h2> was not parsed, because rule'
-                        ' "%s" failed to match.  Definition:'
-                        % (title, rule.name))
-                    error = (
-                        pe.pos + start, end_of_line(pe.text, pe.pos) + start,
-                        description, rule.as_rule())
-                    self.errors.append(error)
-                else:  # pragma: nocover
-                    # Not sure how we'd get here, so halt
-                    raise Exception('Failed to detect parse mistake!')
-
-    visit_other_section = detect_missed_h2
-    visit_last_section = detect_missed_h2
-
-    def visit_compat_body(self, node, children):
-        compat_headers = children[2]
-        compat_rows = children[4][0]
-
-        assert isinstance(compat_headers, list), type(compat_headers)
-        for header in compat_headers:
-            assert isinstance(header, dict), type(header)
-        assert isinstance(compat_rows, list), type(compat_rows)
-        for row in compat_rows:
-            assert isinstance(row, dict), type(row)
-
-        browsers = OrderedDict()
-        features = OrderedDict()
-        versions = OrderedDict()
-        supports = OrderedDict()
-
-        # Gather the browsers and determine # of columns
-        columns = [None]
-        for browser in compat_headers:
-            colspan = int(browser.pop('colspan', 1))
-            browser_id = browser['id']
-            browsers[browser_id] = browser
-            for i in range(colspan):
-                columns.append(browser_id)
-
-        # Create an empty row grid
-        table = []
-        for row in range(len(compat_rows)):
-            table_row = []
-            for col in range(len(columns)):
-                table_row.append(None)
-            table.append(table_row)
-
-        # Parse the rows for features and supports
-        for row, compat_row in enumerate(compat_rows):
-            for cell in compat_row['cells']:
-                td = cell[0]
-                col = table[row].index(None)
-                rowspan = int(td.get('rowspan', 1))
-                colspan = int(td.get('colspan', 1))
-                if col == 0:
-                    # Insert as feature
-                    feature = self.cell_to_feature(cell)
-                    cell_id = feature['id']
-                    features[feature['id']] = feature
-                else:
-                    # Insert as support
-                    feature_id = table[row][0]
-                    assert feature_id
-                    feature = features[feature_id]
-                    browser_id = columns[col]
-                    browser = browsers[browser_id]
-                    cell_versions, cell_supports = self.cell_to_support(
-                        cell, feature, browser)
-                    cell_id = []
-                    for version in cell_versions:
-                        versions[version['id']] = version
-                    for support in cell_supports:
-                        cell_id.append(support['id'])
-                        supports[support['id']] = support
-                # Insert IDs into table
-                for r in range(rowspan):
-                    for c in range(colspan):
-                        table[row + r][col + c] = cell_id
-
-        return {
-            'browsers': list(browsers.values()),
-            'versions': list(versions.values()),
-            'features': list(features.values()),
-            'supports': list(supports.values()),
-        }
-
-    def visit_compat_headers(self, node, children):
-        compat_client_cells = children[4]
-        assert isinstance(compat_client_cells, list), type(compat_client_cells)
-        for cell in compat_client_cells:
-            assert isinstance(cell, dict), type(cell)
-        return compat_client_cells
-
-    def visit_compat_client_cell(self, node, children):
-        th_open = children[0]
-        compat_client_name = children[2]
-        assert isinstance(th_open, dict), type(th_open)
-        assert isinstance(compat_client_name, dict), type(compat_client_name)
-        client = compat_client_name.copy()
-        client.update(th_open)
-        return client
-
-    re_whitespace = re.compile(r'''(?x)  # Be verbose
-    (\s|                # Any whitespace, or
-     (<\s*br\s*/?>)|    # A variant of <br>, or
-     \xa0|              # Unicode non-breaking space, or
-     (\&nbsp;)          # HTML nbsp character
-    )+                  # One or more in a row
-    ''')
-
-    def cleanup_whitespace(self, text):
-        """Normalize whitespace"""
-        normal = self.re_whitespace.sub(' ', text)
-        assert '  ' not in normal
-        return normal.strip()
-
-    def visit_compat_client_name(self, node, children):
-        name = node.match.group('content')
-        assert isinstance(name, text_type), type(name)
-
-        b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
-        if str(b_id).startswith('_'):
-            self.errors.append(
-                (node.start, node.end, 'Unknown Browser "%s"' % name))
-        return {
-            'name': b_name,
-            'id': b_id,
-            'slug': b_slug,
-        }
-
-    def visit_compat_rows(self, node, children):
-        compat_rows = children[0]
-
-        assert isinstance(compat_rows, list), type(compat_rows)
-        for row in compat_rows:
-            assert isinstance(row, dict), type(row)
-        return compat_rows
-
-    def visit_compat_row(self, node, children):
-        tr_open = children[0]
-        compat_row_cells = children[2]
-
-        assert isinstance(tr_open, dict), type(tr_open)
-        assert isinstance(compat_row_cells, list), type(compat_row_cells)
-        for cell_list in compat_row_cells:
-            assert isinstance(cell_list, list), type(cell_list)
-            for cell in cell_list:
-                assert isinstance(cell, dict), type(cell)
-        row_dict = {
-            'cells': compat_row_cells,
-        }
-        row_dict.update(tr_open)
-        return row_dict
-
-    def visit_compat_row_cell(self, node, children):
-        td_open = children[0]
-        compat_cell = children[2]
-
-        assert isinstance(td_open, dict), type(td_open)
-        assert isinstance(compat_cell, list), type(compat_cell)
-        for item in compat_cell:
-            assert isinstance(item, dict)
-        td_open['type'] = 'td'
-        compat_cell.insert(0, td_open)
-        return compat_cell
-
-    def visit_compat_cell_item(self, node, children):
-        item = children[0]
-        assert isinstance(item, dict), type(item)
-        return item
-
-    def visit_code_block(self, node, children):
-        text = children[2].text
-        assert isinstance(text, text_type), type(text)
-        return {
-            'type': 'code_block',
-            'content': self.cleanup_whitespace(text),
-            'start': node.start,
-            'end': node.end
-        }
-
-    def visit_cell_tag(self, node, children):
-        func = children[2]
-        assert isinstance(func, dict), type(func)
-        func['start'] = node.start
-        func['end'] = node.end
-        return func
-
-    def visit_cell_kuma_func(self, node, children):
-        name = children[0]
-        argslist = children[1]
-        if isinstance(argslist, Node):
-            assert argslist.start == argslist.end
-            args = []
-        else:
-            assert isinstance(argslist, list), type(argslist)
-            assert len(argslist) == 1
-            args = argslist[0]
-        assert isinstance(name, text_type), type(name)
-        assert isinstance(args, list), type(args)
-        return {
-            'type': 'kuma',
-            'name': name,
-            'args': args
-        }
-
-    def visit_kuma_arglist(self, node, children):
-        arg0 = children[1]
-        argrest = children[2]
-        args = []
-        assert arg0.text
-        args.append(arg0.text)
-        assert argrest.start == argrest.end
-        return args
-
-    def visit_cell_break(self, node, children):
-        return {
-            'type': 'break',
-            'start': node.start,
-            'end': node.end
-        }
-
-    def visit_cell_p_open(self, node, children):
-        return {
-            'type': 'p_open',
-            'start': node.start,
-            'end': node.end
-        }
-
-    def visit_cell_p_close(self, node, children):
-        return {
-            'type': 'p_close',
-            'start': node.start,
-            'end': node.end
-        }
-
-    def visit_cell_version(self, node, children):
-        return {
-            'type': 'version',
-            'version': node.match.group('version'),
-            'eng_version': node.match.group('eng_version'),
-            'start': node.start,
-            'end': node.end,
-        }
-
-    def visit_cell_footnote_id(self, node, children):
-        return {
-            'type': 'footnote_id',
-            'footnote_id': node.match.group('footnote_id'),
-            'start': node.start,
-            'end': node.end,
-        }
-
-    def visit_cell_other(self, node, children):
-        text = self.cleanup_whitespace(node.text)
-        assert 'td>' not in text
-        return {
-            'type': 'text',
-            'content': text,
-            'start': node.start,
-            'end': node.end
-        }
-
+    #
+    # Footnote parsing
+    #
     def format_footnote(self, footnote):
         if len(footnote) == 1 and footnote[0]['type'] in ('p',):
             return footnote[0]['content']
@@ -949,48 +1083,6 @@ class PageVisitor(NodeVisitor):
                     i['tag'] = '<%s>' % i['type']
                 bits.append(fmt % i)
             return "\n".join(bits)
-
-    def visit_compat_footnotes(self, node, children):
-        items = children[0]
-        if isinstance(items, Node):
-            assert items.start == items.end  # Empty
-            return OrderedDict()
-        assert isinstance(items, list), type(items)
-        for item in items:
-            assert isinstance(item, dict), type(item)
-
-        footnotes = OrderedDict()
-        footnote = []
-
-        def add_footnote(footnote):
-            f_id = footnote[0]['footnote_id']
-            start = footnote[0]['start']
-            end = footnote[-1]['end']
-            assert f_id not in footnotes
-            text = self.format_footnote(footnote)
-            footnotes[f_id] = (text, start, end)
-
-        for item in items:
-            if not footnote:
-                # First should be a footnote
-                assert 'footnote_id' in item
-                footnote.append(item)
-            elif item.get('footnote_id'):
-                # New footnote
-                add_footnote(footnote)
-                footnote = [item]
-            else:
-                # Continue footnote
-                footnote.append(item)
-
-        assert footnote
-        add_footnote(footnote)
-        return footnotes
-
-    def visit_footnote_item(self, node, children):
-        item = children[0]
-        assert isinstance(item, dict), type(item)
-        return item
 
     re_kuma = re.compile(r'''(?x)(?s)  # Be verbose, . include newlines
     {{\s*               # Kuma start, with optional whitespace
@@ -1030,132 +1122,50 @@ class PageVisitor(NodeVisitor):
                 rendered[:match.start()] + kuma + rendered[match.end():])
         return rendered
 
-    def visit_footnote_p(self, node, children):
-        footnote_id = children[2]
-        text = children[4]
-        assert isinstance(text, text_type), type(text)
-        fixed = self.render_footnote_kuma(text, node.children[4].start)
-        data = {
-            'type': 'p',
-            'content': fixed,
-            'start': node.start,
-            'end': node.end,
-        }
-        if isinstance(footnote_id, list):
-            data['footnote_id'] = footnote_id[0]
+
+def scrape_page(mdn_page, feature, locale='en'):
+    data = OrderedDict((
+        ('locale', locale),
+        ('specs', []),
+        ('compat', []),
+        ('footnotes', None),
+        ('issues', []),
+        ('errors', []),
+    ))
+    if '<h2' not in mdn_page:
+        data['errors'].append('No <h2> found in page')
         return data
 
-    def visit_footnote_id(self, node, children):
-        footnote_id = children[1].match.group('content')
-        return footnote_id
+    grammar = Grammar(page_grammar)
+    try:
+        page_parsed = grammar.parse(mdn_page)
+    except IncompleteParseError as ipe:
+        error = (
+            ipe.pos, end_of_line(ipe.text, ipe.pos),
+            'Unable to finish parsing MDN page, starting at this position.')
+        data['errors'].append(error)
+        return data
+    except ParseError as pe:  # pragma: no cover
+        # TODO: Add a test once we know how to trigger
+        # Because the rules include optional sections, parse issues mostly
+        # appear as IncompleteParseError or skipping a section.  A small
+        # change to the rules may turn these into ParseErrors instead.
+        # PageVisitor.visit_other_section() handles skipped sections.
+        rule = pe.expr
+        error = (
+            pe.pos, end_of_line(pe.text, pe.pos),
+            'Rule "%s" failed to match.  Rule definition:' % rule.name,
+            rule.as_rule())
+        data['errors'].append(error)
+        return data
+    page_data = PageVisitor(feature).visit(page_parsed)
 
-    def visit_footnote_pre(self, node, children):
-        attrs_node = children[1]
-        if isinstance(attrs_node, Node):
-            attrs = []
-        else:
-            assert isinstance(attrs_node, list), type(attrs_node)
-            assert len(attrs_node) == 1
-            attrs = attrs_node[0]
-        assert isinstance(attrs, list), type(attrs)
-
-        text = children[3]
-        assert isinstance(text, text_type), type(text)
-        return {
-            'type': 'pre',
-            'attributes': dict(attrs),
-            'content': text,
-            'start': node.start,
-            'end': node.end,
-        }
-
-    def visit_generic_open(self, node, children, tag, expected):
-        """Parse an opening tag with an expectd attributes list"""
-        attrs = children[2]
-        assert isinstance(attrs, list), type(attrs)
-        for attr in attrs:
-            assert len(attr) == 2, attr
-
-        # Filter attributes
-        attr_dict = {}
-        for name, value in attrs:
-            if name not in expected:
-                self.issues.append((
-                    node.start, node.end,
-                    "Unexpected attribute <%s %s=\"%s\">" % (
-                        tag, name, value)))
-            else:
-                attr_dict[name] = value
-        return attr_dict
-
-    def visit_td_open(self, node, children):
-        expected = ('rowspan', 'colspan')
-        return self.visit_generic_open(node, children, 'td', expected)
-
-    def visit_th_open(self, node, children):
-        expected = ('colspan',)
-        return self.visit_generic_open(node, children, 'th', expected)
-
-    def visit_tr_open(self, node, children):
-        expected = []
-        return self.visit_generic_open(node, children, 'tr', expected)
-
-    def generic_visit_content(self, node, args):
-        return node.match.group('content')
-
-    visit_single_quoted_text = generic_visit_content
-    visit_double_quoted_text = generic_visit_content
-    visit_bare_text = generic_visit_content
-    visit_ident = generic_visit_content
-    visit_inner_td = generic_visit_content
-    visit_compat_feature = generic_visit_content
-    visit_compat_support = generic_visit_content
-    visit_kuma_name = generic_visit_content
-    visit_footnote_p_text = generic_visit_content
-    visit_footnote_pre_text = generic_visit_content
-
-
-def range_error_to_html(page, start, end, reason, rule=None):
-    """Convert a range error to HTML"""
-    assert page, "Page can not be empty"
-    html_bits = ["<div><p>", escape(reason), "</p>"]
-    if rule:
-        html_bits.extend(("<p><code>", escape(rule), "</code></p>"))
-
-    # Get 2 lines of context around error
-    html_bits.append('<p>Context:<pre>')
-    start_line = page.count('\n', 0, start)
-    end_line = page.count('\n', 0, end)
-    ctx_start_line = max(0, start_line - 2)
-    ctx_end_line = min(end_line + 3, page.count('\n'))
-    digits = len(str(ctx_end_line))
-    context_lines = page.split('\n')[ctx_start_line:ctx_end_line]
-
-    # Highlight the errored portion
-    err_page_bits = []
-    err_line_count = 1
-    assert page
-    for p, c in enumerate(page):  # pragma: nocover - page always enumerates
-        if c == '\n':
-            err_page_bits.append(c)
-            err_line_count += 1
-            if err_line_count > ctx_end_line:
-                break
-        elif p < start or p >= end:
-            err_page_bits.append(' ')
-        else:
-            err_page_bits.append('^')
-    err_page = ''.join(err_page_bits)
-    err_lines = err_page.split('\n')[ctx_start_line:ctx_end_line]
-
-    for num, (line, err_line) in enumerate(zip(context_lines, err_lines)):
-        lnum = ctx_start_line + num
-        html_bits.append(str(lnum).rjust(digits) + ' ' + escape(line) + '\n')
-        if '^' in err_line:
-            html_bits.append('*' * digits + ' ' + err_line + '\n')
-
-    html_bits.append("</pre></p></div>")
-    return ''.join(html_bits)
+    data['specs'] = page_data.get('specs', [])
+    data['compat'] = page_data.get('compat', [])
+    data['issues'] = page_data.get('issues', [])
+    data['errors'] = page_data.get('errors', [])
+    data['footnotes'] = page_data.get('footnotes', None)
+    return data
 
 
 def scrape_feature_page(fp):
@@ -1247,6 +1257,7 @@ def scrape_feature_page(fp):
         sections[section_id] = section_content
         fp_data['features']['links']['sections'].append(str(section_id))
 
+    # Load compatibility section
     tabs = []
     browsers = {}
     versions = {}
@@ -1254,7 +1265,6 @@ def scrape_feature_page(fp):
     supports = {}
     compat_table_supports = OrderedDict(((str(fp.feature.id), {}),))
     footnotes = OrderedDict()
-    # Load compatibility section
     tab_name = {
         'desktop': 'Desktop Browsers',
         'mobile': 'Mobile Browsers',
@@ -1456,7 +1466,70 @@ def scrape_feature_page(fp):
     fp.save()
 
 
+#
+# Utility methods
+#
+def date_to_iso(date):
+    """Convert a datetime.Date to the ISO 8601 format, or None"""
+    if date:
+        return date.isoformat()
+    else:
+        return None
+
+
+def end_of_line(text, pos):
+    """Get the position of the end of the line from pos"""
+    try:
+        return text.index('\n', pos)
+    except ValueError:
+        return len(text)
+
+
+def range_error_to_html(page, start, end, reason, rule=None):
+    """Convert a range error to HTML"""
+    assert page, "Page can not be empty"
+    html_bits = ["<div><p>", escape(reason), "</p>"]
+    if rule:
+        html_bits.extend(("<p><code>", escape(rule), "</code></p>"))
+
+    # Get 2 lines of context around error
+    html_bits.append('<p>Context:<pre>')
+    start_line = page.count('\n', 0, start)
+    end_line = page.count('\n', 0, end)
+    ctx_start_line = max(0, start_line - 2)
+    ctx_end_line = min(end_line + 3, page.count('\n'))
+    digits = len(str(ctx_end_line))
+    context_lines = page.split('\n')[ctx_start_line:ctx_end_line]
+
+    # Highlight the errored portion
+    err_page_bits = []
+    err_line_count = 1
+    assert page
+    for p, c in enumerate(page):  # pragma: nocover - page always enumerates
+        if c == '\n':
+            err_page_bits.append(c)
+            err_line_count += 1
+            if err_line_count > ctx_end_line:
+                break
+        elif p < start or p >= end:
+            err_page_bits.append(' ')
+        else:
+            err_page_bits.append('^')
+    err_page = ''.join(err_page_bits)
+    err_lines = err_page.split('\n')[ctx_start_line:ctx_end_line]
+
+    for num, (line, err_line) in enumerate(zip(context_lines, err_lines)):
+        lnum = ctx_start_line + num
+        html_bits.append(str(lnum).rjust(digits) + ' ' + escape(line) + '\n')
+        if '^' in err_line:
+            html_bits.append('*' * digits + ' ' + err_line + '\n')
+
+    html_bits.append("</pre></p></div>")
+    return ''.join(html_bits)
+
+
 def slugify(word, length=50, suffix=""):
+    """Create a slugged version of a word or phrase"""
     raw = word.lower()
     out = []
     acceptable = string.ascii_lowercase + string.digits + '_-'
@@ -1471,11 +1544,3 @@ def slugify(word, length=50, suffix=""):
     suffix = str(suffix) if suffix else ""
     with_suffix = slugged[slice(length - len(suffix))] + suffix
     return with_suffix
-
-
-def date_to_iso(date):
-    """Convert a datetime.Date to the ISO 8601 format, or None"""
-    if date:
-        return date.isoformat()
-    else:
-        return None
