@@ -46,6 +46,8 @@
 <label for="submit-reset">Download MDN pages and reparse</label>
 </form>
 <br/>
+{% endif %}
+{% if can_reparse_mdn_import(request.user) %}
 <form action="{{url('feature_page_reparse', pk=object.pk)}}" method="post">
 {{ csrf() }}
 <input id="submit-reparse" class="btn btn-primary" type="submit" value="Reparse">

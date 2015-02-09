@@ -122,3 +122,9 @@ def can_create_mdn_import(context, user):
 @contextfunction
 def can_refresh_mdn_import(context, user):
     return can_refresh(user)
+
+
+@register.function
+@contextfunction
+def can_reparse_mdn_import(context, user):
+    return can_create(user)
