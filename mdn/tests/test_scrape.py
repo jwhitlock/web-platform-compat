@@ -488,6 +488,38 @@ class TestPageVisitor(ScrapeTestCase):
         errors = [(185, 357, 'Unknown Specification "HTML WHATWG"')]
         self.assertEqual(errors, self.visitor.errors)
 
+    def test_spec_no_thead(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/AudioContext
+        text = '''\
+<table class="standard-table">
+ <tbody>
+  <tr>
+   <th scope="col">Specification</th>
+   <th scope="col">Status</th>
+   <th scope="col">Comment</th>
+  </tr>
+  <tr>
+   <td>{{SpecName('Web Audio API', '#the-audiocontext-interface',\
+ 'AudioContext')}}</td>
+   <td>{{Spec2('Web Audio API')}}</td>
+   <td>&nbsp;</td>
+  </tr>
+ </tbody>
+</table>
+'''
+        parsed = page_grammar['spec_table'].parse(text)
+        self.visitor.visit(parsed)
+        expected = [{
+            'section.note': '',
+            'section.subpath': '#the-audiocontext-interface',
+            'section.name': 'AudioContext',
+            'specification.mdn_key': 'Web Audio API',
+            'section.id': None,
+            'specification.id': None}]
+        self.assertEqual(expected, self.visitor.specs)
+        errors = [(166, 251, 'Unknown Specification "Web Audio API"')]
+        self.assertEqual(errors, self.visitor.errors)
+
     def test_compat_row_cell_feature_with_rowspan(self):
         text = '<td rowspan="2">Some Feature</td>'
         parsed = page_grammar['compat_row_cell'].parse(text)

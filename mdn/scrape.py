@@ -59,11 +59,15 @@ spec_title = ~r"(?P<content>[sS]pecifications?)"
 spec_table = "<table class=\"standard-table\">" _ spec_head _ spec_body
     _ "</table>" _
 
-spec_head = "<thead>" _ "<tr>" _ th_elems _ "</tr>" _ "</thead>"
+spec_head = spec_thead_headers / spec_tbody_headers
+spec_thead_headers = "<thead>" _ spec_headers "</thead>" _ spec_tbody _
+spec_tbody_headers = spec_tbody _ spec_headers
+spec_headers =  "<tr>" _ th_elems _ "</tr>" _
 th_elems = th_elem+
 th_elem = "<th scope=\"col\">" _ (!"</th>" bare_text) _ "</th>" _
+spec_tbody = "<tbody>"
 
-spec_body = "<tbody>" _ spec_rows "</tbody>"
+spec_body = spec_rows "</tbody>"
 spec_rows = spec_row+
 spec_row = "<tr>" _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
 specname_td = "<td>" _ kuma "</td>"
