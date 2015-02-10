@@ -54,7 +54,8 @@ last_section = _ other_h2 _ ~r".*(?!=<h2)"s
 # Specifications section
 #
 spec_section = _ spec_h2 _ spec_table
-spec_h2 = "<h2 " _ attrs? _ ">" _ "Specifications" _ "</h2>"
+spec_h2 = "<h2 " _ attrs? _ ">" _ spec_title _ "</h2>"
+spec_title = ~r"(?P<content>[sS]pecifications?)"
 spec_table = "<table class=\"standard-table\">" _ spec_head _ spec_body
     _ "</table>" _
 
@@ -65,11 +66,8 @@ th_elem = "<th scope=\"col\">" _ (!"</th>" bare_text) _ "</th>" _
 spec_body = "<tbody>" _ spec_rows "</tbody>"
 spec_rows = spec_row+
 spec_row = "<tr>" _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
-specname_td = "<td>" kuma_esc_start "SpecName" kuma_func_start qtext
-    kuma_func_arg qtext kuma_func_arg qtext kuma_func_end kuma_esc_end
-    "</td>"
-spec2_td = "<td>" kuma_esc_start "Spec2" kuma_func_start qtext
-    kuma_func_end kuma_esc_end "</td>"
+specname_td = "<td>" _ kuma "</td>"
+spec2_td = "<td>" _ kuma "</td>"
 specdesc_td = "<td>" _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
@@ -80,10 +78,8 @@ compat_section = _ compat_h2 _ compat_kuma _ compat_divs compat_footnotes?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
 compat_kuma = (compat_kuma_div / compat_kuma_p)
-compat_kuma_div = "<div>" _ kuma_esc_start _ "CompatibilityTable" "()"? _
-    kuma_esc_end _ "</div>"
-compat_kuma_p = "<p>" _ kuma_esc_start _ "CompatibilityTable" "()"? _
-    kuma_esc_end _ "</p>"
+compat_kuma_div = "<div>" _ kuma "</div>"
+compat_kuma_p = "<p>" _ kuma "</p>"
 compat_divs = compat_div+
 compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
     _ "</div>" _
@@ -104,15 +100,9 @@ compat_row_cell = td_open _ compat_cell _ "</td>" _
 #   Due to rowspan and colspan usage, we won't know if a cell is a feature
 #   or a support until we visit the table.
 #
-compat_cell = compat_cell_item+
-compat_cell_item = (cell_tag / cell_break / code_block / cell_p_open /
-    cell_p_close / cell_version / cell_footnote_id / cell_other)
-cell_tag = kuma_esc_start _ cell_kuma_func _ kuma_esc_end _
-cell_kuma_func = kuma_name kuma_arglist?
-kuma_name = ~r"(?P<content>.*?(?=((}})|\()))"s
-kuma_arglist = kuma_func_start kuma_arg kuma_arg_rest* kuma_func_end
-kuma_arg = ~r"(?P<content>.*?(?=[,)]))"
-kuma_arg_rest = kuma_func_arg kuma_arg
+compat_cell = compat_cell_item*
+compat_cell_item = (kuma / cell_break / code_block / cell_p_open /
+    cell_p_close / cell_version / cell_footnote_id / cell_removed / cell_other)
 cell_break = "<" _ "br" _ ("/>" / ">") _
 code_block = "<code>" _ code_text _ "</code>" _
 code_text = ~r"(?P<content>.*?(?=</code>))"s
@@ -120,6 +110,7 @@ cell_p_open = "<p>" _
 cell_p_close = "</p>" _
 cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
     r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
+cell_removed = ~r"[Rr]emoved\s+[Ii]n\s*"s
 cell_footnote_id = ~r"\[(?P<footnote_id>\d+)\]\s*"s
 cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 
@@ -137,11 +128,17 @@ footnote_pre_text = ~r"(?P<content>.*?(?=</pre>))"s
 #
 # Common tokens
 #
-kuma_esc_start = _ "{{" _
+kuma = kuma_esc_start kuma_name kuma_arglist? kuma_esc_end
+kuma_esc_start = "{{" _
+kuma_name = ~r"(?P<content>[^\(\}\s]*)\s*"s
+kuma_arglist = kuma_func_start kuma_arg kuma_arg_rest* kuma_func_end
 kuma_func_start = "(" _
 kuma_func_arg = _ "," _
 kuma_func_end = _ ")" _
-kuma_esc_end = _ "}}" _
+kuma_esc_end = "}}" _
+kuma_arg = (double_quoted_text / single_quoted_text / kuma_bare_arg)
+kuma_bare_arg = ~r"(?P<content>.*?(?=[,)]))"
+kuma_arg_rest = kuma_func_arg kuma_arg
 
 tr_open = "<tr" _ opt_attrs ">"
 th_open = "<th" _ opt_attrs ">"
@@ -229,7 +226,8 @@ class PageVisitor(NodeVisitor):
         """
         sections = {
             'browser compatibility': 'compat_section',
-            'specifications': 'spec_section'
+            'specifications': 'spec_section',
+            'specification': 'spec_section'
         }
 
         for h2 in self.re_h2.finditer(section_node.text):
@@ -238,7 +236,6 @@ class PageVisitor(NodeVisitor):
             if section:
                 # Failed to parse an <h2>.  Add an error
                 start = section_node.start + h2.start()
-                # end = section_node.end + h2.end()
                 text = section_node.text[h2.start():]
                 try:
                     page_grammar[section].parse(text)
@@ -253,8 +250,11 @@ class PageVisitor(NodeVisitor):
                         description, rule.as_rule())
                     self.errors.append(error)
                 else:  # pragma: nocover
-                    # Not sure how we'd get here, so halt
-                    raise Exception('Failed to detect parse mistake!')
+                    error = (
+                        start, end_of_line(text, 0) + start,
+                        "Section %s not parsed, probably due to earlier"
+                        " errors." % title)
+                    self.errors.append(error)
 
     visit_last_section = visit_other_section
 
@@ -286,7 +286,12 @@ class PageVisitor(NodeVisitor):
 
         spec2_key = children[4]
         assert isinstance(spec2_key, text_type), spec2_key
-        assert spec2_key == key, (spec2_key, key)
+        if spec2_key != key:
+            self.errors.append((
+                node.start, node.end,
+                ('SpecName(%s, ...) does not match Spec2(%s)'
+                 % (spec2_key, key))))
+            spec2_key = key
 
         desc = children[6]
         assert isinstance(desc, text_type)
@@ -302,16 +307,22 @@ class PageVisitor(NodeVisitor):
             'specification.id': spec_id,
             'section.subpath': path,
             'section.name': name,
-            'section.note': desc,
+            'section.note': self.cleanup_whitespace(desc),
             'section.id': section_id})
 
     def visit_specname_td(self, node, children):
-        key = children[4][0]
-        subpath = children[6][0]
-        name = children[8][0]
-        assert isinstance(key, text_type), type(key)
-        assert isinstance(subpath, text_type), type(subpath)
-        assert isinstance(name, text_type), type(name)
+        kuma = children[2]
+        assert isinstance(kuma, dict), type(kuma)
+        assert kuma['name'].lower() == 'specname'
+        key = self.unquote(kuma["args"][0])
+        subpath = ""
+        name = ""
+        try:
+            subpath = self.unquote(kuma["args"][1])
+            name = self.unquote(kuma["args"][2])
+        except IndexError:
+            pass  # subpath and name can be empty
+
         try:
             spec = Specification.objects.get(mdn_key=key)
         except Specification.DoesNotExist:
@@ -323,7 +334,11 @@ class PageVisitor(NodeVisitor):
         return (key, spec_id, subpath, name)
 
     def visit_spec2_td(self, node, children):
-        key = children[4][0]
+        kuma = children[2]
+        assert isinstance(kuma, dict), type(kuma)
+        assert kuma['name'].lower() == 'spec2'
+        assert len(kuma["args"]) == 1
+        key = self.unquote(kuma["args"][0])
         assert isinstance(key, text_type), type(key)
         return key
 
@@ -371,6 +386,13 @@ class PageVisitor(NodeVisitor):
 
         self.compat = compat_divs
         self.footnotes = footnotes
+
+    def visit_compat_kuma(self, node, children):
+        assert isinstance(children, list), type(children)
+        kuma = children[0][2]
+        assert isinstance(kuma, dict), type(kuma)
+        assert kuma['type'] == 'kuma'
+        assert kuma['name'].lower() == 'compatibilitytable'
 
     def visit_compat_div(self, node, children):
         compat_div_id = children[6][0]
@@ -482,7 +504,7 @@ class PageVisitor(NodeVisitor):
         assert isinstance(name, text_type), type(name)
 
         b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
-        if str(b_id).startswith('_'):
+        if is_fake_id(b_id):
             self.errors.append(
                 (node.start, node.end, 'Unknown Browser "%s"' % name))
         return {
@@ -517,9 +539,12 @@ class PageVisitor(NodeVisitor):
 
     def visit_compat_row_cell(self, node, children):
         td_open = children[0]
-        compat_cell = children[2]
-
         assert isinstance(td_open, dict), type(td_open)
+
+        compat_cell = children[2]
+        if isinstance(compat_cell, Node):
+            assert compat_cell.start == compat_cell.end
+            compat_cell = []
         assert isinstance(compat_cell, list), type(compat_cell)
         for item in compat_cell:
             assert isinstance(item, dict)
@@ -536,38 +561,6 @@ class PageVisitor(NodeVisitor):
         item = children[0]
         assert isinstance(item, dict), type(item)
         return item
-
-    def visit_cell_tag(self, node, children):
-        func = children[2]
-        assert isinstance(func, dict), type(func)
-        func['start'] = node.start
-        func['end'] = node.end
-        return func
-
-    def visit_cell_kuma_func(self, node, children):
-        name = children[0]
-        argslist = children[1]
-        if isinstance(argslist, Node):
-            assert argslist.start == argslist.end
-            args = []
-        else:
-            assert isinstance(argslist, list), type(argslist)
-            assert len(argslist) == 1
-            args = argslist[0]
-        assert isinstance(name, text_type), type(name)
-        assert isinstance(args, list), type(args)
-        return {'type': 'kuma', 'name': name, 'args': args}
-
-    visit_kuma_name = _visit_content
-
-    def visit_kuma_arglist(self, node, children):
-        arg0 = children[1]
-        argrest = children[2]
-        args = []
-        assert arg0.text
-        args.append(arg0.text)
-        assert argrest.start == argrest.end
-        return args
 
     def visit_cell_break(self, node, children):
         return {'type': 'break', 'start': node.start, 'end': node.end}
@@ -598,6 +591,9 @@ class PageVisitor(NodeVisitor):
             'type': 'footnote_id',
             'footnote_id': node.match.group('footnote_id'),
             'start': node.start, 'end': node.end}
+
+    def visit_cell_removed(self, node, children):
+        return {'type': 'removed', 'start': node.start, 'end': node.end}
 
     def visit_cell_other(self, node, children):
         text = self.cleanup_whitespace(node.text)
@@ -632,8 +628,11 @@ class PageVisitor(NodeVisitor):
         for item in items:
             if not footnote:
                 # First should be a footnote
-                assert 'footnote_id' in item
-                footnote.append(item)
+                if 'footnote_id' in item:
+                    footnote.append(item)
+                else:
+                    self.errors.append((
+                        item['start'], item['end'], "No ID in footnote."))
             elif item.get('footnote_id'):
                 # New footnote
                 add_footnote(footnote)
@@ -642,8 +641,8 @@ class PageVisitor(NodeVisitor):
                 # Continue footnote
                 footnote.append(item)
 
-        assert footnote
-        add_footnote(footnote)
+        if footnote:
+            add_footnote(footnote)
         return footnotes
 
     def visit_footnote_item(self, node, children):
@@ -690,6 +689,49 @@ class PageVisitor(NodeVisitor):
     #
     # Other visitors
     #
+    def visit_kuma(self, node, children):
+        name = children[1]
+        assert isinstance(name, text_type), type(name)
+
+        argslist = children[2]
+        if isinstance(argslist, Node):
+            assert argslist.start == argslist.end
+            args = []
+        else:
+            assert isinstance(argslist, list), type(argslist)
+            assert len(argslist) == 1
+            args = argslist[0]
+        assert isinstance(args, list), type(args)
+
+        return {
+            'type': 'kuma', 'name': name, 'args': args,
+            'start': node.start, 'end': node.end}
+
+    visit_kuma_name = _visit_content
+
+    def visit_kuma_arglist(self, node, children):
+        arg0 = children[1]
+        argrest = children[2]
+        args = []
+        if arg0:
+            args.append(arg0)
+        if isinstance(argrest, Node):
+            # No additional args
+            assert argrest.start == argrest.end
+        else:
+            for _, arg in argrest:
+                args.append(arg)
+        return args
+
+    def visit_kuma_arg(self, node, children):
+        assert isinstance(children, list)
+        assert len(children) == 1
+        item = children[0]
+        assert isinstance(item, text_type)
+        return item
+
+    visit_kuma_bare_arg = _visit_content
+
     def visit_attrs(self, node, children):
         return children  # Even if empty list
 
@@ -758,8 +800,16 @@ class PageVisitor(NodeVisitor):
         return normal.strip()
 
     def unquote(self, text):
-        assert text.startswith('"') and text.endswith('"')
-        return text[1:-1]
+        """Unquote strings.
+
+        Used in the footnotes parser.  Might be removed if it is replaced with
+        a compat_cell tokenizer using kuma rule
+        """
+        if text.startswith('"') or text.startswith("'"):
+            if text[0] != text[-1]:
+                raise ValueError(text)
+            return text[1:-1]
+        return text
 
     #
     # API lookup methods
@@ -833,7 +883,7 @@ class PageVisitor(NodeVisitor):
             clean_version = raw_version
         else:
             clean_version = raw_version + '.0'
-        if not str(browser['id']).startswith('_'):
+        if not is_fake_id(browser['id']):
             # Might be known version
             try:
                 version = Version.objects.get(
@@ -853,8 +903,8 @@ class PageVisitor(NodeVisitor):
 
     def support_id(self, version_id, feature_id):
         support = None
-        real_version = not str(version_id).startswith('_')
-        real_feature = not str(feature_id).startswith('_')
+        real_version = not is_fake_id(version_id)
+        real_feature = not is_fake_id(feature_id)
         if real_version and real_feature:
             # Might be known version
             try:
@@ -876,6 +926,7 @@ class PageVisitor(NodeVisitor):
     def cell_to_feature(self, cell):
         """Parse cell items as a feature (first column)"""
         name_bits = []
+        name_replacements = [('</code> ,', '</code>,')]
         feature = {}
         assert cell[0]['type'] == 'td'
         for item in cell[1:]:
@@ -883,12 +934,33 @@ class PageVisitor(NodeVisitor):
                 pass  # Discard breaks in feature names
             elif item['type'] == 'text':
                 name_bits.append(item['content'])
+            elif item['type'] == 'version':
+                # Not really a version - need to strip the trailing space
+                v = item['version']
+                name_replacements.append(('%s ' % v, '%s' % v))
+                name_bits.append(v)
             elif item['type'] == 'code_block':
                 name_bits.append('<code>%s</code>' % item['content'])
             elif item['type'] == 'kuma':
-                if item['name'] == 'experimental_inline':
+                kname = item['name'].lower()
+                if kname == 'experimental_inline':
                     assert 'experimental' not in feature
                     feature['experimental'] = True
+                elif kname == 'non-standard_inline':
+                    assert 'standardized' not in feature
+                    feature['standardized'] = False
+                elif kname == 'not_standard_inline':
+                    assert 'standardized' not in feature
+                    feature['standardized'] = False
+                elif kname == 'deprecated_inline':
+                    assert 'obsolete' not in feature
+                    feature['obsolete'] = True
+                elif kname == 'htmlelement':
+                    name_bits.append(
+                        '<code>&lt;%s&gt;</code>' %
+                        self.unquote(item['args'][0]))
+                elif kname == 'domxref':
+                    name_bits.append(self.unquote(item['args'][0]))
                 else:
                     if item['args']:
                         args = '(' + ', '.join(item['args']) + ')'
@@ -897,14 +969,21 @@ class PageVisitor(NodeVisitor):
                     self.errors.append((
                         item['start'], item['end'],
                         'Unknown kuma function %s%s' % (item['name'], args)))
+            elif item['type'] == 'footnote_id':
+                self.errors.append((
+                    item['start'], item['end'],
+                    'Footnotes are not allowed on features'))
             else:
                 raise ValueError("Unknown item!", item)
         assert name_bits
-        if len(name_bits) == 1 and name_bits[0].startswith('<code>'):
+        if (len(name_bits) == 1 and isinstance(name_bits[0], text_type) and
+                name_bits[0].startswith('<code>')):
             feature['canonical'] = True
             name = name_bits[0][6:-7]  # Trim out surrounding <code>xx</code>
         else:
-            name = ' '.join(name_bits).replace('</code> ,', '</code>,')
+            name = ' '.join(name_bits)
+            for old, new in name_replacements:
+                name = name.replace(old, new)
         f_id, slug = self.feature_id_and_slug(name)
         feature['name'] = name
         feature['id'] = f_id
@@ -948,22 +1027,27 @@ class PageVisitor(NodeVisitor):
             if item['type'] == 'version':
                 version_found = item['version']
             elif item['type'] == 'footnote_id':
-                assert 'footnote_id' not in support
-                support['footnote_id'] = (
-                    item['footnote_id'], item['start'], item['end'])
+                if 'footnote_id' in support:
+                    self.errors.append((
+                        item['start'], item['end'],
+                        'Only one footnote allowed.'))
+                else:
+                    support['footnote_id'] = (
+                        item['footnote_id'], item['start'], item['end'])
             elif item['type'] == 'kuma':
+                kname = item['name'].lower()
                 # See https://developer.mozilla.org/en-US/docs/Template:<name>
-                if item['name'] == 'CompatVersionUnknown':
+                if kname == 'compatversionunknown':
                     version_found = ''
-                elif item['name'] == 'CompatUnknown':
+                elif kname == 'compatunknown':
                     # Could use support = unknown, but don't bother
                     pass
-                elif item['name'] == 'CompatNo':
+                elif kname == 'compatno':
                     version_found = ''
                     support['support'] = 'no'
-                elif item['name'] == 'property_prefix':
+                elif kname == 'property_prefix':
                     support['prefix'] = self.unquote(item['args'][0])
-                elif item['name'] == 'CompatGeckoDesktop':
+                elif kname == 'compatgeckodesktop':
                     gversion = self.unquote(item['args'][0])
                     version_found = self.geckodesktop_to_firefox.get(gversion)
                     if not version_found:
@@ -972,13 +1056,13 @@ class PageVisitor(NodeVisitor):
                         except ValueError:
                             nversion = 0
                         if nversion >= 5:
-                            version_found = str(nversion)
+                            version_found = text_type(nversion)
                         else:
                             version_found = None
                             self.errors.append((
                                 item['start'], item['end'],
                                 'Unknown Gecko version "%s"' % gversion))
-                elif item['name'] == 'CompatGeckoMobile':
+                elif kname == 'compatgeckomobile':
                     gversion = self.unquote(item['args'][0])
                     version_found = gversion.split('.', 1)[0]
                     if version_found == '2':
@@ -1017,12 +1101,20 @@ class PageVisitor(NodeVisitor):
                     assert not support.get('id')
                 if item['type'] == 'p_close':
                     p_depth = 0
+            elif item['type'] == 'removed':
+                support['support'] = 'no'
             elif item['type'] == 'text':
-                # Inline text requires human intervention to move to a
-                #  footnote, convert to a normal version, or remove entirely.
+                if item['content']:
+                    # Inline text requires human intervention to move to a
+                    #  footnote, convert to a normal version, or remove.
+                    self.errors.append((
+                        item['start'], item['end'],
+                        'Unknown support text "%s"' % item['content']))
+            elif item['type'] == 'code_block':
                 self.errors.append((
                     item['start'], item['end'],
-                    'Unknown support text "%s"' % item['content']))
+                    'Unknown support text <code>%s</code>' %
+                    item['content']))
             else:
                 raise ValueError("Unknown item", item)
 
@@ -1030,9 +1122,7 @@ class PageVisitor(NodeVisitor):
             if version_found is not None:
                 version_id, version_name = self.version_id_and_name(
                     version_found, browser)
-                unknown_version = str(version_id).startswith('_')
-                unknown_browser = str(browser['id']).startswith('_')
-                if unknown_version and not unknown_browser:
+                if is_fake_id(version_id) and not is_fake_id(browser['id']):
                     self.errors.append((
                         item['start'], item['end'],
                         'Unknown version "%s" for browser "%s"'
@@ -1096,20 +1186,20 @@ class PageVisitor(NodeVisitor):
         rendered = text
         for match in self.re_kuma.finditer(text):
             name = match.group('name')
-            kuma = ''
+            kname = name.lower()
+            kuma = match.group()
             if match.group('args'):
                 arglist = match.group('args').split(',')
             else:
                 arglist = []
 
-            if name == 'cssxref':
+            if kname == 'cssxref':
                 # https://developer.mozilla.org/en-US/docs/Template:cssxref
                 # The MDN version does a lookup and creates a link
                 # This version just turns it into a code block
                 kuma = "<code>%s</code>" % self.unquote(arglist[0])
             else:
-                rendered = (
-                    rendered[:match.start()] + rendered[match.end() + 1:])
+                kuma = ""
                 if arglist:
                     args = '(' + ', '.join(arglist) + ')'
                 else:
@@ -1170,7 +1260,7 @@ def scrape_feature_page(fp):
     """Scrape a FeaturePage object"""
     en_content = fp.translatedcontent_set.get(locale='en-US')
     fp_data = fp.reset_data()
-    main_feature_id = str(fp.feature.id)
+    main_feature_id = text_type(fp.feature.id)
     data = scrape_page(en_content.raw, fp.feature)
     fp_data['meta']['scrape']['raw'] = data
 
@@ -1184,23 +1274,23 @@ def scrape_feature_page(fp):
         if spec_id:
             spec = Specification.objects.get(id=spec_id)
             section_ids = [
-                str(s_id) for s_id in spec.sections.values_list(
+                text_type(s_id) for s_id in spec.sections.values_list(
                     'id', flat=True)]
             spec_content = OrderedDict((
-                ('id', str(spec_id)),
+                ('id', text_type(spec_id)),
                 ('slug', spec.slug),
                 ('mdn_key', spec.mdn_key),
                 ('name', spec.name),
                 ('uri', spec.uri),
                 ('links', OrderedDict((
-                    ('maturity', str(spec.maturity_id)),
+                    ('maturity', text_type(spec.maturity_id)),
                     ('sections', section_ids)
                 )))))
             specifications[spec_id] = spec_content
 
             mat = spec.maturity
             mat_content = OrderedDict((
-                ('id', str(mat.id)),
+                ('id', text_type(mat.id)),
                 ('slug', mat.slug),
                 ('name', mat.name)))
             maturities[mat.id] = mat_content
@@ -1227,20 +1317,20 @@ def scrape_feature_page(fp):
         if section_id:
             section = Section.objects.get(id=section_id)
             feature_ids = [
-                str(f_id) for f_id in section.features.values_list(
+                text_type(f_id) for f_id in section.features.values_list(
                     'id', flat=True)]
             if main_feature_id not in feature_ids:
                 feature_ids.append(main_feature_id)
             section_content = OrderedDict((
-                ('id', str(section_id)),
+                ('id', text_type(section_id)),
                 ('number', section.number),
                 ('name', section.name),
                 ('subpath', section.subpath),
                 ('note', section.note),
                 ('links', OrderedDict((
-                    ('specification', str(spec_id)),)))))
+                    ('specification', text_type(spec_id)),)))))
         else:
-            section_id = str(spec_id) + '_' + row['section.subpath']
+            section_id = text_type(spec_id) + '_' + row['section.subpath']
             section_content = OrderedDict((
                 ('id', section_id),
                 ('number', OrderedDict()),
@@ -1248,12 +1338,12 @@ def scrape_feature_page(fp):
                 ('subpath', OrderedDict()),
                 ('note', OrderedDict()),
                 ('links', OrderedDict((
-                    ('specification', str(spec_id)),)))))
+                    ('specification', text_type(spec_id)),)))))
         section_content['name']['en'] = row['section.name']
         section_content['subpath']['en'] = row['section.subpath']
         section_content['note']['en'] = row['section.note']
         sections[section_id] = section_content
-        fp_data['features']['links']['sections'].append(str(section_id))
+        fp_data['features']['links']['sections'].append(text_type(section_id))
 
     # Load compatibility section
     tabs = []
@@ -1261,7 +1351,7 @@ def scrape_feature_page(fp):
     versions = {}
     features = {}
     supports = {}
-    compat_table_supports = OrderedDict(((str(fp.feature.id), {}),))
+    compat_table_supports = OrderedDict(((text_type(fp.feature.id), {}),))
     footnotes = OrderedDict()
     tab_name = {
         'desktop': 'Desktop Browsers',
@@ -1275,7 +1365,7 @@ def scrape_feature_page(fp):
         ))
         # Load Browsers (first row)
         for b in table['browsers']:
-            if str(b['id']).startswith('_'):
+            if is_fake_id(b['id']):
                 browser_content = OrderedDict((
                     ('id', b['id']),
                     ('slug', ''),
@@ -1285,7 +1375,7 @@ def scrape_feature_page(fp):
             else:
                 browser = Browser.objects.get(id=b['id'])
                 browser_content = OrderedDict((
-                    ('id', str(browser.id)),
+                    ('id', text_type(browser.id)),
                     ('slug', browser.slug),
                     ('name', browser.name),
                     ('note', browser.note),
@@ -1295,7 +1385,7 @@ def scrape_feature_page(fp):
 
         # Load Features (first column)
         for f in table['features']:
-            if str(f['id']).startswith('_'):
+            if is_fake_id(f['id']):
                 # Fake feature
                 if f.get('canonical'):
                     fname = f['name']
@@ -1313,23 +1403,24 @@ def scrape_feature_page(fp):
                     ('links', OrderedDict((
                         ('sections', []),
                         ('supports', []),
-                        ('parent', str(fp.feature.id)),
+                        ('parent', text_type(fp.feature.id)),
                         ('children', []))))))
             else:
                 feature = Feature.objects.get(id=f['id'])
                 section_ids = [
-                    str(s_id) for s_id in
+                    text_type(s_id) for s_id in
                     feature.sections.values_list('pk', flat=True)]
                 support_ids = [
-                    str(s_id) for s_id in
+                    text_type(s_id) for s_id in
                     sorted(feature.supports.values_list('pk', flat=True))]
                 parent_id = (
-                    str(feature.parent_id) if feature.parent_id else None)
+                    text_type(feature.parent_id) if feature.parent_id
+                    else None)
                 children_ids = [
-                    str(c_id) for c_id in
+                    text_type(c_id) for c_id in
                     feature.children.values_list('pk', flat=True)]
                 feature_content = OrderedDict((
-                    ('id', str(f['id'])),
+                    ('id', text_type(f['id'])),
                     ('slug', feature.slug),
                     ('mdn_uri', feature.mdn_uri or None),
                     ('experimental', feature.experimental),
@@ -1347,7 +1438,7 @@ def scrape_feature_page(fp):
 
         # Load Versions
         for v in table['versions']:
-            if str(v['id']).startswith('_'):
+            if is_fake_id(v['id']):
                 # New Version
                 version_content = OrderedDict((
                     ('id', v['id']),
@@ -1358,12 +1449,12 @@ def scrape_feature_page(fp):
                     ('release_notes_uri', None),
                     ('note', None),
                     ('links', OrderedDict((
-                        ('browser', str(v['browser'])),)))))
+                        ('browser', text_type(v['browser'])),)))))
             else:
                 # Existing Version
                 version = Version.objects.get(id=v['id'])
                 version_content = OrderedDict((
-                    ('id', str(v['id'])),
+                    ('id', text_type(v['id'])),
                     ('version', version.version),
                     ('release_day', date_to_iso(version.release_day)),
                     ('retirement_day', date_to_iso(version.retirement_day)),
@@ -1372,12 +1463,12 @@ def scrape_feature_page(fp):
                     ('note', version.note or None),
                     ('order', version._order),
                     ('links', OrderedDict((
-                        ('browser', str(version.browser_id)),)))))
+                        ('browser', text_type(version.browser_id)),)))))
             versions.setdefault(v['id'], version_content)
 
         # Load Supports
         for s in table['supports']:
-            if str(s['id']).startswith('_'):
+            if is_fake_id(s['id']):
                 # New support
                 support_content = OrderedDict((
                     ('id', s['id']),
@@ -1393,8 +1484,8 @@ def scrape_feature_page(fp):
                     ('note', s.get('note')),
                     ('footnote', None),
                     ('links', OrderedDict((
-                        ('version', str(s['version'])),
-                        ('feature', str(s['feature'])))))))
+                        ('version', text_type(s['version'])),
+                        ('feature', text_type(s['feature'])))))))
                 if s.get('footnote'):
                     support_content['footnote'] = {'en': s['footnote']}
                 version_id = s['version']
@@ -1403,7 +1494,7 @@ def scrape_feature_page(fp):
                 # Existing support
                 support = Support.objects.get(id=s['id'])
                 support_content = OrderedDict((
-                    ('id', str(support.id)),
+                    ('id', text_type(support.id)),
                     ('support', support.support),
                     ('prefix', support.prefix or None),
                     ('prefix_mandatory', support.prefix_mandatory),
@@ -1415,19 +1506,20 @@ def scrape_feature_page(fp):
                     ('note', support.note or None),
                     ('footnote', support.footnote or None),
                     ('links', OrderedDict((
-                        ('version', str(support.version_id)),
-                        ('feature', str(support.feature_id)))))))
+                        ('version', text_type(support.version_id)),
+                        ('feature', text_type(support.feature_id)))))))
                 version_id = support.version_id
                 feature_id = support.feature_id
             supports.setdefault(s['id'], support_content)
             if support_content['footnote']:
-                footnotes[str(s['id'])] = len(footnotes) + 1
+                footnotes[text_type(s['id'])] = len(footnotes) + 1
 
             # Set the meta lookup
             version = versions[version_id]
             browser_id = version['links']['browser']
             compat_table_supports[feature_id].setdefault(browser_id, [])
-            compat_table_supports[feature_id][browser_id].append(str(s['id']))
+            compat_table_supports[feature_id][browser_id].append(
+                text_type(s['id']))
 
         tabs.append(tab)
 
@@ -1483,6 +1575,11 @@ def end_of_line(text, pos):
         return len(text)
 
 
+def is_fake_id(_id):
+    # Detect if an ID is a real ID
+    return isinstance(_id, text_type) and _id[0] == '_'
+
+
 def range_error_to_html(page, start, end, reason, rule=None):
     """Convert a range error to HTML"""
     assert page, "Page can not be empty"
@@ -1496,7 +1593,7 @@ def range_error_to_html(page, start, end, reason, rule=None):
     end_line = page.count('\n', 0, end)
     ctx_start_line = max(0, start_line - 2)
     ctx_end_line = min(end_line + 3, page.count('\n'))
-    digits = len(str(ctx_end_line))
+    digits = len(text_type(ctx_end_line))
     context_lines = page.split('\n')[ctx_start_line:ctx_end_line]
 
     # Highlight the errored portion
@@ -1518,7 +1615,8 @@ def range_error_to_html(page, start, end, reason, rule=None):
 
     for num, (line, err_line) in enumerate(zip(context_lines, err_lines)):
         lnum = ctx_start_line + num
-        html_bits.append(str(lnum).rjust(digits) + ' ' + escape(line) + '\n')
+        html_bits.append(
+            text_type(lnum).rjust(digits) + ' ' + escape(line) + '\n')
         if '^' in err_line:
             html_bits.append('*' * digits + ' ' + err_line + '\n')
 
@@ -1539,6 +1637,6 @@ def slugify(word, length=50, suffix=""):
     slugged = ''.join(out)
     while '__' in slugged:
         slugged = slugged.replace('__', '_')
-    suffix = str(suffix) if suffix else ""
+    suffix = text_type(suffix) if suffix else ""
     with_suffix = slugged[slice(length - len(suffix))] + suffix
     return with_suffix

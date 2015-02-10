@@ -230,6 +230,34 @@ window.WPC = {
                             td.appendChild(span1);
                             td.appendChild(span2);
                         }
+                        if (!feature.standardized) {
+                            span1 = document.createElement('span');
+                            span1.setAttribute('class', 'glyphicon glyphicon-warning-sign');
+                            span1.setAttribute('style', 'color: #db0;');
+                            span1.setAttribute('aria-hidden', 'true');
+                            span1.setAttribute('data-toggle', 'tooltip');
+                            span1.setAttribute('data-placement', 'top');
+                            span1.setAttribute('title', 'This API has not been standardized.');
+                            span2 = document.createElement('span');
+                            span2.setAttribute('class', 'sr-only');
+                            span2.appendChild(document.createTextNode('This API has not been standardized.'));
+                            td.appendChild(span1);
+                            td.appendChild(span2);
+                        }
+                        if (feature.obsolete) {
+                            span1 = document.createElement('span');
+                            span1.setAttribute('class', 'glyphicon glyphicon-thumbs-down');
+                            span1.setAttribute('style', 'color: #000;');
+                            span1.setAttribute('aria-hidden', 'true');
+                            span1.setAttribute('data-toggle', 'tooltip');
+                            span1.setAttribute('data-placement', 'top');
+                            span1.setAttribute('title', 'This deprecated API should no longer be used, but will probably still work.');
+                            span2 = document.createElement('span');
+                            span2.setAttribute('class', 'sr-only');
+                            span2.appendChild(document.createTextNode('This deprecated API should no longer be used, but will probably still work.'));
+                            td.appendChild(span1);
+                            td.appendChild(span2);
+                        }
                         tr.appendChild(td);
 
                         for (browserIdx = 0; browserIdx < browserCnt; browserIdx += 1) {
@@ -264,6 +292,9 @@ window.WPC = {
                                         }
                                     }
                                     if (support.support === 'no') {
+                                        if (version.version) {
+                                            td.appendChild(document.createTextNode(' '));
+                                        }
                                         nosupport = document.createElement('span');
                                         nosupport.setAttribute('style', 'color: #f00;');
                                         nosupport.appendChild(document.createTextNode('Not supported'));
