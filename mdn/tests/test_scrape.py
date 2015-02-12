@@ -970,6 +970,11 @@ class TestPageVisitor(ScrapeTestCase):
             '{{CompatGeckoMobile("2")}}',
             [{'version': '4.0'}], [{'support': 'yes'}])
 
+    def test_compat_row_cell_support_compatandroid_3(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatAndroid("3.0")}}',
+            [{'version': '3.0'}], [{'support': 'yes'}])
+
     def test_compat_row_cell_support_unknown_kuma(self):
         self.assert_compat_row_cell_support(
             '{{UnknownKuma}}',

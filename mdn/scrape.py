@@ -90,7 +90,8 @@ compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
 compat_div_id = qtext
 compat_table = "<table class=\"compat-table\">" _ compat_body _ "</table>" _
 compat_body = "<tbody>" _ compat_headers _ compat_rows* _ "</tbody>"
-compat_headers = tr_open _ "<th>Feature</th>" _ compat_client_cells _ "</tr>" _
+compat_headers = tr_open _ th_open _ "Feature</th>" _ compat_client_cells
+    _ "</tr>" _
 compat_client_cells = compat_client_cell*
 compat_client_cell = th_open _ compat_client_name _ "</th>" _
 compat_client_name = ~r"(?P<content>.*?(?=</th>))"s
@@ -488,7 +489,7 @@ class PageVisitor(NodeVisitor):
         }
 
     def visit_compat_headers(self, node, children):
-        compat_client_cells = children[4]
+        compat_client_cells = children[6]
         assert isinstance(compat_client_cells, list), type(compat_client_cells)
         for cell in compat_client_cells:
             assert isinstance(cell, dict), type(cell)
@@ -824,6 +825,7 @@ class PageVisitor(NodeVisitor):
         'Safari (WebKit)': 'Safari',
         'Windows Phone': 'IE Mobile',
         'IE Phone': 'IE Mobile',
+        'IE': 'Internet Explorer',
     }
 
     def browser_id_name_and_slug(self, name):
@@ -1024,6 +1026,10 @@ class PageVisitor(NodeVisitor):
         support = {}
         p_depth = 0
 
+        kuma_compat_versions = [
+            'compat' + b for b in ('android', 'chrome', 'ie', 'opera',
+                                   'operamobile', 'safari')]
+
         assert cell[0]['type'] == 'td'
         for item in cell[1:]:
             version_found = None
@@ -1071,6 +1077,8 @@ class PageVisitor(NodeVisitor):
                     version_found = gversion.split('.', 1)[0]
                     if version_found == '2':
                         version_found = '4'
+                elif kname in kuma_compat_versions:
+                    version_found = self.unquote(item['args'][0])
                 else:
                     if item['args']:
                         args = '(' + ', '.join(item['args']) + ')'
