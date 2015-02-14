@@ -14,6 +14,30 @@ from webplatformcompat.tests.base import TestCase
 
 
 class TestGrammar(TestCase):
+    def test_other_h2_plain(self):
+        text = "<h2 id=\"Summary\">Summary</h2>"
+        parsed = page_grammar['other_h2'].parse(text)
+        capture = parsed.children[6]
+        self.assertEqual("Summary", capture.text)
+
+    def test_other_h2_code(self):
+        text = "<h2 id=\"Summary\"><code>Summary</code></h2>"
+        parsed = page_grammar['other_h2'].parse(text)
+        capture = parsed.children[6]
+        self.assertEqual("<code>Summary</code>", capture.text)
+
+    def test_th_elem_plain(self):
+        text = "<th scope=\"col\">Plain Text</th>"
+        parsed = page_grammar['th_elem'].parse(text)
+        capture = parsed.children[2]
+        self.assertEqual("Plain Text", capture.text)
+
+    def test_th_elem_code(self):
+        text = "<th scope=\"col\"><code>Code</code></th>"
+        parsed = page_grammar['th_elem'].parse(text)
+        capture = parsed.children[2]
+        self.assertEqual("<code>Code</code>", capture.text)
+
     def test_specdesc_td_empty(self):
         text = '<td></td>'
         parsed = page_grammar['specdesc_td'].parse(text)
