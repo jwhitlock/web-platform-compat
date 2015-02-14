@@ -152,6 +152,7 @@ class ScrapeTestCase(TestCase):
   </tbody>
  </table>
 </div>
+<p>&nbsp;</p>
 """
     # From Web/CSS/background-size?raw
     # colspan="3" on the Safari column
@@ -243,6 +244,7 @@ Browser compatibility</h2>
 </div>
 """
     complex_compat_footnotes = """\
+<p>&nbsp;</p>
 <p>[1] Opera 9.5's computation of the background positioning area is incorrect\
  for fixed backgrounds.  Opera 9.5 also interprets the two-value form as a\
  horizontal scaling factor and, from appearances, a vertical <em>clipping</em>\
@@ -1629,14 +1631,14 @@ class TestScrape(ScrapeTestCase):
                      'support': 'yes'},
                 ],
             }],
-            'footnotes': {'3': (fn_3, 3757, 3830)},
+            'footnotes': {'3': (fn_3, 3771, 3844)},
             'issues': [],
             'errors': [
                 (1689, 1704, 'Unknown support text "with some bugs"'),
                 (1770, 1799,
                  'Unknown support text "but from an older CSS3 draft"'),
                 (2918, 2933, 'Unknown support text "(maybe earlier)"'),
-                (3757, 3830, 'Footnote [3] not used')
+                (3771, 3844, 'Footnote [3] not used')
             ]
         }
         self.assertScrape(self.complex_page, expected)
@@ -1742,7 +1744,7 @@ class TestScrape(ScrapeTestCase):
             (701, 730, 'Unknown support text "but from an older CSS3 draft"'),
             (1850, 1865, 'Unknown support text "(maybe earlier)"'),
             (1026, 1030, 'Footnote [50] not found'),
-            (2689, 2762, 'Footnote [3] not used'),
+            (2703, 2776, 'Footnote [3] not used'),
         ]
         self.assertEqual(expected_errors, actual['errors'])
 

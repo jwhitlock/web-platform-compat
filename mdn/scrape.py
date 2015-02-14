@@ -78,7 +78,8 @@ inner_td = ~r"(?P<content>.*?(?=</td>))"s
 #
 # Browser Compatibility section
 #
-compat_section = _ compat_h2 _ compat_kuma _ compat_divs compat_footnotes?
+compat_section = _ compat_h2 _ compat_kuma _ compat_divs p_empty*
+    compat_footnotes?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
 compat_kuma = (compat_kuma_div / compat_kuma_p)
@@ -148,6 +149,8 @@ kuma_arg_rest = kuma_func_arg kuma_arg
 tr_open = "<tr" _ opt_attrs ">"
 th_open = "<th" _ opt_attrs ">"
 td_open = "<td" _ opt_attrs ">"
+
+p_empty = _ "<p>" _ "&nbsp;"* _ "</p>" _
 
 attrs = attr+
 opt_attrs = attr*
@@ -359,7 +362,7 @@ class PageVisitor(NodeVisitor):
     #
     def visit_compat_section(self, node, children):
         compat_divs = children[5]
-        footnotes = children[6][0]
+        footnotes = children[7][0]
 
         assert isinstance(compat_divs, list), type(compat_divs)
         for div in compat_divs:
