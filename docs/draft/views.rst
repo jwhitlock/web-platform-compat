@@ -1134,9 +1134,84 @@ to the feature_.  This will facilitate displaying a history of
 the compatibility tables, for the purpose of reviewing changes and reverting
 vandalism.
 
+Updating View with PUT
+~~~~~~~~~~~~~~~~~~~~~~
+
+`view_features` supports PUT for bulk updates of support data.  Here is a simple
+example that adds a new subfeature without support:
+
+.. code-block:: http
+
+    PUT /api/v1/view_features/html-element-address HTTP/1.1
+    Host: browsersupports.org
+    Content-Type: application/vnd.api+json
+    Authorization: Bearer mF_9.B5f-4.1JqM
+
+.. code-block:: json
+
+    {
+        "features": {
+            "id": "816",
+            "slug": "html-element-address",
+            "mdn_uri": {
+                "en": "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/address"
+            },
+            "experimental": false,
+            "standardized": true,
+            "stable": true,
+            "obsolete": false,
+            "name": "address",
+            "links": {
+                "sections": ["746", "421", "70"],
+                "supports": [],
+                "parent": "800",
+                "children": ["191"],
+                "history_current": "216",
+                "history": ["216"]
+            }
+        },
+        "linked": {
+            "features": [
+                {
+                    "id": "_New Subfeature",
+                    "slug": "html-address-new-subfeature",
+                    "name": {
+                        "en": "New Subfeature"
+                    },
+                    "links": {
+                        "parent": "816"
+                    }
+                }
+            ]
+        }
+    }
+
+The response is the feature view with new and updated items, or an error
+response.
+
+This is a trivial use case, which would be better implemented by creating the
+feature_ directly, but it can be extended to bulk updates of existing feature
+views, or for first-time importing of subfeatures and support data.  It has
+some quirks:
+
+* New items should be identified with an ID starting with an underscore
+  (``_``).  Relations to new items should use the underscored IDs.
+* Only feature_, support_, and section_ resources can be added or updated.
+  Features must be the target feature or a descendant, and supports and
+  sections are restricted to those features.
+* Deletions are not supported.
+* Other resources (browsers_, versions_, etc) can not be added or changed.
+  This includes adding links to new resources.
+
+Once the MDN import is complete, this PUT interface will be deprecated in
+favor of direct POST and PUT to the standard resource API.
+
+.. _browsers: resources.html#browsers
 .. _feature: resources.html#features
-.. _support: resources.html#versions-feature
+.. _section: resources.html#sections
+.. _support: resources.html#supports
 .. _version: resources.html#versions
+.. _versions: resources.html#versions
 
 .. _changeset: change-control#changeset
 

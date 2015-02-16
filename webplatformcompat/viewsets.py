@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from django.contrib.auth.models import User
-from rest_framework.renderers import BrowsableAPIRenderer
+from rest_framework.mixins import UpdateModelMixin
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.viewsets import ModelViewSet as BaseModelViewSet
 from rest_framework.viewsets import ReadOnlyModelViewSet as BaseROModelViewSet
 
@@ -170,10 +171,13 @@ class HistoricalVersionViewSet(ReadOnlyModelViewSet):
 # Views
 #
 
-class ViewFeaturesViewSet(CachedViewMixin, ReadOnlyModelViewSet):
+class ViewFeaturesViewSet(
+        PartialPutMixin, CachedViewMixin, UpdateModelMixin,
+        ReadOnlyModelViewSet):
     model = Feature
     serializer_class = ViewFeatureSerializer
     filter_fields = ('slug',)
+    parser_classes = (JsonApiParser, FormParser, MultiPartParser)
     renderer_classes = (
         JsonApiRenderer, BrowsableAPIRenderer, JsonApiTemplateHTMLRenderer)
     template_name = 'webplatformcompat/feature.basic.jinja2'

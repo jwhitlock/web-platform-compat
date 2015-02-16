@@ -144,7 +144,8 @@ class Resource(object):
                 return self._data.get(name, None)
             else:
                 return None
-        raise AttributeError
+        raise AttributeError(
+            "%r object has no attribute %r" % (self.__class__, name))
 
     def __setattr__(self, name, value):
         """Set resource properties and links."""
@@ -190,7 +191,7 @@ class Resource(object):
                 resource = self._collection.get(
                     link.linked_type, link.id)
                 assert resource, \
-                    'When looking up "%s", could not find ID "%s" in %s.' % (
+                    'When looking up "%s", could not find ID %r in %s.' % (
                         orig_name, link.id, link.linked_type)
             data_item = getattr(resource, name)
             if data_item is None:
@@ -258,6 +259,7 @@ class Version(Resource):
     _writeable_link_fields = {
         'browser': ('browsers', False),
     }
+    _readonly_property_fields = ('order',)
     _readonly_link_fields = {
         'supports': ('supports', True),
         'history': ('historical_versions', True),
@@ -330,6 +332,8 @@ class Section(Resource):
 
     @property
     def number_en(self):
+        if self.number is None:
+            return None
         return self.number['en']
 
 
@@ -679,31 +683,38 @@ class CollectionChangeset(object):
         # Summarize new resources
         for item in self.changes['new'].values():
             resource_type = item._resource_type
-            new_json = dumps(
-                item.to_json_api(with_sorted=False),
-                indent=2, separators=(',', ': '))
-            out.append("New %s:\n%s" % (resource_type, new_json))
+            rep = self.format_item(item)
+            out.append("New %s:\n%s" % (resource_type, rep))
 
         # Summarize deleted resources
         for item in self.changes['deleted'].values():
             url = client.url(item._resource_type, item.id.id)
-            old_json = dumps(
-                item.to_json_api(),
-                indent=2, separators=(',', ': '))
-            out.append("Deleted %s:\n%s" % (url, old_json))
+            rep = self.format_item(item)
+            out.append("Deleted %s:\n%s" % (url, rep))
 
         # Summarize changed resources
         for item in self.changes['changed'].values():
             url = client.url(item._resource_type, item.id.id)
-            orig_item = item._original
-            orig_json = dumps(
-                orig_item.to_json_api(),
-                indent=2, separators=(',', ': '))
-            new_json = dumps(
-                item.to_json_api(),
-                indent=2, separators=(',', ': '))
-            diff = ''.join(Differ().compare(
-                orig_json.splitlines(1), new_json.splitlines(1)))
-            out.append("Changed: %s:\n%s" % (url, diff))
+            rep = self.format_diff(item)
+            out.append("Changed: %s:\n%s" % (url, rep))
 
         return '\n'.join(out)
+
+    def format_item(self, item):
+        """Create human-friendly representation of an item"""
+        return dumps(
+            item.to_json_api(with_sorted=False),
+            indent=2, separators=(',', ': '))
+
+    def format_diff(self, item):
+        """Create human-friendly representation of a difference"""
+        orig_item = item._original
+        orig_json = dumps(
+            orig_item.to_json_api(),
+            indent=2, separators=(',', ': '))
+        new_json = dumps(
+            item.to_json_api(),
+            indent=2, separators=(',', ': '))
+        diff = ''.join(Differ().compare(
+            orig_json.splitlines(1), new_json.splitlines(1)))
+        return diff

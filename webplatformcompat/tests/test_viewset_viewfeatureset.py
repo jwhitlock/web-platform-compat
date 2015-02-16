@@ -3,19 +3,20 @@
 """Tests for `web-platform-compat.viewsets.ViewFeaturesViewSet` class."""
 from __future__ import unicode_literals
 from datetime import date
-from json import loads
+from json import dumps, loads
 
 from django.core.urlresolvers import reverse
 from django.test.utils import override_settings
 
 from webplatformcompat.models import (
     Browser, Feature, Maturity, Section, Specification, Support, Version)
+from webplatformcompat.serializers import (
+    DjangoResourceClient, ViewFeatureExtraSerializer)
 
-from .base import APITestCase
+from .base import APITestCase, TestCase
 
 
 class TestViewFeatureViewSet(APITestCase):
-
     """Test /view_features/<feature_id>."""
 
     def test_get_list(self):
@@ -1723,3 +1724,432 @@ multipage/sections.html#the-address-element">
 """ % {'f_id': feature_816.id}
         self.assertDataEqual(expected, response.content.decode('utf-8'))
         self.assertContains(response, expected, html=True)
+
+
+class TestViewFeatureUpdates(APITestCase):
+    """Test PUT to a ViewFeature detail"""
+    longMessage = True
+
+    def setUp(self):
+        self.feature = self.create(
+            Feature, slug='feature', name={'en': "Feature"})
+        self.browser = self.create(
+            Browser, slug='browser', name={'en': 'Browser'})
+        self.version = self.create(
+            Version, browser=self.browser, version='1.0')
+        self.maturity = self.create(Maturity, slug='M', name={"en": 'Mature'})
+        self.spec = self.create(
+            Specification, slug='spec', mdn_key='SPEC', name={'en': 'Spec'},
+            uri={'en': 'http://example.com/Spec'}, maturity=self.maturity)
+
+        self.browser_data = {
+            "id": str(self.browser.id), "slug": self.browser.slug,
+            "name": self.browser.name, "note": None,
+            "links": {"versions": [str(self.version.id)]}}
+        self.version_data = {
+            "id": str(self.version.id), "version": self.version.version,
+            "release_day": None, "retirement_day": None, "note": None,
+            "status": "unknown", "release_notes_uri": None,
+            "links": {"browser": str(self.browser.id)}}
+        self.maturity_data = {
+            "id": str(self.maturity.id), "slug": self.maturity.slug,
+            "name": self.maturity.name}
+        self.spec_data = {
+            "id": str(self.spec.id), "slug": self.spec.slug,
+            "mdn_key": self.spec.mdn_key, "name": self.spec.name,
+            "uri": self.spec.uri,
+            "links": {"maturity": str(self.maturity.id), "sections": []}}
+        self.url = reverse(
+            'viewfeatures-detail', kwargs={'pk': self.feature.pk})
+
+    def json_api(self, feature_data=None, meta=None, **resources):
+        base = {'features': {"id": str(self.feature.id)}}
+        if feature_data:
+            base['features'].update(feature_data)
+        if meta:
+            base['meta'] = meta
+        if resources:
+            base['linked'] = {}
+        for name, values in resources.items():
+            base['linked'][name] = values
+        return dumps(base)
+
+    def test_post_just_feature(self):
+        data = {
+            "mdn_uri": {
+                "en": "https://developer.mozilla.org/en-US/docs/feature",
+                "fr": "https://developer.mozilla.org/fr/docs/feature",
+            },
+            "name": {
+                "en": "The Feature",
+                "fr": "Le Feature",
+            }
+        }
+        json_data = self.json_api(data)
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        f = Feature.objects.get(id=self.feature.id)
+        self.assertEqual(f.mdn_uri, data['mdn_uri'])
+        self.assertEqual(f.name, data['name'])
+
+    def test_post_add_subfeature(self):
+        subfeature = {
+            "id": "_new", "slug": "subfeature", "name": {"en": "Sub Feature"},
+            "links": {"parent": str(self.feature.pk)}}
+        json_data = self.json_api(features=[subfeature])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        subfeature = Feature.objects.get(slug='subfeature')
+        self.assertEqual(subfeature.parent, self.feature)
+        feature = Feature.objects.get(id=self.feature.id)
+        self.assertEqual(list(feature.children.all()), [subfeature])
+
+    def test_post_add_second_subfeature(self):
+        sf1 = self.create(
+            Feature, slug='sf1', name={'en': 'sf1'}, parent=self.feature)
+        sf2_data = {
+            "id": "_sf2", "slug": "sf2", "name": {"en": "Sub Feature 2"},
+            "links": {"parent": str(self.feature.pk)}}
+        json_data = self.json_api(features=[sf2_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        sf2 = Feature.objects.get(slug='sf2')
+        self.assertEqual(sf2.parent, self.feature)
+        feature = Feature.objects.get(id=self.feature.id)
+        self.assertEqual(list(feature.children.all()), [sf1, sf2])
+
+    def test_post_update_existing_subfeature(self):
+        subfeature = self.create(
+            Feature, slug='subfeature', name={'en': 'subfeature'},
+            parent=self.feature)
+        subfeature_data = {
+            "id": str(subfeature.id), "slug": "subfeature",
+            "name": {"en": "subfeature 1"},
+            "links": {"parent": str(self.feature.pk)}}
+        json_data = self.json_api(features=[subfeature_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        subfeature = Feature.objects.get(id=subfeature.id)
+        self.assertEqual(subfeature.parent, self.feature)
+        self.assertEqual(subfeature.name, {"en": "subfeature 1"})
+        feature = Feature.objects.get(id=self.feature.id)
+        self.assertEqual(list(feature.children.all()), [subfeature])
+
+    def test_post_add_subsupport(self):
+        subfeature_data = {
+            "id": "_new", "slug": "subfeature", "name": {"en": "Sub Feature"},
+            "links": {"parent": str(self.feature.pk)}}
+        support_data = {
+            "id": "_new_yes", "support": "yes",
+            "links": {"version": str(self.version.id), "feature": "_new"}}
+        json_data = self.json_api(
+            features=[subfeature_data], supports=[support_data],
+            versions=[self.version_data], browsers=[self.browser_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        subfeature = Feature.objects.get(slug='subfeature')
+        self.assertEqual(subfeature.parent, self.feature)
+        self.assertEqual(subfeature.name, {"en": "Sub Feature"})
+        supports = subfeature.supports.all()
+        self.assertEqual(1, len(supports))
+        support = supports[0]
+        self.assertEqual(support.version, self.version)
+        self.assertEqual('yes', support.support)
+
+    def test_post_no_change(self):
+        subfeature = self.create(
+            Feature, slug='subfeature', name={'en': 'subfeature'},
+            parent=self.feature)
+        history_count = subfeature.history.all().count()
+        subfeature_data = {
+            'slug': 'subfeature', 'mdn_uri': None,
+            'experimental': False, 'standardized': True, 'stable': True,
+            'obsolete': False, 'name': {'en': 'subfeature'},
+            'links': {'parent': str(self.feature.id), 'sections': []}}
+        json_data = self.json_api(
+            features=[subfeature_data], meta={'not': 'used'})
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        subfeature = Feature.objects.get(slug='subfeature')
+        self.assertEqual(subfeature.parent, self.feature)
+        self.assertEqual(subfeature.name, {"en": "subfeature"})
+        self.assertEqual(history_count, subfeature.history.all().count())
+
+    def test_existing_changeset(self):
+        response = self.client.post(
+            reverse('changeset-list'), dumps({}),
+            content_type="application/vnd.api+json")
+        self.assertEqual(201, response.status_code, response.content)
+        response_json = loads(response.content.decode('utf-8'))
+        changeset_id = response_json['changesets']['id']
+        c = '?changeset=%s' % changeset_id
+
+        subfeature = {
+            "id": "_new", "slug": "subfeature", "name": {"en": "Sub Feature"},
+            "links": {"parent": str(self.feature.pk)}}
+        json_data = self.json_api(features=[subfeature])
+        response = self.client.put(
+            self.url + c, data=json_data,
+            content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        subfeature = Feature.objects.get(slug='subfeature')
+        self.assertEqual(subfeature.parent, self.feature)
+        self.assertEqual(
+            int(changeset_id),
+            subfeature.history.last().history_changeset_id)
+
+        close = {'changesets': {'id': changeset_id, 'close': True}}
+        response = self.client.post(
+            reverse('changeset-detail', kwargs={'pk': changeset_id}),
+            dumps(close), content_type="application/vnd.api+json")
+
+    def test_invalid_subfeature(self):
+        subfeature = {
+            "id": "_new", "slug": None, "name": {"en": "Sub Feature"},
+            "links": {"parent": str(self.feature.pk)}}
+        json_data = self.json_api(features=[subfeature])
+        response = self.client.put(
+            self.url, data=json_data,
+            content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.features.0.slug",
+                "detail": "This field is required.",
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+
+    def test_invalid_support(self):
+        subfeature_data = {
+            "id": "_new", "slug": "subfeature", "name": {"en": "Sub Feature"},
+            "links": {"parent": str(self.feature.pk)}}
+        support_data = {
+            "id": "_new_maybe", "support": "maybe",
+            "links": {"version": str(self.version.id), "feature": "_new"}}
+        json_data = self.json_api(
+            features=[subfeature_data], supports=[support_data],
+            versions=[self.version_data], browsers=[self.browser_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.supports.0.support",
+                "detail": (
+                    "Select a valid choice. maybe is not one of the available"
+                    " choices."),
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+        self.assertFalse(Feature.objects.filter(slug='subfeature').exists())
+
+    def test_add_section(self):
+        section_data = {
+            "id": "_section", "name": {"en": "Section"},
+            "links": {
+                "specification": str(self.spec.id),
+                "features": [str(self.feature.id)],
+            }}
+        json_data = self.json_api(
+            {'sections': ['_section']}, sections=[section_data],
+            specifications=[self.spec_data], maturities=[self.maturity_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        section = Section.objects.get()
+        self.assertEqual([self.feature], list(section.features.all()))
+
+    def test_add_support_to_target(self):
+        support_data = {
+            "id": "_yes", "support": "yes",
+            "links": {
+                "version": str(self.version.id),
+                "feature": str(self.feature.id),
+            }}
+        json_data = self.json_api(
+            supports=[support_data], versions=[self.version_data],
+            browsers=[self.browser_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 200, response.content)
+        support = Support.objects.get()
+        self.assertEqual(self.version, support.version)
+        self.assertEqual(self.feature, support.feature)
+        self.assertEqual('yes', support.support)
+
+    def test_to_native_none(self):
+        # This is used by the DRF browsable API
+        self.assertIsNone(ViewFeatureExtraSerializer().to_native(None))
+
+    def test_top_level_feature_is_error(self):
+        subfeature = {
+            "id": "_new", "slug": 'slug', "name": {"en": "Sub Feature"},
+            "links": {"parent": None}}
+        json_data = self.json_api(features=[subfeature])
+        response = self.client.put(
+            self.url, data=json_data,
+            content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.features.0.parent",
+                "detail": (
+                    "Feature must be a descendant of feature %s." %
+                    self.feature.id),
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+
+    def test_other_feature_is_error(self):
+        other = self.create(
+            Feature, slug='other', name={'en': "Other"})
+        subfeature = {
+            "id": "_new", "slug": 'slug', "name": {"en": "Sub Feature"},
+            "links": {"parent": str(other.id)}}
+        json_data = self.json_api(features=[subfeature])
+        response = self.client.put(
+            self.url, data=json_data,
+            content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.features.0.parent",
+                "detail": (
+                    "Feature must be a descendant of feature %s." %
+                    self.feature.id),
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+
+    def test_changed_maturity_is_error(self):
+        section_data = {
+            "id": "_section", "name": {"en": "Section"},
+            "links": {
+                "specification": str(self.spec.id),
+                "features": [str(self.feature.id)],
+            }
+        }
+        maturity_data = self.maturity_data.copy()
+        maturity_data['name']['en'] = "New Maturity Name"
+        json_data = self.json_api(
+            {'sections': ['_section']}, sections=[section_data],
+            specifications=[self.spec_data], maturities=[maturity_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.maturities.0.name",
+                "detail": (
+                    'Field can not be changed from {"en": "Mature"} to'
+                    ' {"en": "New Maturity Name"} as part of this update.'
+                    ' Update the resource by itself, and try again.'),
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+
+    def test_new_specification_is_error(self):
+        section_data = {
+            "id": "_section", "name": {"en": "Section"},
+            "links": {
+                "specification": "_NEW", "features": [str(self.feature.id)]}}
+        spec_data = {
+            "id": "_NEW", "slug": "NEW", "mdn_key": "",
+            "name": {"en": "New Specification"},
+            "uri": {"en": "https://example.com/new"},
+            "links": {"maturity": str(self.maturity.id)}}
+        json_data = self.json_api(
+            {'sections': ['_section']}, sections=[section_data],
+            specifications=[spec_data], maturities=[self.maturity_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.specifications.0.id",
+                "detail": (
+                    'Resource can not be created as part of this update.'
+                    ' Create first, and try again.'),
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+
+    def test_omitted_specification_field_is_error(self):
+        section_data = {
+            "id": "_section", "name": {"en": "Section"},
+            "links": {
+                "specification": str(self.spec.id),
+                "features": [str(self.feature.id)],
+            }}
+        spec_data = self.spec_data.copy()
+        del spec_data['links']['sections']
+        json_data = self.json_api(
+            {'sections': ['_section']}, sections=[section_data],
+            specifications=[spec_data], maturities=[self.maturity_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.specifications.0.sections",
+                "detail": 'Field was omitted, but should be set to []'
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+
+    def test_new_version_is_error(self):
+        support_data = {
+            "id": "_yes", "support": "yes",
+            "links": {
+                "version": "_NEW", "feature": str(self.feature.id),
+            }}
+        version_data = {
+            "id": "_NEW", "version": "1.0", "note": None,
+            "links": {"browser": str(self.browser.id)}}
+        json_data = self.json_api(
+            supports=[support_data], versions=[version_data],
+            browsers=[self.browser_data])
+        response = self.client.put(
+            self.url, data=json_data, content_type="application/vnd.api+json")
+        self.assertEqual(response.status_code, 400, response.content)
+        expected_error = {
+            'errors': [{
+                "status": "400", "path": "/linked.versions.0.id",
+                "detail": (
+                    'Resource can not be created as part of this update.'
+                    ' Create first, and try again.'),
+            }]
+        }
+        actual_error = loads(response.content.decode('utf-8'))
+        self.assertEqual(expected_error, actual_error)
+
+
+class TestDjangoResourceClient(TestCase):
+    def setUp(self):
+        self.client = DjangoResourceClient()
+
+    def test_url_maturity_list(self):
+        expected = reverse('maturity-list')
+        self.assertEqual(expected, self.client.url('maturities'))
+
+    def test_url_feature_detail(self):
+        expected = reverse('feature-detail', kwargs={'pk': '55'})
+        self.assertEqual(expected, self.client.url('features', '55'))
+
+    def test_delete(self):
+        self.assertRaises(
+            NotImplementedError, self.client.delete, 'features', '666')

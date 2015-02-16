@@ -3,6 +3,7 @@
 
 from collections import OrderedDict
 from itertools import chain
+from json import dumps
 
 from django.db.models import CharField
 from django.conf import settings
@@ -12,8 +13,10 @@ from drf_cached_instances.models import CachedQueryset
 from rest_framework.reverse import reverse
 from rest_framework.serializers import (
     DateField, DateTimeField, IntegerField, ModelSerializer,
-    PrimaryKeyRelatedField, SerializerMethodField, ValidationError)
+    NestedValidationError, PrimaryKeyRelatedField, SerializerMethodField,
+    ValidationError)
 
+from tools.resources import Collection, CollectionChangeset
 from . import fields
 from .cache import Cache
 from .drf_fields import (
@@ -463,8 +466,302 @@ class ViewFeatureListSerializer(ModelSerializer):
             'stable', 'obsolete', 'name')
 
 
-class ViewFeatureExtraSerializer(ModelSerializer):
+class DjangoResourceClient(object):
+    """Implement tools.client.Client using Django native functions"""
+    cls_by_name = {
+        'features': (Feature, FeatureSerializer),
+        'supports': (Support, SupportSerializer),
+        'maturities': (Maturity, MaturitySerializer),
+        'specifications': (Specification, SpecificationSerializer),
+        'sections': (Section, SectionSerializer),
+        'browsers': (Browser, BrowserSerializer),
+        'versions': (Version, VersionSerializer),
+    }
 
+    def url(self, resource_type, resource_id=None):
+        if resource_type == 'maturities':
+            singular = 'maturity'
+        else:
+            singular = resource_type[:-1]
+        if resource_id:
+            return reverse(
+                singular + '-detail', kwargs={'pk': resource_id})
+        else:
+            return reverse(singular + '-list')
+
+    def open_changeset(self):
+        pass
+
+    def close_changeset(self):
+        pass
+
+    def update(self, resource_type, resource_id, resource):
+        model_cls, serializer_cls = self.cls_by_name[resource_type]
+        instance = model_cls.objects.get(id=resource_id)
+        data = resource.copy()
+        links = data.pop('links', {})
+        data.update(links)
+        serializer = serializer_cls(instance=instance, data=data)
+        assert serializer.is_valid()
+        serializer.save()
+
+    def create(self, resource_type, resource):
+        model_cls, serializer_cls = self.cls_by_name[resource_type]
+        data = resource.copy()
+        links = data.pop('links', {})
+        data.update(links)
+        serializer = serializer_cls(data=data)
+        assert serializer.is_valid()
+        obj = serializer.save()
+        return {'id': obj.id}
+
+    def delete(self, resource_type, resource_id):
+        raise NotImplementedError("delete not implemented for safety")
+
+
+class FeatureExtra(object):
+    """Handle new and updated data in a view_feature update"""
+    # Map resource collection names to Model and Serializer classes
+    cls_by_name = {
+        'features': (Feature, FeatureSerializer),
+        'supports': (Support, SupportSerializer),
+        'maturities': (Maturity, MaturitySerializer),
+        'specifications': (Specification, SpecificationSerializer),
+        'sections': (Section, SectionSerializer),
+        'browsers': (Browser, BrowserSerializer),
+        'versions': (Version, VersionSerializer),
+    }
+
+    def __init__(self, all_data, feature, context):
+        self.all_data = all_data
+        self.feature = feature
+        self.context = context
+
+    def is_valid(self):
+        """Validate the linked data"""
+        self.errors = {}
+        self._process_data()
+        self._validate_changes()
+        return not self.errors
+
+    def load_resource(self, resource_cls, data):
+        """Load a resource, stringifying IDs"""
+        rdata = {}
+        wlinks = getattr(resource_cls, '_writeable_link_fields', {})
+        rlinks = getattr(resource_cls, '_readonly_link_fields', {})
+        link_names = set(['id'] + list(wlinks.keys()) + list(rlinks.keys()))
+        for key, value in data.items():
+            if key in link_names:
+                if isinstance(value, list):
+                    raw_ids = value
+                    unlist = False
+                else:
+                    raw_ids = [value]
+                    unlist = True
+                ids = [str(i) for i in raw_ids]
+                if unlist:
+                    rdata[key] = ids[0]
+                else:
+                    rdata[key] = ids
+            else:
+                rdata[key] = value
+        return resource_cls(**rdata)
+
+    def _process_data(self):
+        """Load the linked data and compare to current data."""
+        assert not hasattr(self, 'changes')
+        assert hasattr(self, 'errors')
+        r_by_t = Collection.resource_by_type
+
+        # Create and load collection of new data
+        new_collection = Collection()
+        new_extra = self.all_data['_view_extra']
+        for rtype, items in new_extra.items():
+            resource_cls = r_by_t.get(rtype)
+            if resource_cls:
+                for seq, json_api_item in enumerate(items):
+                    item = json_api_item.copy()
+                    links = item.pop('links', {})
+                    item.update(links)
+                    resource = self.load_resource(resource_cls, item)
+                    resource._seq = seq
+                    new_collection.add(resource)
+
+        # Create native representation of current feature data
+        current_collection = Collection(DjangoResourceClient())
+        feature_serializer = ViewFeatureSerializer(context=self.context)
+        current_feature = feature_serializer.to_native(self.feature)
+        current_extra = current_feature.pop('_view_extra')
+        del current_extra['meta']
+
+        # Load feature into new and current collection
+        current_feature_resource = self.load_resource(
+            r_by_t['features'], current_feature)
+        current_collection.add(current_feature_resource)
+        current_feature.update(self.feature._in_extra)
+        current_feature['id'] = str(current_feature['id'])
+        resource_feature = self.load_resource(
+            r_by_t['features'], current_feature)
+        resource_feature._seq = None
+        new_collection.add(resource_feature)
+
+        # Populate collection of current data
+        for rtype, items in current_extra.items():
+            resource_cls = r_by_t.get(rtype)
+            assert resource
+            for item in items:
+                resource = self.load_resource(resource_cls, item)
+                current_collection.add(resource)
+
+        # Add existing items not explicit in PUT content
+        # This avoids 'delete' changes
+        new_items = new_collection.get_all_by_data_id()
+        for data_id, item in current_collection.get_all_by_data_id().items():
+            if data_id not in new_items:
+                resource = r_by_t[item._resource_type]()
+                resource.from_json_api(item.to_json_api())
+                resource._seq = None
+                new_collection.add(resource)
+
+        # Add existing items used in new collection to current collection
+        # This avoids incorrect 'new' changes
+        existing_items = current_collection.get_all_by_data_id()
+        for data_id, item in new_collection.get_all_by_data_id().items():
+            if item.id:
+                item_id = item.id.id
+                int_id = None
+                existing_item = existing_items.get(data_id)
+                try:
+                    int_id = int(item_id)
+                except ValueError:
+                    pass
+                if int_id and (existing_item is None):
+                    rtype = item._resource_type
+                    resource_cls = r_by_t[rtype]
+                    model_cls, serializer_cls = self.cls_by_name[rtype]
+                    obj = model_cls.objects.get(id=int_id)
+                    serializer = serializer_cls()
+                    data = serializer.to_native(obj)
+                    resource = self.load_resource(resource_cls, data)
+                    current_collection.add(resource)
+
+        # Load the diff
+        self.changeset = CollectionChangeset(
+            current_collection, new_collection)
+        assert not self.changeset.changes.get('deleted')
+
+    def add_error(self, resource_type, seq, error_dict):
+        """Add a validation error for a linked resource."""
+        self.errors.setdefault(
+            resource_type, {}).setdefault(seq, {}).update(error_dict)
+
+    def _validate_changes(self):
+        """Validate the changes.
+
+        Validation includes:
+        - Field validation of properties
+        - Disallow adding features outside of the target feature's subtree
+        - Disallow additions of maturities
+
+        Validation of links is not attempted, since most validation errors
+        will be relations to new resources.  This may miss links to
+        "existing" resources that aren't in the database, but those will
+        be DoesNotExist exceptions in _process_data.
+        """
+        assert hasattr(self, 'changeset')
+        assert hasattr(self, 'errors')
+        assert not self.errors
+
+        new_collection = self.changeset.new_collection
+        resource_feature = new_collection.get('features', str(self.feature.id))
+
+        # Validate with DRF serializers
+        for data_id, item in new_collection.get_all_by_data_id().items():
+            rtype = item._resource_type
+            model_cls, serializer_cls = self.cls_by_name[rtype]
+            seq = getattr(item, '_seq')
+            if seq is None:
+                continue
+
+            # Does the ID imply an existing instance?
+            int_id = None
+            instance = None
+            assert item.id
+            item_id = item.id.id
+            try:
+                int_id = int(item_id)
+            except ValueError:
+                pass
+            else:
+                instance = model_cls.objects.get(id=int_id)
+
+            # Validate the data with DRF serializer
+            data = item.to_json_api()[rtype]
+            links = data.pop('links', {})
+            data.update(links)
+            serializer = serializer_cls(instance=instance, data=data)
+            if not serializer.is_valid():
+                errors = {}
+                # Discard errors in link fields, for now
+                for fieldname, error in serializer.errors.items():
+                    if fieldname not in links:
+                        errors[fieldname] = error
+                if errors:
+                    self.add_error(rtype, seq, errors)
+
+        # Validate that features are in the feature tree
+        target_id = resource_feature.id.id
+        for feature in new_collection.get_resources('features'):
+            if feature.id.id == target_id:
+                continue
+
+            f = feature
+            while (f and f.parent is not None and
+                    f.parent.id != target_id):
+                f = new_collection.get('features', f.parent.id)
+
+            if f is None or f.parent.id is None:
+                error = (
+                    "Feature must be a descendant of feature %s." % target_id)
+                self.add_error('features', feature._seq, {'parent': error})
+
+        # Validate that "expert" objects are not added
+        expert_resources = set((
+            'maturities', 'specifications', 'versions', 'browsers'))
+        add_error = (
+            'Resource can not be created as part of this update. Create'
+            ' first, and try again.')
+        for item in self.changeset.changes['new'].values():
+            if item._resource_type in expert_resources:
+                self.add_error(
+                    item._resource_type, item._seq, {'id': add_error})
+
+        # Validate that "expert" objects are not changed
+        omit_err = 'Field was omitted, but should be set to %s'
+        change_err = (
+            'Field can not be changed from %s to %s as part of this update.'
+            ' Update the resource by itself, and try again.')
+        for item in self.changeset.changes['changed'].values():
+            if item._resource_type in expert_resources:
+                rtype = item._resource_type
+                new_json = dict(item.to_json_api()[rtype])
+                new_json.update(new_json.pop('links', {}))
+                orig_json = dict(item._original.to_json_api()[rtype])
+                orig_json.update(orig_json.pop('links', {}))
+                for key, value in orig_json.items():
+                    if key not in new_json:
+                        err = omit_err % dumps(value)
+                        self.add_error(rtype, item._seq, {key: err})
+                    elif value != new_json[key]:
+                        err = change_err % (dumps(value), dumps(new_json[key]))
+                        self.add_error(rtype, item._seq, {key: err})
+
+    def save(self, **kwargs):
+        """Commit changes to linked data"""
+        self.changeset.change_original_collection()
+
+
+class ViewFeatureExtraSerializer(ModelSerializer):
     """Linked resources and metadata for ViewFeatureSerializer."""
 
     class ViewBrowserSerializer(BrowserSerializer):
@@ -506,22 +803,16 @@ class ViewFeatureExtraSerializer(ModelSerializer):
     versions = ViewVersionSerializer(source='all_versions', many=True)
     meta = SerializerMethodField('get_meta')
 
-    def to_native(self, obj):
-        """Add addditonal data for the ViewFeatureSerializer.
-
-        For most features, all the related data is cachable, and no database
-        reads are required with a warm cache.
-
-        For some features, such as the root node for CSS, the subtree is huge,
-        and the descendant feature PKs won't fit in the cache.  In these
-        cases, a couple of database reads are required to get the
-        descendant feature PKs, which are then paginated to reduce the huge
-        amount of related data.
-        """
-        # Load the paginated descendant features
+    def add_sources(self, obj):
+        """Add the sources used by the serializer fields."""
         page = self.context['request'].GET.get('page', 1)
         per_page = settings.PAGINATE_VIEW_FEATURE
-        if obj.descendant_count <= per_page:
+        if isinstance(obj, Feature):
+            # It's a real Feature, not a cached proxy Feature
+            obj.descendant_count = obj.get_descendant_count()
+            descendant_pks = obj.get_descendants().values_list('pk', flat=True)
+        elif obj.descendant_count <= per_page:
+            # The cached PK list is enough to populate descendant_pks
             descendant_pks = obj.descendants.values_list('id', flat=True)
         else:
             # Load the real object to get the full list of descendants
@@ -570,6 +861,23 @@ class ViewFeatureExtraSerializer(ModelSerializer):
         obj.all_browsers = list(CachedQueryset(
             Cache(), Browser.objects.all(), sorted(browser_pks)))
 
+    def to_native(self, obj):
+        """Add addditonal data for the ViewFeatureSerializer.
+
+        For most features, all the related data is cachable, and no database
+        reads are required with a warm cache.
+
+        For some features, such as the root node for CSS, the subtree is huge,
+        and the descendant feature PKs won't fit in the cache.  In these
+        cases, a couple of database reads are required to get the
+        descendant feature PKs, which are then paginated to reduce the huge
+        amount of related data.
+        """
+        # Load the paginated descendant features
+        if obj is None:
+            # This happens when OPTIONS is called from browsable API
+            return None
+        self.add_sources(obj)
         ret = super(ViewFeatureExtraSerializer, self).to_native(obj)
         return ret
 
@@ -789,6 +1097,37 @@ class ViewFeatureExtraSerializer(ModelSerializer):
             ))),))
         return meta
 
+    def field_from_native(self, data, files, field_name, reverted_data):
+        """Deserialize objects in the "linked" field of JSON API
+
+        This acts a bit like a nested Serializer, but because JSON-API doesn't
+        use nested representions, we have to do some gymnastics to fit in
+        Django REST Framework.
+
+        Return will be a FeatureExtra instance that will update the
+        database with new and updated linked data when .save() is called.
+
+        Some validation errors can be detected at this point, which will raise
+        a NestedValidationError.  Other objects won't be validated until
+        related objects are saved, which may cause validation errors.
+        """
+        linked = data.get(field_name, {})
+        if linked:
+            # Add existing related data to target Feature
+            self.object = self.parent.object
+            assert self.object
+            self.add_sources(self.object)
+            self.object._in_extra = self.parent._in_extra
+
+            # Validate the linked data
+            extra = FeatureExtra(data, self.object, self.context)
+            if extra.is_valid():
+                # Parent serializer will call extra.save()
+                reverted_data[field_name] = extra
+            else:
+                assert extra.errors
+                raise NestedValidationError(extra.errors)
+
     class Meta:
         model = Feature
         fields = (
@@ -803,3 +1142,42 @@ class ViewFeatureSerializer(FeatureSerializer):
 
     class Meta(FeatureSerializer.Meta):
         fields = FeatureSerializer.Meta.fields + ('_view_extra',)
+
+    def restore_object(self, attrs, instance=None):
+        """Restore feature, and convert _view_extra"""
+        obj = super(ViewFeatureSerializer, self).restore_object(
+            attrs, instance)
+        return obj
+
+    def restore_fields(self, data, files):
+        self._in_extra = {
+            'sections': data.pop('sections', []),
+            'supports': data.pop('supports', []),
+            'children': data.pop('children', []),
+        }
+        return super(ViewFeatureSerializer, self).restore_fields(data, files)
+
+    def save(self, *args, **kwargs):
+        """Save the feature plus linked elements.
+
+        The save is done using DRF conventions; the _view_extra field is set
+        to an object (FeatureExtra) that will same linked elements.  The only
+        wrinkle is that the changeset should not be auto-closed by any saved
+        items.
+        """
+        changeset = self.context['request'].changeset
+        if changeset.id:
+            # Already in an open changeset - client will close
+            close_changeset = False
+        else:
+            close_changeset = True
+            assert not changeset.user_id
+            changeset.user = self.context['request'].user
+            changeset.save()
+
+        ret = super(ViewFeatureSerializer, self).save(*args, **kwargs)
+
+        if close_changeset:
+            changeset.closed = True
+            changeset.save()
+        return ret
