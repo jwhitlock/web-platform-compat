@@ -20,6 +20,7 @@ class JsonApiRenderer(BaseJsonApiRender):
     encoder_class = JSONEncoder
     wrappers = ([
         'wrap_view_extra',
+        'wrap_view_extra_error',
     ] + BaseJsonApiRender.wrappers)
 
     def add_meta(self, resource, field, field_name, request):
@@ -31,6 +32,10 @@ class JsonApiRenderer(BaseJsonApiRender):
         """Add nested data w/o adding links to main resource."""
         if not (data and '_view_extra' in data):
             raise WrapperNotApplicable('Not linked results')
+        response = renderer_context.get("response", None)
+        status_code = response and response.status_code
+        if status_code == 400:
+            raise WrapperNotApplicable('Status code must not be 400.')
 
         linked = data.pop('_view_extra')
         data.fields.pop('_view_extra')
@@ -43,6 +48,30 @@ class JsonApiRenderer(BaseJsonApiRender):
             if key in to_transfer:
                 wrapper.setdefault(key, self.dict_class()).update(value)
         return wrapper
+
+    def wrap_view_extra_error(self, data, renderer_context):
+        """Convert field errors involving _view_extra"""
+        response = renderer_context.get("response", None)
+        status_code = response and response.status_code
+        if status_code != 400:
+            raise WrapperNotApplicable('Status code must be 400.')
+        if not (data and '_view_extra' in data):
+            raise WrapperNotApplicable('Not linked results')
+
+        view_extra = data.pop('_view_extra')
+        assert isinstance(view_extra, list)
+        assert len(view_extra) == 1
+        converted = {}
+        for rname, error_dict in view_extra[0].items():
+            assert rname != 'meta'
+            for seq, errors in error_dict.items():
+                for fieldname, error in errors.items():
+                    name = 'linked.%s.%d.%s' % (rname, seq, fieldname)
+                    converted[name] = error
+        data.update(converted)
+
+        return self.wrap_error(
+            data, renderer_context, keys_are_fields=True, issue_is_title=False)
 
     def model_to_resource_type(self, model):
         if model:

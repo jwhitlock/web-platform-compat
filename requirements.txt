@@ -81,3 +81,6 @@ requests==2.4.3
 
 # CORS headers in middleware
 git+git://github.com/ottoyiu/django-cors-headers@5d5eeccf7ce#egg=django-cors-headers
+
+# Parsing Expression Grammar, for MDN scraping
+parsimonious==0.6.2

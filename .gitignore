@@ -43,11 +43,10 @@ output/*/index.html
 # Sphinx
 docs/_build/*
 
-# Downloaded files
-data-human.json
-Spec2.txt
-SpecName.txt
+# Downloaded and generate files
 data/*.json
+data/*.txt
+data/*.csv
 
 # SQLite databases
 *.sqlite3

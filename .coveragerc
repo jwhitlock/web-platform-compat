@@ -8,6 +8,8 @@ source =
 omit =
     tools/client.py
     tools/download_data.py
+    tools/gather_import_errors.py
+    tools/import_mdn.py
     tools/load_spec_data.py
     tools/load_webcompat_data.py
     tools/sample_mdn.py

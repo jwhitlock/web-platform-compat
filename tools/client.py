@@ -106,7 +106,7 @@ class Client(object):
             'csrfmiddlewaretoken': csrf,
             'next': next_path
         }
-
+        self.session.headers['referer'] = url
         response = self.session.post(
             self.base_url + '/api-auth/login/', params=params, data=data)
         if response.url == self.base_url + next_path:

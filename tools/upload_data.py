@@ -97,7 +97,7 @@ def confirm_changes(client, changeset):
 
 if __name__ == '__main__':
     import argparse
-    description = 'Download data from API.'
+    description = 'Upload data to the API.'
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         '-a', '--api',

@@ -26,7 +26,9 @@ except NameError:
 
 
 logger = logging.getLogger('tools.load_webcompat_data')
-COMPAT_DATA_FILENAME = "data-human.json"
+my_dir = os.path.dirname(os.path.realpath(__file__))
+data_dir = os.path.realpath(os.path.join(my_dir, '..', 'data'))
+COMPAT_DATA_FILENAME = os.path.join(data_dir, "data-human.json")
 COMPAT_DATA_URL = (
     "https://raw.githubusercontent.com/webplatform/compatibility-data"
     "/master/data-human.json")
@@ -55,7 +57,7 @@ def get_compat_data(filename, url):
         logger.info("Downloading " + filename)
         r = requests.get(url)
         with codecs.open(filename, 'wb', 'utf8') as f:
-            f.write(r.content)
+            f.write(r.text)
     else:
         logger.info("Using existing " + filename)
 
@@ -124,6 +126,7 @@ def parse_compat_data(compat_data, local_collection):
 
 
 def slugify(word, attempt=0):
+    # TODO: replace with mdn.scrape.slugify
     raw = word.lower().encode('utf-8')
     out = []
     acceptable = string.ascii_lowercase + string.digits + '_-'

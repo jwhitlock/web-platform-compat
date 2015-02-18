@@ -1,6 +1,6 @@
 {
     "name": "web-platform-compat",
-    "description": "Data store and API for web platform compatability data.",
+    "description": "Data store and API for web platform compatibility data.",
     "repository": "https://github.com/jwhitlock/web-platform-compat",
     "keywords": ["python", "django", "mozilla"],
     "env": {

@@ -21,9 +21,11 @@ except NameError:
     pass  # We're in Py3
 
 logger = logging.getLogger('tools.load_spec_data')
-SPEC2_FILENAME = 'Spec2.txt'
+my_dir = os.path.dirname(os.path.realpath(__file__))
+data_dir = os.path.realpath(os.path.join(my_dir, '..', 'data'))
+SPEC2_FILENAME = os.path.join(data_dir, 'Spec2.txt')
 SPEC2_URL = 'https://developer.mozilla.org/en-US/docs/Template:Spec2?raw'
-SPECNAME_FILENAME = 'SpecName.txt'
+SPECNAME_FILENAME = os.path.join(data_dir, 'SpecName.txt')
 SPECNAME_URL = 'https://developer.mozilla.org/en-US/docs/Template:SpecName?raw'
 
 
@@ -32,7 +34,7 @@ def get_template(filename, url):
         logger.info("Downloading " + filename)
         r = requests.get(url)
         with codecs.open(filename, 'wb', 'utf8') as f:
-            f.write(r.content)
+            f.write(r.text)
     else:
         logger.info("Using existing " + filename)
 
@@ -50,6 +52,14 @@ def load_spec_data(client, specname, spec2, confirm=None):
     load_api_spec_data(api_collection)
     logger.info('Reading spec data from MDN templates')
     parse_spec_data(specname, spec2, api_collection, local_collection)
+
+    # Load API sections into local collection
+    local_collection.override_ids_to_match(api_collection)
+    local_specs = local_collection.get_resources('specifications')
+    for local_spec in local_specs:
+        api_spec = api_collection.get('specifications', local_spec.id.id)
+        if api_spec:
+            local_spec.sections = api_spec.sections.ids
 
     changeset = CollectionChangeset(api_collection, local_collection)
     delta = changeset.changes
@@ -215,6 +225,7 @@ def parse_spec2(specname, local_collection):
 
 
 def slugify(word, attempt=0):
+    # TODO: replace with mdn.scrape.slugify
     raw = word.lower().encode('utf-8')
     out = []
     acceptable = string.ascii_lowercase + string.digits + '_-'

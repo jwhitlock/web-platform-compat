@@ -1,0 +1,61 @@
+{% extends "webplatformcompat/base.jinja2" %}
+
+{% block head_title %}MDN Importer{% endblock %}
+{% block body_title %}MDN Importer{% endblock %}
+
+{% block quick_nav %}
+<p><em>back to <a href="{{ url('home') }}">home</a></em></p>
+{% endblock %}
+
+{% block content %}
+<form class="form-inline" action="{{url("feature_page_search")}}" method="GET">
+  <div class="form-group">
+    <label class="sr-only" for="id-url">MDN URL</label>
+    <input type="url" class="form-control" id="id-url" name="url"
+     placeholder="https://developer.mozilla.org/en-US/docs/...">
+  </div>
+  <input id="fp-search" class="btn btn-primary" type="submit" value="Search by URL">
+</form>
+{% if page_obj %}
+{{ pagination_control(page_obj, url('feature_page_list')) }}
+<table class="table table-condensed">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Feature ID</th>
+      <th>MDN Slug</th>
+      <th>Status</th>
+      <th>Has Issues?</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for page in page_obj.object_list %}
+    <tr>
+      <td><a href="{{ url('feature_page_detail', pk=page.id) }}">{{page.id}}</a></td>
+      <td>{{page.feature_id}}</td>
+      <td>{{page.slug()}}</td>
+      <td><a href="{{ url('feature_page_detail', pk=page.id) }}">{{page.get_status_display()}}</a></td>
+      <td>
+        <a href="{{ url('feature_page_detail', pk=page.id) }}">
+        {%- if page.status == page.STATUS_PARSED -%}
+          {%- if page.has_issues %}<strong>Yes</strong>{% else %}No{%endif -%}
+        {%- elif page.status == page.STATUS_ERROR %}
+          Scraping Failed
+        {%- else %}
+          <em>Still Processing</em>
+        {%- endif -%}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{{ pagination_control(page_obj, url('feature_page_list')) }}
+{% else %}
+<p><i>No pages imported yet.</i></p>
+{% endif %}
+
+{% if can_create_mdn_import(request.user) %}
+<a class="btn btn-primary" href="{{url('feature_page_create')}}">Import a new page</a>
+{% endif %}
+
+{% endblock content %}
