@@ -47,7 +47,7 @@ doc = other_text other_section* spec_section? compat_section?
 # Sections that we don't care about
 other_text = ~r".*?(?=<h2)"s
 other_section = _ !(spec_h2 / compat_h2) other_h2 _ other_text
-other_h2 = "<h2 " _ attrs? _ ">" _ bare_text _ "</h2>"
+other_h2 = "<h2 " _ attrs? _ ">" _ ~r"(?P<content>.*?(?=</h2>))"s _ "</h2>"
 last_section = _ other_h2 _ ~r".*(?!=<h2)"s
 
 #
