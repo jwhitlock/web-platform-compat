@@ -508,7 +508,8 @@ class PageVisitor(NodeVisitor):
         return client
 
     def visit_compat_client_name(self, node, children):
-        name = node.match.group('content')
+        cname = node.match.group('content')
+        name = re.sub('<[^>]*>', '', cname)
         assert isinstance(name, text_type), type(name)
 
         b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
