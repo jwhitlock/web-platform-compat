@@ -47,7 +47,7 @@ doc = other_text other_section* spec_section? compat_section?
 # Sections that we don't care about
 other_text = ~r".*?(?=<h2)"s
 other_section = _ !(spec_h2 / compat_h2) other_h2 _ other_text
-other_h2 = "<h2 " _ attrs? _ ">" _ bare_text _ "</h2>"
+other_h2 = "<h2 " _ attrs? _ ">" _ ~r"(?P<content>.*?(?=</h2>))"s _ "</h2>"
 last_section = _ other_h2 _ ~r".*(?!=<h2)"s
 
 #
@@ -64,7 +64,7 @@ spec_thead_headers = "<thead>" _ spec_headers "</thead>" _ spec_tbody _
 spec_tbody_headers = spec_tbody _ spec_headers
 spec_headers =  "<tr>" _ th_elems _ "</tr>" _
 th_elems = th_elem+
-th_elem = "<th scope=\"col\">" _ (!"</th>" bare_text) _ "</th>" _
+th_elem = "<th scope=\"col\">" _ ~r"(?P<content>.*?(?=</th>))"s _ "</th>" _
 spec_tbody = "<tbody>"
 
 spec_body = spec_rows "</tbody>"
