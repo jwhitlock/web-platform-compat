@@ -1168,6 +1168,52 @@ class PageVisitor(NodeVisitor):
                             self.errors.append((
                                 item['start'], item['end'],
                                 'Unknown Gecko version "%s"' % gversion))
+                elif kname == 'compatgeckofxos':
+                    gversion = self.unquote(item['args'][0])
+                    try:
+                        oversion = self.unquote(item['args'][1])
+                    except IndexError:
+                        oversion = ''
+                    try:
+                        nversion = float(gversion)
+                    except ValueError:
+                        nversion = -1
+                    if (nversion >= 0 and nversion < 19 and
+                       oversion in ('', '1.0')):
+                        version_found = '1.0'
+                    elif (nversion >= 0 and nversion < 21 and
+                          oversion == '1.0.1'):
+                        version_found = '1.0.1'
+                    elif (nversion >= 0 and nversion < 24 and
+                          oversion in ('1.1', '1.1.0', '1.1.1')):
+                        version_found = '1.1'
+                    elif (nversion >= 19 and nversion < 27 and
+                          oversion in ('', '1.2')):
+                        version_found = '1.2'
+                    elif (nversion >= 27 and nversion < 29 and
+                          oversion in ('', '1.3')):
+                        version_found = '1.3'
+                    elif (nversion >= 29 and nversion < 31 and
+                          oversion in ('', '1.4')):
+                        version_found = '1.4'
+                    elif (nversion >= 31 and nversion < 33 and
+                          oversion in ('', '2.0')):
+                        version_found = '2.0'
+                    elif (nversion >= 33 and nversion < 35 and
+                          oversion in ('', '2.1')):
+                        version_found = '2.1'
+                    elif (nversion >= 35 and nversion < 38 and
+                          oversion in ('', '2.2')):
+                        version_found = '2.2'
+                    elif nversion < 0 or nversion >= 38:
+                        self.errors.append((
+                            item['start'], item['end'],
+                            'Unknown Gecko version "%s"' % gversion))
+                    else:
+                        self.errors.append((
+                            item['start'], item['end'],
+                            ('Override "%s" is invalid for '
+                             'Gecko version "%s"' % (oversion, gversion))))
                 elif kname == 'compatgeckomobile':
                     gversion = self.unquote(item['args'][0])
                     version_found = gversion.split('.', 1)[0]
