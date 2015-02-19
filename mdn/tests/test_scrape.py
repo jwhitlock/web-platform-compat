@@ -1471,7 +1471,7 @@ class TestPageVisitor(ScrapeTestCase):
             '1': ('Footnote  but the beat continues.', 0, 59)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (15, 30, "Unknown footnote kumascript function UnknownKuma")]
+            (12, 27, "Unknown footnote kumascript function UnknownKuma")]
         self.assertEqual(expected_errors, self.visitor.errors)
 
     def test_compat_footnotes_unknown_kumascriptscript_with_args(self):
@@ -1480,8 +1480,8 @@ class TestPageVisitor(ScrapeTestCase):
         expected = {'1': ('Footnote ', 0, 42)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (15, 37,
-             'Unknown footnote kumascript function UnknownKuma("arg")')]
+            (12, 34, 'Unknown footnote kumascript function '
+                     'UnknownKuma("arg")')]
         self.assertEqual(expected_errors, self.visitor.errors)
 
     def test_compat_footnotes_pre_section(self):
@@ -2377,6 +2377,38 @@ class TestScrapeFeaturePage(ScrapeTestCase):
                 'supports': [],
             }}]
         self.assertDataEqual(expected, fp.data['linked']['features'])
+
+    def test_scrape_with_kuma_accepted(self):
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section +
+            "<p>{{SVGRef}}</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+
+    def test_scrape_with_kuma_invalid(self):
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section +
+            "<p>{{UnknownKuma}}</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertTrue(fp.has_issues)
+        expected_errors = [
+            (12, 27, "Kumascript is not an accepted section")]
+        self.assertEqual(expected_errors, fp.data['meta']['scrape']['errors'])
 
     def test_scrape_with_footnote(self):
         orig = "<td>4.0</td>"

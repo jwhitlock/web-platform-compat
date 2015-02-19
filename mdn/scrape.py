@@ -77,7 +77,7 @@ inner_td = ~r"(?P<content>.*?(?=</td>))"s
 # Browser Compatibility section
 #
 compat_section = _ compat_h2 _ compat_kumascript _ compat_divs p_empty*
-    compat_footnotes?
+    compat_footnotes? p_kumascript?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
 compat_kumascript = (compat_kumascript_div / compat_kumascript_p)
@@ -123,7 +123,8 @@ cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 #
 compat_footnotes = footnote_item* _
 footnote_item = (footnote_p / footnote_pre)
-footnote_p = "<p>" a_both? _ footnote_id? _ footnote_p_text "</p>" _
+footnote_p = "<p>" !(kumascript) a_both? _ footnote_id? _ footnote_p_text
+    "</p>" _
 footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
 footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
 footnote_pre = "<pre" attrs? ">" footnote_pre_text "</pre>" _
@@ -153,6 +154,7 @@ a_open = "<a" _  opt_attrs ">"
 a_both = _ a_open _ "</a>" _
 
 p_empty = _ "<p>" _ "&nbsp;"* _ "</p>" _
+p_kumascript = _ "<p>" _ kumascript "</p>" _
 
 attrs = attr+
 opt_attrs = attr*
@@ -703,8 +705,8 @@ class PageVisitor(NodeVisitor):
         return item
 
     def visit_footnote_p(self, node, children):
-        footnote_id = children[3]
-        text = children[5]
+        footnote_id = children[4]
+        text = children[6]
         assert isinstance(text, text_type), type(text)
         fixed = self.render_footnote_kumascript(text, node.children[4].start)
         data = {
@@ -750,6 +752,15 @@ class PageVisitor(NodeVisitor):
     #
     # Other visitors
     #
+    def visit_p_kumascript(self, node, children):
+        name = children[3]['name']
+        assert isinstance(name, text_type), type(name)
+        accepted = ('svgref')
+        if not (name.lower() in accepted):
+            self.errors.append((
+                node.start, node.end,
+                'Kumascript "%s" is not an accepted section' % name))
+
     def visit_kumascript(self, node, children):
         name = children[1]
         assert isinstance(name, text_type), type(name)
