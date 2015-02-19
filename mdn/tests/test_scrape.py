@@ -1171,6 +1171,51 @@ class TestPageVisitor(ScrapeTestCase):
             '{{CompatGeckoDesktop("1.1")}}',
             expected_errors=[(4, 33, 'Unknown Gecko version "1.1"')])
 
+    def test_compat_row_cell_support_compatgeckofxos_7(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("7")}}',
+            [{'version': '1.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_7_version_1_0_1(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("7","1.0.1")}}',
+            [{'version': '1.0.1'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_7_version_1_1(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("7","1.1")}}',
+            [{'version': '1.1'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_range(self):
+        versions = {'10': '1.0',
+                    '24': '1.2',
+                    '28': '1.3',
+                    '29': '1.4',
+                    '32': '2.0',
+                    '34': '2.1',
+                    '35': '2.2'
+                    }
+        for gversion, oversion in versions.items():
+            self.assert_compat_row_cell_support(
+                '{{CompatGeckoFxOS("%s")}}' % gversion,
+                [{'version': oversion}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_bad_gecko(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("9999999")}}',
+            expected_errors=[(4, 34, 'Unknown Gecko version "9999999"')])
+
+    def test_compat_row_cell_support_compatgeckofxos_bad_text(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("Yep")}}',
+            expected_errors=[(4, 30, 'Unknown Gecko version "Yep"')])
+
+    def test_compat_row_cell_support_compatgeckofxos_bad_version(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("18","5.0")}}',
+            expected_errors=[(4, 35, ('Override "5.0" is invalid for '
+                                      'Gecko version "18"'))])
+
     def test_compat_row_cell_support_compatgeckomobile_1(self):
         self.assert_compat_row_cell_support(
             '{{CompatGeckoMobile("1")}}',
