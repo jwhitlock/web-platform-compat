@@ -825,6 +825,7 @@ class PageVisitor(NodeVisitor):
     browser_name_fixes = {
         'Firefox (Gecko)': 'Firefox',
         'Firefox Mobile (Gecko)': 'Firefox Mobile',
+        'Firefox OS (Gecko)': 'Firefox OS',
         'Safari (WebKit)': 'Safari',
         'Windows Phone': 'IE Mobile',
         'IE Phone': 'IE Mobile',
