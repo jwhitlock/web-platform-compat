@@ -74,16 +74,25 @@ if environ.get('SECURE_PROXY_SSL_HEADER'):
     raw = environ['SECURE_PROXY_SSL_HEADER']
     SECURE_PROXY_SSL_HEADER = tuple(raw.split(','))
 
-# Application definition
+AUTHENTICATION_BACKENDS = (
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+)
 
+# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
+    'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.fxa',
     'corsheaders',
     'django_extensions',
     'django_nose',
@@ -113,6 +122,16 @@ MIDDLEWARE_CLASSES = (
 ROOT_URLCONF = 'wpcsite.urls'
 
 WSGI_APPLICATION = 'wpcsite.wsgi.application'
+
+# django-allauth requires some settings
+SITE_ID = int(environ.get('SITE_ID', '1'))
+
+TEMPLATE_CONTEXT_PROCESSORS = (
+    "django.contrib.auth.context_processors.auth",
+    "django.core.context_processors.request",
+    "allauth.account.context_processors.account",
+    "allauth.socialaccount.context_processors.socialaccount",
+)
 
 # Prefer our template folder to rest_framework's
 TEMPLATE_DIRS = (

@@ -76,11 +76,15 @@ django-sortedm2m==0.8.1
 # Cached instances for Django REST Framework
 drf-cached-instances==0.2.0
 
-# Better HTTP Client for tools
-requests==2.4.3
-
 # CORS headers in middleware
 git+git://github.com/ottoyiu/django-cors-headers@5d5eeccf7ce#egg=django-cors-headers
 
 # Parsing Expression Grammar, for MDN scraping
 parsimonious==0.6.2
+
+# Social loging support (Firefox Accounts)
+python-openid==2.2.5
+requests==2.4.3
+oauthlib==0.7.2
+requests-oauthlib==0.4.2
+django-allauth==0.19.1
