@@ -1,17 +1,21 @@
 {% extends "webplatformcompat/base.jinja2" %}
 
-{% block head_title %}Web Platform Compatibility API{% endblock %}
+{% block head_title %}Browser Compatibility Data{% endblock %}
 
 {% block body_container %}
 <div class="jumbotron">
   <div class="container">
-    <h1 class="smaller">Welcome to the Web Platform Compatibility API</h1>
+    <h1 class="smaller">The Web Today</h1>
     <p>
-        The Web Platform Compatibility API will support compatibility data
-        on the Mozilla Developer Network. This currently takes the form of
-        browser compatibility tables, such as the one on the CSS display
-        property. The API will help centralize this data, and allow it to be
-        kept consistant across languages and different presentations.
+        The <strong>web-platform-compat</strong> project helps developers build for
+        the modern web.  It provides up-to-date information from the
+        <a href="https://developer.mozilla.org/en-US/">Mozilla Developer Network</a>.
+        Developers can learn about web browsers and the features they support, and
+        then create something awesome.
+    </p>
+    <p>
+        <a class="btn btn-primary btn-lg" href="{{ url('about') }}" role="button">
+            Learn more »</a>
     </p>
   </div>
 </div>
@@ -19,14 +23,14 @@
 <div class="container">
   <div class="row">
     <div class="col-md-3">
-      <h2>Explore the API</h2>
-      <p>Jump right into the self-documenting API.</p>
-      <p><a class="btn btn-default" href="/api/v1/" role="button">API &raquo;</a></p>
-    </div>
-    <div class="col-md-3">
       <h2>Browse the Data</h2>
       <p>View the web platform compatibility data available from the API.</p>
       <p><a class="btn btn-default" href="{{ url('browse') }}" role="button">Data &raquo;</a></p>
+    </div>
+    <div class="col-md-3">
+      <h2>Explore the API</h2>
+      <p>Jump right into the self-documenting API.</p>
+      <p><a class="btn btn-default" href="{{ url('api-root') }}" role="button">API &raquo;</a></p>
     </div>
     <div class="col-md-3">
       <h2>Import from MDN</h2>
@@ -41,7 +45,7 @@
   </div>
   <hr>
   <footer>
-    <p>© Mozilla 2014</p>
+    <p>© 2014 - {{current_year()}} Mozilla</p>
   </footer>
 </div>
 {% endblock %}

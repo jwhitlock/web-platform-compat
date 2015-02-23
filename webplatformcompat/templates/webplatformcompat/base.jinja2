@@ -8,6 +8,7 @@
 
     <link href="{{ static('vendor/bootstrap-3.2.0-dist/css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ static('vendor/bootstrap-3.2.0-dist/css/bootstrap-theme.min.css') }}" rel="stylesheet">
+    <link href="{{ static('css/webplatformcompat.css') }}" rel="stylesheet">
 
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -18,7 +19,45 @@
     {%- block head_extra %}{% endblock %}
   </head>
   <body>
-    {% block pre_body_container %}{% endblock %}
+    {%- block navbar %}
+    <nav class="navbar navbar-inverse">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed"
+                  data-toggle="collapse" data-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="{{url('home')}}">web-platform-compat</a>
+        </div>
+        <div id="navbar" class="collapse navbar-collapse">
+          <ul class="nav navbar-nav">
+            <li{% if request.path.startswith(url('about')) %} class="active"{% endif %}>
+              <a href="{{url('about')}}">About</a></li>
+            <li><a href="{{url('api-root')}}">API</a></li>
+            <li{% if request.path.startswith(url('browse')) %} class="active"{% endif %}>
+              <a href="{{url('browse')}}">Browse</a></li>
+            <li{% if request.path.startswith(url('feature_page_list')) %} class="active"{% endif %}>
+              <a href="{{url('feature_page_list')}}">Importer</a></li>
+          </ul>
+          <ul class="nav navbar-nav navbar-right">
+            {% if user.is_authenticated() %}
+            <li><span class="navbar-text">Signed in as
+                <a class="navbar-link" href="{{url('account_profile')}}">{{user_display(user)}}</a>
+                <a class="navbar-link" href="{{url('account_logout')}}">(Sign Out)</a>
+                </span>
+            </li>
+            {% else %}
+            <li><a class="navbar-link" href="{{url('account_login')}}">Sign In or Create Account</a></li>
+            {% endif %}
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+    {% endblock navbar %}
     {%- block body_container -%}
     <div class="container">
         {% block body_title_elem -%}
@@ -38,7 +77,7 @@
         {% block content %}{% endblock %}
         <hr>
         <footer>
-          <p>© Mozilla 2014</p>
+            <p>© 2014 - {{current_year()}} Mozilla</p>
         </footer>
     </div>
     {%- endblock body_container %}
