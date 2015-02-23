@@ -14,9 +14,6 @@ webplatformcompat_urlpatterns = patterns(
     url(r'^about/', RequestView.as_view(
         template_name='webplatformcompat/about.jinja2'),
         name='about'),
-    url(r'^accounts/profile/$', RequestView.as_view(
-        template_name='webplatformcompat/profile.jinja2'),
-        name='account_profile'),
     url(r'^browse/', RequestView.as_view(
         template_name='webplatformcompat/browse.jinja2'),
         name='browse'),

@@ -23,6 +23,10 @@ across languages and different presentations.
 .. _Mozilla Developer Network: https://developer.mozilla.org
 .. _CSS display property: https://developer.mozilla.org/en-US/docs/Web/CSS/display#Browser_compatibility
 
+*Note: This project will be renamed to browsercompat in the near future, to
+syncronize the project name with the planned production domain name
+https://browsercompat.org.*
+
 The project started in December 2013.  The goals, requirements, and current
 status are documented on the MozillaWiki_.
 

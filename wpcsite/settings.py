@@ -92,7 +92,6 @@ INSTALLED_APPS = [
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
-    'allauth.socialaccount.providers.fxa',
     'corsheaders',
     'django_extensions',
     'django_nose',
@@ -101,6 +100,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'sortedm2m',
 
+    'bcauth',
+    'bcauth.socialaccount.providers.fxa',
     'mdn',
     'webplatformcompat',
 ]
@@ -133,8 +134,11 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     "allauth.socialaccount.context_processors.socialaccount",
 )
 
-# Prefer our template folder to rest_framework's
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Prefer our template folders to rest_framework's, allauth's
 TEMPLATE_DIRS = (
+    rel_path('bcauth', 'templates'),
     rel_path('webplatformcompat', 'templates'),
 )
 
@@ -150,13 +154,9 @@ DATABASES = {
 # https://docs.djangoproject.com/en/1.6/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_L10N = True
-
 USE_TZ = True
 
 
@@ -214,7 +214,7 @@ SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 PAGINATE_VIEW_FEATURE = 50
 
 # Authentication
-LOGIN_URL = '/api-auth/login/'
+LOGIN_URL = '/accounts/login/'
 
 # MDN Scraping
 if environ.get('MDN_ALLOWED_URL_PREFIXES') and not TESTING:

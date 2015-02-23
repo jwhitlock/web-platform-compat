@@ -1,0 +1,13 @@
+{% extends "account/base.jinja2" %}
+{% block head_title %}Profile for {{user_display(user)}}{% endblock %}
+{% block body_title %}Profile for {{user_display(user)}}{% endblock %}
+{% block content %}
+
+<h2>Actions</h2>
+<ul class="list-inline">
+  <li><a class="btn btn-primary" href="{{url("account_email")}}">Manage email</a></li>
+  <li><a class="btn btn-primary" href="{{url("account_change_password")}}">Manage password</a></li>
+  <li><a class="btn btn-primary" href="{{url("socialaccount_connections")}}">Manage linked accounts</a></li>
+  <li><a class="btn btn-default" href="{{url("account_logout")}}">Sign Out</a></li>
+</ul>
+{% endblock %}

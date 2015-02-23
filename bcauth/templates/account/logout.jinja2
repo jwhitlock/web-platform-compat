@@ -1,4 +1,4 @@
-{% extends "webplatformcompat/base.jinja2" %}
+{% extends "account/base.jinja2" %}
 
 {% block head_title %}{{ _("Sign Out") }}{% endblock %}
 {% block body_title %}{{ _("Sign Out") }}{% endblock %}
@@ -12,6 +12,7 @@
   <input type="hidden" name="{{redirect_field_name}}" value="{{redirect_field_value}}"/>
   {% endif %}
   <button class="btn btn-primary" type="submit">{{ _('Sign Out') }}</button>
+  <button class="btn btn-default" type="button" onclick="window.history.go(-1); return false;">{{ _('Go Back') }}</button>
 </form>
 
 

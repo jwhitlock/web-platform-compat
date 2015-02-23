@@ -1,0 +1,19 @@
+{% extends "socialaccount/base.jinja2" %}
+
+{% block head_title %}{{ _("Social Network Login Failure") }}{% endblock %}
+{% block body_title %}{{ _("Social Network Login Failure") }}{% endblock %}
+
+{% block content %}
+<p>
+{% trans %}
+An error occurred while attempting to login via your social network account.
+{% endtrans %}
+{% if is_debug() %}
+Details:
+</p>
+<pre>{{auth_error}}</pre>
+{% else %}
+</p>
+{% endif %}
+
+{% endblock %}

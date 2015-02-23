@@ -1,4 +1,4 @@
-{% extends "webplatformcompat/base.jinja2" %}
+{% extends "account/base.jinja2" %}
 {% from "socialaccount/snippets/provider_list.jinja2" import list %}
 
 {% block head_title %}{{ _("Sign In") }}{% endblock %}
@@ -37,4 +37,10 @@ for a {{site_name}} account and sign in below:{% endtrans %}</p>
   <button class="btn btn-primary" type="submit">{{ _("Sign In") }}</button>
 </form>
 
+{% endblock %}
+
+{% block body_js_extra %}
+{% if socialaccount.providers  %}
+{{ providers_media_js() }}
+{% endif %}
 {% endblock %}
