@@ -117,7 +117,8 @@ cell_p_close = "</p>" _
 cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
     r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
 cell_removed = ~r"[Rr]emoved\s+[Ii]n\s*"s
-cell_footnote_id = ~r"\[(?P<footnote_id>\d+)\]\s*"s
+cell_footnote_id = "<sup>"? _ a_open? _ ~r"\[(?P<footnote_id>\d+|\*+)\]\s*"s _
+    "</a>"? _ "</sup>"?
 cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 
 #
@@ -125,8 +126,8 @@ cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 #
 compat_footnotes = footnote_item* _
 footnote_item = (footnote_p / footnote_pre)
-footnote_p = "<p>" _ footnote_id? _ footnote_p_text "</p>" _
-footnote_id = "[" ~r"(?P<content>\d+)" "]"
+footnote_p = "<p>" a_both? _ footnote_id? _ footnote_p_text "</p>" _
+footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
 footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
 footnote_pre = "<pre" attrs? ">" footnote_pre_text "</pre>" _
 footnote_pre_text = ~r"(?P<content>.*?(?=</pre>))"s
@@ -149,6 +150,8 @@ kuma_arg_rest = kuma_func_arg kuma_arg
 tr_open = "<tr" _ opt_attrs ">"
 th_open = "<th" _ opt_attrs ">"
 td_open = "<td" _ opt_attrs ">"
+a_open = "<a" _  opt_attrs ">"
+a_both = _ a_open _ "</a>" _
 
 p_empty = _ "<p>" _ "&nbsp;"* _ "</p>" _
 
@@ -595,9 +598,15 @@ class PageVisitor(NodeVisitor):
             'start': node.start, 'end': node.end}
 
     def visit_cell_footnote_id(self, node, children):
+        item = children[4]
+        raw_id = item.match.group('footnote_id')
+        if raw_id.isnumeric():
+            footnote_id = raw_id
+        else:
+            footnote_id = str(len(raw_id))
         return {
             'type': 'footnote_id',
-            'footnote_id': node.match.group('footnote_id'),
+            'footnote_id': footnote_id,
             'start': node.start, 'end': node.end}
 
     def visit_cell_removed(self, node, children):
@@ -659,8 +668,8 @@ class PageVisitor(NodeVisitor):
         return item
 
     def visit_footnote_p(self, node, children):
-        footnote_id = children[2]
-        text = children[4]
+        footnote_id = children[3]
+        text = children[5]
         assert isinstance(text, text_type), type(text)
         fixed = self.render_footnote_kuma(text, node.children[4].start)
         data = {
@@ -671,7 +680,11 @@ class PageVisitor(NodeVisitor):
         return data
 
     def visit_footnote_id(self, node, children):
-        footnote_id = children[1].match.group('content')
+        raw_id = children[1].match.group('content')
+        if raw_id.isnumeric():
+            footnote_id = raw_id
+        else:
+            footnote_id = str(len(raw_id))
         return footnote_id
 
     visit_footnote_p_text = _visit_content
