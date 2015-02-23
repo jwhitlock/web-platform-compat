@@ -1276,6 +1276,22 @@ class TestPageVisitor(ScrapeTestCase):
             expected_errors=[
                 (38, 41, 'Only one footnote allowed.')])
 
+    def test_compat_row_cell_support_double_footnote_link_sup(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/flex
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("20.0")}} '
+            '<sup><a href="#bc2">[2]</a><a href="#bc3">[3]</a></sup>',
+            [{'version': '20.0'}],
+            [{'support': 'yes', 'footnote_id': ('2', 35, 62)}],
+            expected_errors=[
+                (62, 90, 'Only one footnote allowed.')])
+
+    def test_compat_row_cell_support_star_footnote(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("20.0")}} [***]',
+            [{'version': '20.0'}],
+            [{'support': 'yes', 'footnote_id': ('3', 35, 40)}])
+
     def test_compat_row_cell_support_nbsp(self):
         self.assert_compat_row_cell_support(
             '15&nbsp;{{property_prefix("webkit")}}',
@@ -1324,7 +1340,7 @@ class TestPageVisitor(ScrapeTestCase):
             '1': ('Footnote  but the beat continues.', 0, 59)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (16, 31, "Unknown footnote kuma function UnknownKuma")]
+            (15, 30, "Unknown footnote kuma function UnknownKuma")]
         self.assertEqual(expected_errors, self.visitor.errors)
 
     def test_compat_footnotes_unknown_kumascript_with_args(self):
@@ -1333,7 +1349,7 @@ class TestPageVisitor(ScrapeTestCase):
         expected = {'1': ('Footnote ', 0, 42)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (16, 38, 'Unknown footnote kuma function UnknownKuma("arg")')]
+            (15, 37, 'Unknown footnote kuma function UnknownKuma("arg")')]
         self.assertEqual(expected_errors, self.visitor.errors)
 
     def test_compat_footnotes_pre_section(self):
@@ -2202,6 +2218,72 @@ class TestScrapeFeaturePage(ScrapeTestCase):
             self.simple_spec_section +
             self.simple_compat_section.replace(orig, new) +
             "<p>[1] Footnote</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        version = self.versions[('ie', '4.0')]
+        expected = {'__basic support-%d' % version.id: 1}
+        self.assertDataEqual(
+            expected, fp.data['meta']['compat_table']['footnotes'])
+
+    def test_scrape_with_footnote_link(self):
+        orig = "<td>4.0</td>"
+        new = "<td>4.0 <a href=\"#note-1\">[1]</a></td>"
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        assert orig in self.simple_compat_section
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section.replace(orig, new) +
+            "<p><a name=\"note-1\"></a>[1] Footnote</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        version = self.versions[('ie', '4.0')]
+        expected = {'__basic support-%d' % version.id: 1}
+        self.assertDataEqual(
+            expected, fp.data['meta']['compat_table']['footnotes'])
+
+    def test_scrape_with_footnote_link_sup(self):
+        orig = "<td>4.0</td>"
+        new = "<td>4.0 <sup><a href=\"#note-1\">[1]</a></sup></td>"
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        assert orig in self.simple_compat_section
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section.replace(orig, new) +
+            "<p><a name=\"note-1\"></a>[1] Footnote</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        version = self.versions[('ie', '4.0')]
+        expected = {'__basic support-%d' % version.id: 1}
+        self.assertDataEqual(
+            expected, fp.data['meta']['compat_table']['footnotes'])
+
+    def test_scrape_with_footnote_star(self):
+        orig = "<td>4.0</td>"
+        new = "<td>4.0 [*]</td>"
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        assert orig in self.simple_compat_section
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section.replace(orig, new) +
+            "<p><a name=\"note-1\"></a>[*] Footnote</p>")
         en_content.save()
 
         scrape_feature_page(self.page)
