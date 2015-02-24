@@ -130,6 +130,7 @@ SITE_ID = int(environ.get('SITE_ID', '1'))
 TEMPLATE_CONTEXT_PROCESSORS = (
     "django.contrib.auth.context_processors.auth",
     "django.core.context_processors.request",
+    "django.contrib.messages.context_processors.messages",
     "allauth.account.context_processors.account",
     "allauth.socialaccount.context_processors.socialaccount",
 )
