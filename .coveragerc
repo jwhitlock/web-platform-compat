@@ -3,6 +3,7 @@ branch = True
 
 [report]
 source =
+    bcauth
     tools
     webplatformcompat
 omit =
