@@ -25,10 +25,22 @@ $ heroku config
 $ heroku config:set DJANGO_DEBUG=1
 
 Environment variables:
+ADMIN_NAMES, ADMIN_EMAILS - comma-separted list of names and emails of admins
 ALLOWED_HOSTS - comma-separated list of allowed hosts
 DATABASE_URL - See https://github.com/kennethreitz/dj-database-url
+DEFAULT_FROM_EMAIL - "From" email for emails to users
 DJANGO_DEBUG - 1 to enable, 0 to disable, default disabled
+EMAIL_FILE_PATH - File path when FileSystemStorage is used
+EMAIL_HOST - SMTP server, default localhost
+EMAIL_HOST_PASSWORD - SMTP server password, default none
+EMAIL_HOST_USER - SMTP server username, default none
+EMAIL_PORT - SMTP server ports, default 25
+EMAIL_SUBJECT_PREFIX - Prefix for subject line of emails to admins
+EMAIL_USE_SSL - 1 to use SSL SMTP connection, usually on port 465
+EMAIL_USE_TLS - 1 to use TLS SMTP connection, usually on port 587
 EXTRA_INSTALLED_APPS - comma-separated list of apps to add to INSTALLED_APPS
+FXA_OAUTH_ENDPOINT - Override for Firefox Account OAuth2 endpoint
+FXA_PROFILE_ENDPOINT - Override for Firefox Account profile endpoint
 MDN_ALLOWED_URL_PREFIXES - comma-separated list of URL prefixes allowed by
   the scraper
 MEMCACHE_SERVERS - semicolon-separated list of memcache servers
@@ -39,7 +51,9 @@ DRF_INSTANCE_CACHE_POPULATE_COLD - 1 to recursively populate a cold cache on
   updates, 0 to be eventually consistent, default enabled
 SECRET_KEY - Overrides SECRET_KEY
 SECURE_PROXY_SSL_HEADER - "HTTP_X_FORWARDED_PROTOCOL,https" to enable
+SERVER_EMAIL - Email 'From' address for error messages to admins
 STATIC_ROOT - Overrides STATIC_ROOT
+
 """
 
 # Build paths inside the project like this: rel_path('folder', 'file')
@@ -135,7 +149,33 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     "allauth.socialaccount.context_processors.socialaccount",
 )
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Email settings
+if 'ADMIN_NAMES' in environ and 'ADMIN_EMAILS' in environ:
+    names = [x.strip() for x in environ['ADMIN_NAMES'].split(',')]
+    emails = [x.strip() for x in environ['ADMIN_EMAILS'].split(',')]
+    ADMINS = zip(names, emails)
+if 'EMAIL_BACKEND' in environ:
+    EMAIL_BACKEND = environ['EMAIL_BACKEND']
+if 'EMAIL_HOST' in environ:
+    EMAIL_HOST = environ['EMAIL_HOST']
+if 'EMAIL_PORT' in environ:
+    EMAIL_PORT = environ['EMAIL_PORT']
+if 'EMAIL_HOST_USER' in environ:
+    EMAIL_HOST_USER = environ['EMAIL_HOST_USER']
+if 'EMAIL_HOST_PASSWORD' in environ:
+    EMAIL_HOST_PASSWORD = environ['EMAIL_HOST_PASSWORD']
+if 'EMAIL_USE_TLS' in environ:
+    EMAIL_USE_TLS = (environ['EMAIL_USE_TLS'] in (1, "1"))
+if 'EMAIL_USE_SSL' in environ:
+    EMAIL_USE_SSL = (environ['EMAIL_USE_SSL'] in (1, "1"))
+if 'EMAIL_SUBJECT_PREFIX' in environ:
+    EMAIL_SUBJECT_PREFIX = environ['EMAIL_SUBJECT_PREFIX']
+if 'SERVER_EMAIL' in environ:
+    SERVER_EMAIL = environ['SERVER_EMAIL']
+if 'DEFAULT_FROM_EMAIL' in environ:
+    DEFAULT_FROM_EMAIL = environ['DEFAULT_FROM_EMAIL']
+if 'EMAIL_FILE_PATH' in environ:
+    EMAIL_FILE_PATH = environ['EMAIL_FILE_PATH']
 
 # Prefer our template folders to rest_framework's, allauth's
 TEMPLATE_DIRS = (
@@ -282,3 +322,15 @@ DRF_INSTANCE_CACHE_POPULATE_COLD = (
 # CORS Middleware
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
+
+# django-allauth
+SOCIALACCOUNT_PROVIDERS = {
+    'fxa': {
+        'OAUTH_ENDPOINT': environ.get(
+            'FXA_OAUTH_ENDPOINT',
+            'https://oauth.accounts.firefox.com/v1'),
+        'PROFILE_ENDPOINT': environ.get(
+            'FXA_PROFILE_ENDPOINT',
+            'https://profile.accounts.firefox.com/v1'),
+    }
+}
