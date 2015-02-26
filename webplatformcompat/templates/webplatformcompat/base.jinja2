@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    {% block head_meta %}
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% endblock head_meta %}
     <title>{% block head_title %}TODO: set block head_title{% endblock %}</title>
 
+    {% block head_css %}
     <link href="{{ static('vendor/bootstrap-3.2.0-dist/css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ static('vendor/bootstrap-3.2.0-dist/css/bootstrap-theme.min.css') }}" rel="stylesheet">
     <link href="{{ static('css/webplatformcompat.css') }}" rel="stylesheet">
+    {% endblock head_css %}
 
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -37,7 +41,8 @@
           <ul class="nav navbar-nav">
             <li{% if request.path.startswith(url('about')) %} class="active"{% endif %}>
               <a href="{{url('about')}}">About</a></li>
-            <li><a href="{{url('api-root')}}">API</a></li>
+            <li{% if request.path.startswith(url('api_root')) %} class="active"{% endif %}>
+              <a href="{{url('api-root')}}">API</a></li>
             <li{% if request.path.startswith(url('browse')) %} class="active"{% endif %}>
               <a href="{{url('browse')}}">Browse</a></li>
             <li{% if request.path.startswith(url('feature_page_list')) %} class="active"{% endif %}>
@@ -76,9 +81,11 @@
         {% endblock messages %}
         {% block content %}{% endblock %}
         <hr>
+        {% block footer_elem %}
         <footer>
-            <p>© 2014 - {{current_year()}} Mozilla</p>
+            <p>{% block footer %}© 2014 - {{current_year()}} Mozilla{% endblock footer %}</p>
         </footer>
+        {% endblock footer_elem %}
     </div>
     {%- endblock body_container %}
 

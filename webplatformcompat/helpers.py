@@ -8,9 +8,10 @@ from datetime import date
 from django.conf import settings
 from django.contrib.staticfiles.templatetags.staticfiles import static
 from django.utils.html import escape
-
 from jinja2 import contextfunction, Markup
 from jingo import register
+from rest_framework.templatetags.rest_framework import (
+    replace_query_param, urlize_quoted_links, break_long_headers, add_class)
 
 
 def pick_translation(context, trans_obj):
@@ -80,4 +81,14 @@ def is_debug():
     return settings.DEBUG
 
 
+@register.function
+def add_query_param(url, **query):
+    for key, val in query.items():
+        url = replace_query_param(url, key, val)
+    return url
+
+
+register.filter(add_class)
+register.filter(urlize_quoted_links)
+register.filter(break_long_headers)
 register.function(static)
