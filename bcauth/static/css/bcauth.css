@@ -1,0 +1,10 @@
+.socialaccount_provider > img {
+    outline: 1px solid black;
+    display: block;
+}
+
+.socialaccount_providers {
+    list-style: none;
+    margin-left: 0;
+    padding-left: 0;
+}

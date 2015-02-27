@@ -49,15 +49,15 @@
               <a href="{{url('feature_page_list')}}">Importer</a></li>
           </ul>
           <ul class="nav navbar-nav navbar-right">
-            {% if user.is_authenticated() %}
-            <li><span class="navbar-text">Signed in as
+            <li{% if request.path.startswith('/accounts/') %} class="active"{% endif %}>
+              {% if user.is_authenticated() %}
+              <span class="navbar-text">Signed in as
                 <a class="navbar-link" href="{{url('account_profile')}}">{{user_display(user)}}</a>
                 <a class="navbar-link" href="{{url('account_logout')}}">(Sign Out)</a>
-                </span>
+              {% else %}
+              <a class="navbar-link" href="{{url('account_login')}}">Sign In or Create Account</a>
+              {% endif %}
             </li>
-            {% else %}
-            <li><a class="navbar-link" href="{{url('account_login')}}">Sign In or Create Account</a></li>
-            {% endif %}
           </ul>
         </div><!--/.nav-collapse -->
       </div>

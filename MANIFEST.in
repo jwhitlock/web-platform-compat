@@ -5,6 +5,7 @@ include Procfile app.json
 include env.dist
 
 recursive-include bcauth *.py
+recursive-include bcauth/static *.css *.png
 recursive-include bcauth/templates *.jinja2 *.txt *.html
 recursive-include data README.txt
 recursive-include docs Makefile *.gv *.svg conf.py *.rst make.bat
