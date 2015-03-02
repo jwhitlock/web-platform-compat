@@ -83,8 +83,8 @@ class GroupedRouter(DefaultRouter):
         for u in furls:
             assert not isinstance(u, RegexURLResolver)
             match = (
-                u.name == 'viewfeatures-detail'
-                and 'api|json' in u.regex.pattern)
+                u.name == 'viewfeatures-detail' and
+                'api|json' in u.regex.pattern)
             if match:
                 pattern = u.regex.pattern.replace('api|json', 'api|json|html')
                 view = u._callback or u._callback_str

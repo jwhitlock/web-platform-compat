@@ -12,7 +12,7 @@ tox==1.9.0
 
 # PEP8, PEP257 and static analysis
 mccabe==0.3
-pep8==1.5.7
+pep8==1.6.2
 pyflakes==0.8.1
 flake8==2.3.0
 pep257==0.4.1

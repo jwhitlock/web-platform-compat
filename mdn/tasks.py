@@ -18,21 +18,23 @@ def start_crawl(featurepage_id):
     meta = fp.meta()
 
     # Determine next state / task
-    next_task = lambda: None
+    next_task = None
     if meta.status == meta.STATUS_STARTING:
         fp.status = fp.STATUS_META
-        next_task = lambda: fetch_meta.delay(fp.id)
+        next_task = (fetch_meta, fp.id)
     elif meta.status == meta.STATUS_FETCHING:
         fp.status = fp.STATUS_META
     elif meta.status == meta.STATUS_FETCHED:
         fp.status = fp.STATUS_PAGES
-        next_task = lambda: fetch_all_translations.delay(fp.id)
+        next_task = (fetch_all_translations, fp.id)
     else:
         assert meta.status == meta.STATUS_ERROR, meta.status
         fp.status = fp.STATUS_ERROR
         fp.add_error("Failed to download %s: %s" % (meta.url(), meta.raw))
     fp.save()
-    next_task()
+    if next_task is not None:
+        next_func, next_id = next_task
+        next_func.delay(next_id)
 
 
 @shared_task(ignore_result=True)
@@ -50,6 +52,8 @@ def fetch_meta(featurepage_id):
     # Request and validate the metadata
     url = meta.url()
     r = requests.get(url)
+    next_task = None
+    next_task_args = []
     if r.status_code != requests.codes.ok:
         meta.raw = "Status %d, Content:\n%s" % (r.status_code, r.text)
         meta.status = meta.STATUS_ERROR
@@ -72,9 +76,11 @@ def fetch_meta(featurepage_id):
     else:
         assert meta.status == meta.STATUS_FETCHED, meta.status
         fp.status = fp.STATUS_PAGES
-        next_task = lambda: fetch_all_translations.delay(fp.id)
+        next_task = fetch_all_translations.delay
+        next_task_args = (fp.id, )
     fp.save()
-    next_task()
+    assert next_task
+    next_task(*next_task_args)
 
 
 @shared_task(ignore_result=True)
@@ -133,13 +139,16 @@ def fetch_translation(featurepage_id, locale):
     # Request the translation
     r = requests.get(t.url() + "?raw")
     t.raw = r.text
+    next_task = None
+    next_task_args = []
     if r.status_code != requests.codes.ok:
         t.status = t.STATUS_ERROR
         t.raw = "Status %d, Content:\n%s" % (r.status_code, r.text)
         next_task = r.raise_for_status
     else:
         t.status = t.STATUS_FETCHED
-        next_task = lambda: fetch_all_translations.delay(fp.id)
+        next_task = fetch_all_translations.delay
+        next_task_args = (fp.id, )
     t.save()
 
     # Determine next state / task
@@ -147,7 +156,8 @@ def fetch_translation(featurepage_id, locale):
         fp.status = fp.STATUS_ERROR
         fp.add_error("Failed to download %s: %s" % (t.url(), t.raw))
         fp.save()
-    next_task()
+    assert next_task
+    next_task(*next_task_args)
 
 
 @shared_task(ignore_result=True)
