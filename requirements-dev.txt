@@ -1,7 +1,7 @@
 # Requirements for development
 
 # Documentation
-Pygments=2.0.2
+Pygments==2.0.2
 Sphinx==1.2.3
 docutils==0.12
 

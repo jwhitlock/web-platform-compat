@@ -1,6 +1,6 @@
 include LICENSE CONTRIBUTING.rst HISTORY.rst README.rst
 include Makefile .coveragerc manage.py
-include requirements.txt requirements.dev.txt
+include requirements.txt requirements-dev.txt
 include Procfile app.json
 include env.dist
 
