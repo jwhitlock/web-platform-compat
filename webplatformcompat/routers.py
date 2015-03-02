@@ -2,9 +2,9 @@
 
 from collections import OrderedDict
 
+from django.conf.urls import url
 from django.core.urlresolvers import RegexURLResolver
 from django.views.generic import RedirectView
-from rest_framework.compat import url
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.routers import DefaultRouter
