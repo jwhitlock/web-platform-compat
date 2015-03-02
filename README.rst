@@ -4,9 +4,15 @@ web-platform-compat
 
 .. image:: https://travis-ci.org/jwhitlock/web-platform-compat.png?branch=master
     :target: https://travis-ci.org/jwhitlock/web-platform-compat
+    :alt: Build Status
 
 .. image:: https://coveralls.io/repos/jwhitlock/web-platform-compat/badge.png?branch=master
     :target: https://coveralls.io/r/jwhitlock/web-platform-compat?branch=master
+    :alt: Test Coverage
+
+.. image:: https://requires.io/github/jwhitlock/web-platform-compat/requirements.svg?branch=master
+     :target: https://requires.io/github/jwhitlock/web-platform-compat/requirements/?branch=master
+     :alt: Requirements Status
 
 .. image:: https://www.herokucdn.com/deploy/button.png
     :target: https://heroku.com/deploy?template=https://github.com/jwhitlock/web-platform-compat
