@@ -89,11 +89,10 @@ compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
 compat_div_id = qtext
 compat_table = "<table class=\"compat-table\">" _ compat_body _ "</table>" _
 compat_body = "<tbody>" _ compat_headers _ compat_rows* _ "</tbody>"
-compat_headers = tr_open _ th_open _ "Feature</th>" _ compat_client_cells
-    _ "</tr>" _
-compat_client_cells = compat_client_cell*
-compat_client_cell = th_open _ compat_client_name _ "</th>" _
-compat_client_name = ~r"(?P<content>.*?(?=</th>))"s
+compat_headers = tr_open _ feature_cell _ compat_client_cells _
+    "</tr>" _
+feature_cell = th_elem
+compat_client_cells = th_elems
 compat_rows = compat_row* _
 compat_row = tr_open _ compat_row_cells _ "</tr>" _
 compat_row_cells = compat_row_cell+
@@ -145,7 +144,7 @@ kuma_bare_arg = ~r"(?P<content>.*?(?=[,)]))"
 kuma_arg_rest = kuma_func_arg kuma_arg
 
 th_elems = th_elem+
-th_elem = th_open _ bare_text "</th>" _
+th_elem = th_open _ (strong_text / bare_text) "</th>" _
 tr_open = "<tr" _ opt_attrs ">"
 th_open = "<th" _ opt_attrs ">"
 td_open = "<td" _ opt_attrs ">"
@@ -161,6 +160,7 @@ ident = ~r"(?P<content>[a-z][a-z0-9-:]*)"
 text = (double_quoted_text / single_quoted_text / bare_text)
 qtext = (double_quoted_text / single_quoted_text)
 bare_text = ~r"(?P<content>[^<]*)"
+strong_text = "<strong>" _ bare_text _ "</strong>" _
 double_quoted_text = ~r'"(?P<content>[^"]*)"'
 single_quoted_text = ~r"'(?P<content>[^']*)'"
 
@@ -497,40 +497,41 @@ class PageVisitor(NodeVisitor):
         }
 
     def visit_compat_headers(self, node, children):
-        compat_client_cells = children[6]
+        feature = children[2]
+        compat_client_cells = children[4]
+        assert isinstance(feature, dict), type(feature)
         assert isinstance(compat_client_cells, list), type(compat_client_cells)
 
-        # Consume th attributes
-        expected = ('colspan',)
-        for cell in compat_client_cells:
-            assert cell['type'] == 'th'
-            self._consume_attributes(cell, expected)
-            del cell['type']
+        # Verify feature header
+        fcontent = feature['content']
+        if fcontent['text'] != 'Feature':
+            issue = 'Expected header "Feature"'
+            self.issues.append((fcontent['start'], fcontent['end'], issue))
 
-        return compat_client_cells
+        # Process client headers
+        expected_attrs = ('colspan',)
+        clients = []
+        for raw_cell in compat_client_cells:
+            assert isinstance(raw_cell, dict), type(raw_cell)
+            assert raw_cell['type'] == 'th'
+            cell = self._consume_attributes(raw_cell, expected_attrs)
+            content = cell['content']
+            name = content['text']
+            assert isinstance(name, text_type), type(name)
+            b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
+            if is_fake_id(b_id):
+                issue = 'Unknown Browser "%s"' % name
+                self.errors.append((content['start'], content['end'], issue))
+            client = {
+                'name': b_name,
+                'id': b_id,
+                'slug': b_slug
+            }
+            if 'colspan' in cell:
+                client['colspan'] = cell['colspan']
+            clients.append(client)
 
-    def visit_compat_client_cell(self, node, children):
-        th_open = children[0]
-        compat_client_name = children[2]
-        assert isinstance(th_open, dict), type(th_open)
-        assert isinstance(compat_client_name, dict), type(compat_client_name)
-        client = compat_client_name.copy()
-        client.update(th_open)
-        return client
-
-    def visit_compat_client_name(self, node, children):
-        name = node.match.group('content')
-        assert isinstance(name, text_type), type(name)
-
-        b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
-        if is_fake_id(b_id):
-            self.errors.append(
-                (node.start, node.end, 'Unknown Browser "%s"' % name))
-        return {
-            'name': b_name,
-            'id': b_id,
-            'slug': b_slug,
-        }
+        return clients
 
     def visit_compat_rows(self, node, children):
         compat_rows = children[0]
@@ -560,8 +561,8 @@ class PageVisitor(NodeVisitor):
         td_open = children[0]
         assert isinstance(td_open, dict), type(td_open)
         assert td_open['type'] == 'td'
-        self._consume_attributes(td_open, ('rowspan', 'colspan'))
-        compat_row = [td_open]
+        compat_row = [
+            self._consume_attributes(td_open, ('rowspan', 'colspan'))]
 
         compat_cell = children[2]
         if isinstance(compat_cell, Node):
@@ -801,27 +802,38 @@ class PageVisitor(NodeVisitor):
         return {
             'type': tag,
             'attributes': attr_dict,
+            'start': node.start,
+            'end': node.end,
         }
 
     def _consume_attributes(self, node_dict, expected):
         """Move attributes to node dict, or add issue."""
-        attrs = node_dict.pop('attributes')
+        node_out = node_dict.copy()
+        attrs = node_out.pop('attributes', {})
         for ident, attr in attrs.items():
             if ident in expected:
-                assert ident not in node_dict
-                node_dict[ident] = attr['value']
+                assert ident not in node_out
+                node_out[ident] = attr['value']
             else:
                 self.issues.append((
                     attr['start'], attr['end'],
                     "Unexpected attribute <%s %s=\"%s\">" % (
                         node_dict['type'], ident, attr['value'])))
+        return node_out
 
     def visit_th_elem(self, node, children):
         th_open = children[0]
-        text = children[2]
+        content = children[2][0]
         assert isinstance(th_open, dict), type(th_open)
-        assert isinstance(text, text_type), type(text)
-        th_open['text'] = self.cleanup_whitespace(text)
+        if isinstance(content, dict):
+            th_open['content'] = content
+        else:
+            assert isinstance(content, text_type)
+            th_open['content'] = {
+                'start': children[1].end,
+                'end': children[3].start,
+                'text': self.cleanup_whitespace(content)
+            }
         return th_open
 
     def visit_td_open(self, node, children):
@@ -832,6 +844,16 @@ class PageVisitor(NodeVisitor):
 
     def visit_tr_open(self, node, children):
         return self._visit_open(node, children, 'tr')
+
+    def visit_strong_text(self, node, children):
+        text = children[2]
+        assert isinstance(text, text_type), type(text)
+        return {
+            'start': children[1].end,
+            'end': children[3].start,
+            'text': self.cleanup_whitespace(text),
+            'strong': True
+        }
 
     #
     # Utility methods

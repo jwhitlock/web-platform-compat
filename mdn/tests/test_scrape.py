@@ -42,6 +42,7 @@ class TestGrammar(TestCase):
         self.assertEqual('Specification', title.text)
 
     def test_spec_headers_unscoped(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
         text = """<tr>
           <th>Specification</th>
           <th>Status</th>
@@ -54,6 +55,21 @@ class TestGrammar(TestCase):
         title = col1.children[2]
         self.assertEqual('<th>', tag.text)
         self.assertEqual('Specification', title.text)
+
+    def test_spec_headers_strong(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+        text = """<tr>
+          <th scope="col"><strong>Specification</strong></th>
+          <th scope="col"><strong>Status</strong></th>
+          <th scope="col"><strong>Comment</strong></th>
+        </tr>"""
+        parsed = page_grammar['spec_headers'].parse(text)
+        th_elems = parsed.children[2]
+        col1 = th_elems.children[0]
+        tag = col1.children[0]
+        title = col1.children[2]
+        self.assertEqual('<th scope="col">', tag.text)
+        self.assertEqual('<strong>Specification</strong>', title.text)
 
     def test_spec_row_standard(self):
         text = """<tr>
@@ -131,6 +147,24 @@ class TestGrammar(TestCase):
         parsed = page_grammar['specdesc_td'].parse(text)
         td = parsed.children[0]
         self.assertEqual('<td style="vertical-align: top;">', td.text)
+
+    def test_compat_headers_standard(self):
+        text = "<tr><th>Feature</th><th>Firefox</th></tr>"
+        parsed = page_grammar['compat_headers'].parse(text)
+        feature = parsed.children[2]
+        firefox = parsed.children[4]
+        self.assertEqual('<th>Feature</th>', feature.text)
+        self.assertEqual('<th>Firefox</th>', firefox.text)
+
+    def test_compat_headers_strong(self):
+        text = (
+            "<tr><th><strong>Feature</strong></th>"
+            "<th><strong>Firefox</strong></th></tr>")
+        parsed = page_grammar['compat_headers'].parse(text)
+        feature = parsed.children[2]
+        firefox = parsed.children[4]
+        self.assertEqual('<th><strong>Feature</strong></th>', feature.text)
+        self.assertEqual('<th><strong>Firefox</strong></th>', firefox.text)
 
     def assert_cell_version(self, text, version, eng_version=None):
         match = page_grammar['cell_version'].parse(text).match.groupdict()
@@ -659,12 +693,50 @@ class TestPageVisitor(ScrapeTestCase):
         errors = [(166, 251, 'Unknown Specification "Web Audio API"')]
         self.assertEqual(errors, self.visitor.errors)
 
+    def test_compat_headers_standard(self):
+        text = "<tr><th>Feature</th><th>Firefox</th></tr>"
+        parsed = page_grammar['compat_headers'].parse(text)
+        headers = self.visitor.visit(parsed)
+        expected = [{'slug': '_Firefox', 'name': 'Firefox', 'id': "_Firefox"}]
+        self.assertEqual(expected, headers)
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual(
+            [(24, 31, 'Unknown Browser "Firefox"')], self.visitor.errors)
+
+    def test_compat_headers_strong(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+        text = (
+            "<tr><th><strong>Feature</strong></th>"
+            "<th><strong>Firefox</strong></th></tr>")
+        parsed = page_grammar['compat_headers'].parse(text)
+        headers = self.visitor.visit(parsed)
+        expected = [{'slug': '_Firefox', 'name': 'Firefox', 'id': "_Firefox"}]
+        self.assertEqual(expected, headers)
+        self.assertEqual(
+            [(49, 56, 'Unknown Browser "Firefox"')], self.visitor.errors)
+
+    def test_compat_headers_wrong_first_column_header(self):
+        # All known pages use "Features" for first column
+        text = (
+            "<tr><th><strong>Features</strong></th>"
+            "<th><strong>Firefox</strong></th></tr>")
+        parsed = page_grammar['compat_headers'].parse(text)
+        headers = self.visitor.visit(parsed)
+        expected = [{'slug': '_Firefox', 'name': 'Firefox', 'id': "_Firefox"}]
+        self.assertEqual(expected, headers)
+        self.assertEqual(
+            [(16, 24, 'Expected header "Feature"')], self.visitor.issues)
+        self.assertEqual(
+            [(50, 57, 'Unknown Browser "Firefox"')], self.visitor.errors)
+
     def test_compat_row_cell_feature_with_rowspan(self):
         text = '<td rowspan="2">Some Feature</td>'
         parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
             'rowspan': '2',
+            'start': 0,
+            'end': 16,
         }, {
             'type': 'text',
             'content': 'Some Feature',
@@ -686,6 +758,8 @@ class TestPageVisitor(ScrapeTestCase):
         parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
+            'start': 0,
+            'end': 19,
         }, {
             'type': 'text',
             'content': 'Some Feature',
@@ -1332,26 +1406,78 @@ class TestPageVisitor(ScrapeTestCase):
             ["CSS3 Backgrounds", "#the-background-size",
              "background-size"])
 
-    def assert_th(self, text, content, **attributes):
-        expected = {
-            'type': 'th',
-            'text': content,
-            'attributes': attributes}
+    def assert_th(self, text, expected):
         parsed = page_grammar['th_elem'].parse(text)
         self.assertEqual(expected, self.visitor.visit(parsed))
         self.assertEqual([], self.visitor.issues)
         self.assertEqual([], self.visitor.errors)
 
     def test_th_elem_simple(self):
-        self.assert_th('<th>Simple</th>', 'Simple')
+        text = '<th>Simple</th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 4,
+            'content': {
+                'start': 4,
+                'end': 10,
+                'text': 'Simple',
+            },
+            'attributes': {}
+        }
+        self.assert_th(text, expected)
 
     def test_th_elem_eat_whitespace(self):
-        self.assert_th('<th> Eats Whitespace </th>', 'Eats Whitespace')
+        text = '<th> Eats Whitespace </th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 4,
+            'content': {
+                'start': 5,
+                'end': 21,
+                'text': 'Eats Whitespace',
+            },
+            'attributes': {}
+        }
+        self.assert_th(text, expected)
 
     def test_th_elem_attrs(self):
-        self.assert_th(
-            '<th scope="col">Col Scope</th>', 'Col Scope',
-            scope={'start': 4, 'end': 15, 'value': 'col'})
+        text = '<th scope="col">Col Scope</th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 16,
+            'content': {
+                'start': 16,
+                'end': 25,
+                'text': 'Col Scope',
+            },
+            'attributes': {
+                'scope': {
+                    'start': 4,
+                    'end': 15,
+                    'value': 'col'
+                }
+            }
+        }
+        self.assert_th(text, expected)
+
+    def test_th_elem_in_strong(self):
+        text = '<th><strong>Strong</strong></th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 4,
+            'content': {
+                'start': 12,
+                'end': 18,
+                'text': 'Strong',
+                'strong': True
+            },
+            'attributes': {}
+        }
+        self.assert_th(text, expected)
 
     def test_unquote_double(self):
         self.assertEqual('foo', self.visitor.unquote('"foo"'))
