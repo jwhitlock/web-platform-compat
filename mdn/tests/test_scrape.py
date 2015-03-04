@@ -1977,7 +1977,7 @@ class TestScrape(ScrapeTestCase):
         }
         self.assertScrape(page, expected)
 
-    def test_unable_to_parse_compat(self):
+    def test_unable_to_parse_compat_first(self):
         good = '<td>{{CompatGeckoDesktop("1")}}</td>'
         bad = '<td><kuma>CompatGeckoDesktop("1")</kuma></td>'
         self.assertTrue(good in self.simple_compat_section)
@@ -1990,9 +1990,47 @@ class TestScrape(ScrapeTestCase):
             'issues': [],
             'errors': [
                 (377, 418,
-                 'Section <h2>Browser compatibility</h2> was not parsed,'
-                 ' because rule "compat_cell_item" failed to match.'
-                 '  Definition:',
+                 'Section <h2>Browser compatibility</h2> was not parsed.'
+                 ' The parser failed on rule "compat_cell_item", but the'
+                 ' real cause may be unexpected content after this'
+                 ' position. Definition:',
+                 'compat_cell_item = kuma / cell_break / code_block /'
+                 ' cell_p_open / cell_p_close / cell_version /'
+                 ' cell_footnote_id / cell_removed / cell_other')
+            ]
+        }
+        self.assertScrape(page, expected)
+
+    def test_unable_to_parse_compat_second(self):
+        good_spec = "{{SpecName('CSS3 Backgrounds',"
+        bad_spec = "{{SpecName('CRAZY',"
+        self.assertTrue(good_spec in self.simple_spec_section)
+        page = self.simple_spec_section.replace(good_spec, bad_spec)
+        good_compat = '<td>{{CompatGeckoDesktop("1")}}</td>'
+        bad_compat = '<td><kuma>CompatGeckoDesktop("1")</kuma></td>'
+        self.assertTrue(good_compat in self.simple_compat_section)
+        page += self.simple_compat_section.replace(good_compat, bad_compat)
+        expected = {
+            'locale': 'en',
+            'specs': [{
+                'section.id': None,
+                'section.name': u'background-size',
+                'section.note': u'',
+                'section.subpath': u'#the-background-size',
+                'specification.id': None,
+                'specification.mdn_key': u'CRAZY'}],
+            'compat': [],
+            'footnotes': None,
+            'issues': [],
+            'errors': [
+                (251, 324, 'Unknown Specification "CRAZY"'),
+                (243, 389,
+                 'SpecName(CSS3 Backgrounds, ...) does not match'
+                 ' Spec2(CRAZY)'),
+                (784, 825,
+                 'Section <h2>Browser compatibility</h2> was not parsed.'
+                 ' The parser failed on rule "compat_cell_item", but the'
+                 ' real cause is probably earlier issues. Definition:',
                  'compat_cell_item = kuma / cell_break / code_block /'
                  ' cell_p_open / cell_p_close / cell_version /'
                  ' cell_footnote_id / cell_removed / cell_other')

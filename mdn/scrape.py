@@ -251,15 +251,29 @@ class PageVisitor(NodeVisitor):
                 try:
                     page_grammar[section].parse(text)
                 except ParseError as pe:
-                    rule = pe.expr
-                    description = (
-                        'Section <h2>%s</h2> was not parsed, because rule'
-                        ' "%s" failed to match.  Definition:'
-                        % (title, rule.name))
-                    error = (
-                        pe.pos + start, end_of_line(pe.text, pe.pos) + start,
-                        description, rule.as_rule())
-                    self.errors.append(error)
+                    if self.errors:
+                        rule = pe.expr
+                        description = (
+                            'Section <h2>%s</h2> was not parsed.'
+                            ' The parser failed on rule "%s", but the real'
+                            ' cause is probably earlier issues. Definition:'
+                            % (title, rule.name))
+                        self.errors.append((
+                            pe.pos + start,
+                            end_of_line(pe.text, pe.pos) + start,
+                            description, rule.as_rule()))
+                    else:
+                        rule = pe.expr
+                        description = (
+                            'Section <h2>%s</h2> was not parsed. The parser'
+                            ' failed on rule "%s", but the real cause may be'
+                            ' unexpected content after this position.'
+                            ' Definition:' % (title, rule.name))
+                        self.errors.append((
+                            pe.pos + start,
+                            end_of_line(pe.text, pe.pos) + start,
+                            description, rule.as_rule()))
+
                 else:  # pragma: nocover
                     error = (
                         start, end_of_line(text, 0) + start,
