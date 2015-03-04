@@ -271,21 +271,26 @@ class PageVisitor(NodeVisitor):
     #
     def visit_spec_h2(self, node, children):
         attrs_list = children[2][0]
-        attrs = dict(attrs_list)
-        h2_id = attrs.get('id')
-        if h2_id != 'Specifications':
-            self.issues.append(
-                (node.start, node.end,
-                 ('In Specifications section, expected <h2'
-                  ' id="Specifications">, actual id="%s"' % h2_id)))
-
-        h2_name = attrs.get('name')
-        if h2_name is not None and h2_name != 'Specifications':
-            self.issues.append(
-                (node.start, node.end,
-                 ('In Specifications section, expected <h2'
-                  ' name="Specifications"> or no name attribute,'
-                  ' actual name="%s"' % h2_name)))
+        assert isinstance(attrs_list, list), type(attrs_list)
+        h2_id = None
+        expected = ('Specifications',)
+        for attr in attrs_list:
+            assert isinstance(attr, dict), type(attr)
+            if attr['ident'] == 'id':
+                h2_id = attr['value']
+                if h2_id not in expected:
+                    issue = (
+                        'In Specifications section, expected <h2'
+                        ' id="Specifications">, actual id=' '"%s"' % h2_id)
+                    self.issues.append((attr['start'], attr['end'], issue))
+            elif attr['ident'] == 'name':
+                h2_name = attr['value']
+                if h2_name not in expected:
+                    issue = (
+                        'In Specifications section, expected <h2'
+                        ' name="Specifications"> or no name attribute,'
+                        ' actual name="%s"' % h2_name)
+                    self.issues.append((attr['start'], attr['end'], issue))
 
     def visit_spec_row(self, node, children):
         specname = children[2]
@@ -494,8 +499,14 @@ class PageVisitor(NodeVisitor):
     def visit_compat_headers(self, node, children):
         compat_client_cells = children[6]
         assert isinstance(compat_client_cells, list), type(compat_client_cells)
+
+        # Consume th attributes
+        expected = ('colspan',)
         for cell in compat_client_cells:
-            assert isinstance(cell, dict), type(cell)
+            assert cell['type'] == 'th'
+            self._consume_attributes(cell, expected)
+            del cell['type']
+
         return compat_client_cells
 
     def visit_compat_client_cell(self, node, children):
@@ -548,17 +559,21 @@ class PageVisitor(NodeVisitor):
     def visit_compat_row_cell(self, node, children):
         td_open = children[0]
         assert isinstance(td_open, dict), type(td_open)
+        assert td_open['type'] == 'td'
+        self._consume_attributes(td_open, ('rowspan', 'colspan'))
+        compat_row = [td_open]
 
         compat_cell = children[2]
         if isinstance(compat_cell, Node):
             assert compat_cell.start == compat_cell.end
             compat_cell = []
-        assert isinstance(compat_cell, list), type(compat_cell)
-        for item in compat_cell:
-            assert isinstance(item, dict)
-        td_open['type'] = 'td'
-        compat_cell.insert(0, td_open)
-        return compat_cell
+        else:
+            assert isinstance(compat_cell, list), type(compat_cell)
+            for item in compat_cell:
+                assert isinstance(item, dict)
+                compat_row.append(item)
+
+        return compat_row
 
     #
     # Browser Compatibility table cells
@@ -682,14 +697,19 @@ class PageVisitor(NodeVisitor):
             attrs = []
         else:
             assert isinstance(attrs_node, list), type(attrs_node)
-            assert len(attrs_node) == 1
             attrs = attrs_node[0]
         assert isinstance(attrs, list), type(attrs)
+
+        attr_dict = {}
+        for attr in attrs:
+            ident = attr.pop('ident')
+            assert ident not in attr_dict
+            attr_dict[ident] = attr
 
         text = children[3]
         assert isinstance(text, text_type), type(text)
         return {
-            'type': 'pre', 'attributes': dict(attrs), 'content': text,
+            'type': 'pre', 'attributes': attr_dict, 'content': text,
             'start': node.start, 'end': node.end}
 
     visit_footnote_pre_text = _visit_content
@@ -752,43 +772,58 @@ class PageVisitor(NodeVisitor):
         assert isinstance(ident, text_type), type(ident)
         assert isinstance(value, text_type), type(value)
 
-        return (ident, value)
+        return {
+            'ident': ident,
+            'value': value,
+            'start': node.start,
+            'end': node.end,
+        }
 
     visit_ident = _visit_content
     visit_bare_text = _visit_content
     visit_single_quoted_text = _visit_content
     visit_double_quoted_text = _visit_content
 
-    def _visit_open(self, node, children, tag, expected):
+    def _visit_open(self, node, children, tag):
         """Parse an opening tag with an expected attributes list"""
         attrs = children[2]
         assert isinstance(attrs, list), type(attrs)
         for attr in attrs:
-            assert len(attr) == 2, attr
+            assert isinstance(attr, dict)
 
-        # Filter attributes
+        # Index by attribute ident
         attr_dict = {}
-        for name, value in attrs:
-            if name not in expected:
-                self.issues.append((
-                    node.start, node.end,
-                    "Unexpected attribute <%s %s=\"%s\">" % (
-                        tag, name, value)))
+        for attr in attrs:
+            ident = attr.pop('ident')
+            assert ident not in attr_dict
+            attr_dict[ident] = attr
+
+        return {
+            'type': tag,
+            'attributes': attr_dict,
+        }
+
+    def _consume_attributes(self, node_dict, expected):
+        """Move attributes to node dict, or add issue."""
+        attrs = node_dict.pop('attributes')
+        for ident, attr in attrs.items():
+            if ident in expected:
+                assert ident not in node_dict
+                node_dict[ident] = attr['value']
             else:
-                attr_dict[name] = value
-        return attr_dict
+                self.issues.append((
+                    attr['start'], attr['end'],
+                    "Unexpected attribute <%s %s=\"%s\">" % (
+                        node_dict['type'], ident, attr['value'])))
 
     def visit_td_open(self, node, children):
-        expected = ('rowspan', 'colspan')
-        return self._visit_open(node, children, 'td', expected)
+        return self._visit_open(node, children, 'td')
 
     def visit_th_open(self, node, children):
-        expected = ('colspan',)
-        return self._visit_open(node, children, 'th', expected)
+        return self._visit_open(node, children, 'th')
 
     def visit_tr_open(self, node, children):
-        expected = []
-        return self._visit_open(node, children, 'tr', expected)
+        return self._visit_open(node, children, 'tr')
 
     #
     # Utility methods
@@ -1181,9 +1216,11 @@ class PageVisitor(NodeVisitor):
             for item in footnote:
                 i = item.copy()
                 if i.get('attributes'):
-                    attrs = " ".join(
-                        '%s="%s"' % a for a in i['attributes'].items())
-                    i['tag'] = '<%s %s>' % (i['type'], attrs)
+                    attrs = [
+                        (k, v['value']) for k, v in i['attributes'].items()]
+                    attrs.sort()
+                    attr_out = " ".join('%s="%s"' % a for a in attrs)
+                    i['tag'] = '<%s %s>' % (i['type'], attr_out)
                 else:
                     i['tag'] = '<%s>' % i['type']
                 bits.append(fmt % i)

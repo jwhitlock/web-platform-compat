@@ -409,6 +409,51 @@ class TestPageVisitor(ScrapeTestCase):
         expected = "This text has lots of extra whitespace."
         self.assertEqual(expected, self.visitor.cleanup_whitespace(text))
 
+    def assert_spec_h2(self, text, issues):
+        parsed = page_grammar['spec_h2'].parse(text)
+        self.visitor.visit(parsed)
+        self.assertEqual(issues, self.visitor.issues)
+
+    def test_spec_h2_expected(self):
+        self.assert_spec_h2('<h2 id="Specifications">Specifications</h2>', [])
+
+    def test_spec_h2_with_name(self):
+        self.assert_spec_h2(
+            '<h2 name="Specifications" id="Specifications">'
+            'Specifications</h2>', [])
+
+    def test_spec_h2_discards_extra(self):
+        self.assert_spec_h2(
+            '<h2 id="Specifications" extra="crazy">Specifications</h2>', [])
+
+    def test_spec_h2_specification_id(self):
+        self.assert_spec_h2(
+            '<h2 id="Specification">Specifications</h2>',
+            [(4, 22,
+              ('In Specifications section, expected <h2 id="Specifications">,'
+               ' actual id="Specification"'))])
+
+    def test_spec_h2_specification_name(self):
+        self.assert_spec_h2(
+            '<h2 id="Specifications" name="Specification">Specifications</h2>',
+            [(24, 44,
+              ('In Specifications section, expected <h2'
+               ' name="Specifications"> or no name attribute, actual'
+               ' name="Specification"'))])
+
+    def test_spec_h2_browser_compat(self):
+        # Common bug from copying from Browser Compatibility section
+        self.assert_spec_h2(
+            '<h2 id="Browser_compatibility" name="Browser_compatibility">'
+            'Specifications</h2>',
+            [(4, 31,
+              ('In Specifications section, expected <h2 id="Specifications">,'
+               ' actual id="Browser_compatibility"')),
+             (31, 59,
+              ('In Specifications section, expected <h2'
+               ' name="Specifications"> or no name attribute, actual'
+               ' name="Browser_compatibility"'))])
+
     def test_specname_3_arg(self):
         self.add_spec_models()
         text = '<td>{{SpecName("CSS3 Backgrounds", "#subpath", "Name")}}</td>'
@@ -569,6 +614,9 @@ class TestPageVisitor(ScrapeTestCase):
         }]
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
+        expected_issues = [
+            (4, 18, 'Unexpected attribute <td class="freaky">')]
+        self.assertEqual(expected_issues, self.visitor.issues)
 
     def test_compat_row_cell_feature_name_lookup(self):
         texts = [
@@ -1729,10 +1777,10 @@ class TestScrape(ScrapeTestCase):
             'compat': [],
             'footnotes': None,
             'issues': [
-                (0, 79,
+                (4, 31,
                  'In Specifications section, expected <h2 id="Specifications">'
                  ', actual id="Browser_Compatibility"'),
-                (0, 79,
+                (31, 59,
                  'In Specifications section, expected <h2'
                  ' name="Specifications"> or no name attribute,'
                  ' actual name="Browser_Compatibility"'),
