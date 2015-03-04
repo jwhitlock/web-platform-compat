@@ -273,7 +273,7 @@ class PageVisitor(NodeVisitor):
         attrs_list = children[2][0]
         assert isinstance(attrs_list, list), type(attrs_list)
         h2_id = None
-        expected = ('Specifications',)
+        expected = ('Specifications', 'Specification')
         for attr in attrs_list:
             assert isinstance(attr, dict), type(attr)
             if attr['ident'] == 'id':

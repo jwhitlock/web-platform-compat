@@ -427,19 +427,12 @@ class TestPageVisitor(ScrapeTestCase):
             '<h2 id="Specifications" extra="crazy">Specifications</h2>', [])
 
     def test_spec_h2_specification_id(self):
-        self.assert_spec_h2(
-            '<h2 id="Specification">Specifications</h2>',
-            [(4, 22,
-              ('In Specifications section, expected <h2 id="Specifications">,'
-               ' actual id="Specification"'))])
+        self.assert_spec_h2('<h2 id="Specification">Specifications</h2>', [])
 
     def test_spec_h2_specification_name(self):
         self.assert_spec_h2(
             '<h2 id="Specifications" name="Specification">Specifications</h2>',
-            [(24, 44,
-              ('In Specifications section, expected <h2'
-               ' name="Specifications"> or no name attribute, actual'
-               ' name="Specification"'))])
+            [])
 
     def test_spec_h2_browser_compat(self):
         # Common bug from copying from Browser Compatibility section
