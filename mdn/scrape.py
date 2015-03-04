@@ -63,16 +63,14 @@ spec_head = spec_thead_headers / spec_tbody_headers
 spec_thead_headers = "<thead>" _ spec_headers "</thead>" _ spec_tbody _
 spec_tbody_headers = spec_tbody _ spec_headers
 spec_headers =  "<tr>" _ th_elems _ "</tr>" _
-th_elems = th_elem+
-th_elem = "<th scope=\"col\">" _ (!"</th>" bare_text) _ "</th>" _
 spec_tbody = "<tbody>"
 
 spec_body = spec_rows "</tbody>"
 spec_rows = spec_row+
-spec_row = "<tr>" _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
-specname_td = "<td>" _ kuma "</td>"
-spec2_td = "<td>" _ kuma "</td>"
-specdesc_td = "<td>" _ inner_td _ "</td>"
+spec_row = tr_open _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
+specname_td = td_open _ kuma "</td>"
+spec2_td = td_open _ kuma "</td>"
+specdesc_td = td_open _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
 #
@@ -146,6 +144,8 @@ kuma_arg = (double_quoted_text / single_quoted_text / kuma_bare_arg)
 kuma_bare_arg = ~r"(?P<content>.*?(?=[,)]))"
 kuma_arg_rest = kuma_func_arg kuma_arg
 
+th_elems = th_elem+
+th_elem = th_open _ bare_text "</th>" _
 tr_open = "<tr" _ opt_attrs ">"
 th_open = "<th" _ opt_attrs ">"
 td_open = "<td" _ opt_attrs ">"
@@ -815,6 +815,14 @@ class PageVisitor(NodeVisitor):
                     attr['start'], attr['end'],
                     "Unexpected attribute <%s %s=\"%s\">" % (
                         node_dict['type'], ident, attr['value'])))
+
+    def visit_th_elem(self, node, children):
+        th_open = children[0]
+        text = children[2]
+        assert isinstance(th_open, dict), type(th_open)
+        assert isinstance(text, text_type), type(text)
+        th_open['text'] = self.cleanup_whitespace(text)
+        return th_open
 
     def visit_td_open(self, node, children):
         return self._visit_open(node, children, 'td')

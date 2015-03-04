@@ -26,6 +26,86 @@ class TestGrammar(TestCase):
         capture = parsed.children[6]
         self.assertEqual("<code>Summary</code>", capture.text)
 
+    def test_spec_headers_scoped(self):
+        # Most common version
+        text = """<tr>
+          <th scope="col">Specification</th>
+          <th scope="col">Status</th>
+          <th scope="col">Comment</th>
+        </tr>"""
+        parsed = page_grammar['spec_headers'].parse(text)
+        th_elems = parsed.children[2]
+        col1 = th_elems.children[0]
+        tag = col1.children[0]
+        title = col1.children[2]
+        self.assertEqual('<th scope="col">', tag.text)
+        self.assertEqual('Specification', title.text)
+
+    def test_spec_headers_unscoped(self):
+        text = """<tr>
+          <th>Specification</th>
+          <th>Status</th>
+          <th>Comment</th>
+        </tr>"""
+        parsed = page_grammar['spec_headers'].parse(text)
+        th_elems = parsed.children[2]
+        col1 = th_elems.children[0]
+        tag = col1.children[0]
+        title = col1.children[2]
+        self.assertEqual('<th>', tag.text)
+        self.assertEqual('Specification', title.text)
+
+    def test_spec_row_standard(self):
+        text = """<tr>
+          <td>{{SpecName('CSS3 Backgrounds', '#the-background-size',
+            'background-size')}}</td>
+          <td>{{Spec2('CSS3 Backgrounds')}}</td>
+          <td></td>
+        </tr>"""
+        parsed = page_grammar['spec_row'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<tr>', tr.text)
+
+    def test_spec_row_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = """<tr style="vertical-align: top;">
+          <td>{{ SpecName('CSS2.1', "cascade.html#value-def-inherit",
+            "inherit") }}</td>
+          <td>{{ Spec2('CSS2.1') }}</td>
+          <td>Initial definition</td>
+        </tr>"""
+        parsed = page_grammar['spec_row'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<tr style="vertical-align: top;">', tr.text)
+
+    def test_specname_td_standard(self):
+        text = """<td>{{SpecName('CSS3 Backgrounds', '#the-background-size',
+            'background-size')}}</td>"""
+        parsed = page_grammar['specname_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td>', tr.text)
+
+    def test_specname_td_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = """<td style="vertical-align: top;">{{ SpecName('CSS2.1',
+            "cascade.html#value-def-inherit", "inherit") }}</td>"""
+        parsed = page_grammar['specname_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td style="vertical-align: top;">', tr.text)
+
+    def test_spec2_td_standard(self):
+        text = "<td>{{Spec2('CSS3 Backgrounds')}}</td>"
+        parsed = page_grammar['spec2_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td>', tr.text)
+
+    def test_spec2_td_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = '<td style="vertical-align: top;">{{ Spec2("CSS2.1") }}</td>'
+        parsed = page_grammar['spec2_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td style="vertical-align: top;">', tr.text)
+
     def test_specdesc_td_empty(self):
         text = '<td></td>'
         parsed = page_grammar['specdesc_td'].parse(text)
@@ -44,6 +124,13 @@ class TestGrammar(TestCase):
         capture = parsed.children[2]
         self.assertEqual(
             'Defines <code>right</code> as animatable.', capture.text)
+
+    def test_specdesc_td_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = "<td style=\"vertical-align: top;\">Initial definition.</td>"
+        parsed = page_grammar['specdesc_td'].parse(text)
+        td = parsed.children[0]
+        self.assertEqual('<td style="vertical-align: top;">', td.text)
 
     def assert_cell_version(self, text, version, eng_version=None):
         match = page_grammar['cell_version'].parse(text).match.groupdict()
@@ -1244,6 +1331,27 @@ class TestPageVisitor(ScrapeTestCase):
             "SpecName",
             ["CSS3 Backgrounds", "#the-background-size",
              "background-size"])
+
+    def assert_th(self, text, content, **attributes):
+        expected = {
+            'type': 'th',
+            'text': content,
+            'attributes': attributes}
+        parsed = page_grammar['th_elem'].parse(text)
+        self.assertEqual(expected, self.visitor.visit(parsed))
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual([], self.visitor.errors)
+
+    def test_th_elem_simple(self):
+        self.assert_th('<th>Simple</th>', 'Simple')
+
+    def test_th_elem_eat_whitespace(self):
+        self.assert_th('<th> Eats Whitespace </th>', 'Eats Whitespace')
+
+    def test_th_elem_attrs(self):
+        self.assert_th(
+            '<th scope="col">Col Scope</th>', 'Col Scope',
+            scope={'start': 4, 'end': 15, 'value': 'col'})
 
     def test_unquote_double(self):
         self.assertEqual('foo', self.visitor.unquote('"foo"'))
