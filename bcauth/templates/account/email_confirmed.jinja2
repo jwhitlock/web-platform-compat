@@ -1,0 +1,13 @@
+{% extends "account/base.jinja2" %}
+
+{% block head_title %}{{ _("Confirm E-mail Address") }}{% endblock %}
+{% block body_title %}{{ _("Confirm E-mail Address") }}{% endblock %}
+
+{% block content %}
+{% user_display confirmation.email_address.user as user_display %}
+<p>{% trans email=confirmation.email_address.email,
+            user_display=user_display(confirmation.email_address.user) %}
+You have confirmed that <a href="mailto:{{email}}">{{ email }}</a> is an
+e-mail address for user {{ user_display }}.
+{% endtrans %}</p>
+{% endblock %}

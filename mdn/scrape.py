@@ -47,7 +47,7 @@ doc = other_text other_section* spec_section? compat_section?
 # Sections that we don't care about
 other_text = ~r".*?(?=<h2)"s
 other_section = _ !(spec_h2 / compat_h2) other_h2 _ other_text
-other_h2 = "<h2 " _ attrs? _ ">" _ bare_text _ "</h2>"
+other_h2 = "<h2 " _ attrs? _ ">" _ ~r"(?P<content>.*?(?=</h2>))"s _ "</h2>"
 last_section = _ other_h2 _ ~r".*(?!=<h2)"s
 
 #
@@ -63,16 +63,14 @@ spec_head = spec_thead_headers / spec_tbody_headers
 spec_thead_headers = "<thead>" _ spec_headers "</thead>" _ spec_tbody _
 spec_tbody_headers = spec_tbody _ spec_headers
 spec_headers =  "<tr>" _ th_elems _ "</tr>" _
-th_elems = th_elem+
-th_elem = "<th scope=\"col\">" _ (!"</th>" bare_text) _ "</th>" _
 spec_tbody = "<tbody>"
 
 spec_body = spec_rows "</tbody>"
 spec_rows = spec_row+
-spec_row = "<tr>" _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
-specname_td = "<td>" _ kuma "</td>"
-spec2_td = "<td>" _ kuma "</td>"
-specdesc_td = "<td>" _ inner_td _ "</td>"
+spec_row = tr_open _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
+specname_td = td_open _ kuma "</td>"
+spec2_td = td_open _ kuma "</td>"
+specdesc_td = td_open _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
 #
@@ -91,11 +89,10 @@ compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
 compat_div_id = qtext
 compat_table = "<table class=\"compat-table\">" _ compat_body _ "</table>" _
 compat_body = "<tbody>" _ compat_headers _ compat_rows* _ "</tbody>"
-compat_headers = tr_open _ th_open _ "Feature</th>" _ compat_client_cells
-    _ "</tr>" _
-compat_client_cells = compat_client_cell*
-compat_client_cell = th_open _ compat_client_name _ "</th>" _
-compat_client_name = ~r"(?P<content>.*?(?=</th>))"s
+compat_headers = tr_open _ feature_cell _ compat_client_cells _
+    "</tr>" _
+feature_cell = th_elem
+compat_client_cells = th_elems
 compat_rows = compat_row* _
 compat_row = tr_open _ compat_row_cells _ "</tr>" _
 compat_row_cells = compat_row_cell+
@@ -117,7 +114,8 @@ cell_p_close = "</p>" _
 cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
     r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
 cell_removed = ~r"[Rr]emoved\s+[Ii]n\s*"s
-cell_footnote_id = ~r"\[(?P<footnote_id>\d+)\]\s*"s
+cell_footnote_id = "<sup>"? _ a_open? _ ~r"\[(?P<footnote_id>\d+|\*+)\]\s*"s _
+    "</a>"? _ "</sup>"?
 cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 
 #
@@ -125,8 +123,8 @@ cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 #
 compat_footnotes = footnote_item* _
 footnote_item = (footnote_p / footnote_pre)
-footnote_p = "<p>" _ footnote_id? _ footnote_p_text "</p>" _
-footnote_id = "[" ~r"(?P<content>\d+)" "]"
+footnote_p = "<p>" a_both? _ footnote_id? _ footnote_p_text "</p>" _
+footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
 footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
 footnote_pre = "<pre" attrs? ">" footnote_pre_text "</pre>" _
 footnote_pre_text = ~r"(?P<content>.*?(?=</pre>))"s
@@ -146,9 +144,13 @@ kuma_arg = (double_quoted_text / single_quoted_text / kuma_bare_arg)
 kuma_bare_arg = ~r"(?P<content>.*?(?=[,)]))"
 kuma_arg_rest = kuma_func_arg kuma_arg
 
+th_elems = th_elem+
+th_elem = th_open _ (strong_text / bare_text) "</th>" _
 tr_open = "<tr" _ opt_attrs ">"
 th_open = "<th" _ opt_attrs ">"
 td_open = "<td" _ opt_attrs ">"
+a_open = "<a" _  opt_attrs ">"
+a_both = _ a_open _ "</a>" _
 
 p_empty = _ "<p>" _ "&nbsp;"* _ "</p>" _
 
@@ -161,6 +163,7 @@ ident = ~r"(?P<content>[a-z][a-z0-9-:]*)"
 text = (double_quoted_text / single_quoted_text / bare_text)
 qtext = (double_quoted_text / single_quoted_text)
 bare_text = ~r"(?P<content>[^<]*)"
+strong_text = "<strong>" _ bare_text _ "</strong>" _
 double_quoted_text = ~r'"(?P<content>[^"]*)"'
 single_quoted_text = ~r"'(?P<content>[^']*)'"
 
@@ -248,15 +251,29 @@ class PageVisitor(NodeVisitor):
                 try:
                     page_grammar[section].parse(text)
                 except ParseError as pe:
-                    rule = pe.expr
-                    description = (
-                        'Section <h2>%s</h2> was not parsed, because rule'
-                        ' "%s" failed to match.  Definition:'
-                        % (title, rule.name))
-                    error = (
-                        pe.pos + start, end_of_line(pe.text, pe.pos) + start,
-                        description, rule.as_rule())
-                    self.errors.append(error)
+                    if self.errors:
+                        rule = pe.expr
+                        description = (
+                            'Section <h2>%s</h2> was not parsed.'
+                            ' The parser failed on rule "%s", but the real'
+                            ' cause is probably earlier issues. Definition:'
+                            % (title, rule.name))
+                        self.errors.append((
+                            pe.pos + start,
+                            end_of_line(pe.text, pe.pos) + start,
+                            description, rule.as_rule()))
+                    else:
+                        rule = pe.expr
+                        description = (
+                            'Section <h2>%s</h2> was not parsed. The parser'
+                            ' failed on rule "%s", but the real cause may be'
+                            ' unexpected content after this position.'
+                            ' Definition:' % (title, rule.name))
+                        self.errors.append((
+                            pe.pos + start,
+                            end_of_line(pe.text, pe.pos) + start,
+                            description, rule.as_rule()))
+
                 else:  # pragma: nocover
                     error = (
                         start, end_of_line(text, 0) + start,
@@ -271,21 +288,26 @@ class PageVisitor(NodeVisitor):
     #
     def visit_spec_h2(self, node, children):
         attrs_list = children[2][0]
-        attrs = dict(attrs_list)
-        h2_id = attrs.get('id')
-        if h2_id != 'Specifications':
-            self.issues.append(
-                (node.start, node.end,
-                 ('In Specifications section, expected <h2'
-                  ' id="Specifications">, actual id="%s"' % h2_id)))
-
-        h2_name = attrs.get('name')
-        if h2_name is not None and h2_name != 'Specifications':
-            self.issues.append(
-                (node.start, node.end,
-                 ('In Specifications section, expected <h2'
-                  ' name="Specifications"> or no name attribute,'
-                  ' actual name="%s"' % h2_name)))
+        assert isinstance(attrs_list, list), type(attrs_list)
+        h2_id = None
+        expected = ('Specifications', 'Specification')
+        for attr in attrs_list:
+            assert isinstance(attr, dict), type(attr)
+            if attr['ident'] == 'id':
+                h2_id = attr['value']
+                if h2_id not in expected:
+                    issue = (
+                        'In Specifications section, expected <h2'
+                        ' id="Specifications">, actual id=' '"%s"' % h2_id)
+                    self.issues.append((attr['start'], attr['end'], issue))
+            elif attr['ident'] == 'name':
+                h2_name = attr['value']
+                if h2_name not in expected:
+                    issue = (
+                        'In Specifications section, expected <h2'
+                        ' name="Specifications"> or no name attribute,'
+                        ' actual name="%s"' % h2_name)
+                    self.issues.append((attr['start'], attr['end'], issue))
 
     def visit_spec_row(self, node, children):
         specname = children[2]
@@ -492,34 +514,41 @@ class PageVisitor(NodeVisitor):
         }
 
     def visit_compat_headers(self, node, children):
-        compat_client_cells = children[6]
+        feature = children[2]
+        compat_client_cells = children[4]
+        assert isinstance(feature, dict), type(feature)
         assert isinstance(compat_client_cells, list), type(compat_client_cells)
-        for cell in compat_client_cells:
-            assert isinstance(cell, dict), type(cell)
-        return compat_client_cells
 
-    def visit_compat_client_cell(self, node, children):
-        th_open = children[0]
-        compat_client_name = children[2]
-        assert isinstance(th_open, dict), type(th_open)
-        assert isinstance(compat_client_name, dict), type(compat_client_name)
-        client = compat_client_name.copy()
-        client.update(th_open)
-        return client
+        # Verify feature header
+        fcontent = feature['content']
+        if fcontent['text'] != 'Feature':
+            issue = 'Expected header "Feature"'
+            self.issues.append((fcontent['start'], fcontent['end'], issue))
 
-    def visit_compat_client_name(self, node, children):
-        name = node.match.group('content')
-        assert isinstance(name, text_type), type(name)
+        # Process client headers
+        expected_attrs = ('colspan',)
+        clients = []
+        for raw_cell in compat_client_cells:
+            assert isinstance(raw_cell, dict), type(raw_cell)
+            assert raw_cell['type'] == 'th'
+            cell = self._consume_attributes(raw_cell, expected_attrs)
+            content = cell['content']
+            name = content['text']
+            assert isinstance(name, text_type), type(name)
+            b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
+            if is_fake_id(b_id):
+                issue = 'Unknown Browser "%s"' % name
+                self.errors.append((content['start'], content['end'], issue))
+            client = {
+                'name': b_name,
+                'id': b_id,
+                'slug': b_slug
+            }
+            if 'colspan' in cell:
+                client['colspan'] = cell['colspan']
+            clients.append(client)
 
-        b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
-        if is_fake_id(b_id):
-            self.errors.append(
-                (node.start, node.end, 'Unknown Browser "%s"' % name))
-        return {
-            'name': b_name,
-            'id': b_id,
-            'slug': b_slug,
-        }
+        return clients
 
     def visit_compat_rows(self, node, children):
         compat_rows = children[0]
@@ -548,17 +577,21 @@ class PageVisitor(NodeVisitor):
     def visit_compat_row_cell(self, node, children):
         td_open = children[0]
         assert isinstance(td_open, dict), type(td_open)
+        assert td_open['type'] == 'td'
+        compat_row = [
+            self._consume_attributes(td_open, ('rowspan', 'colspan'))]
 
         compat_cell = children[2]
         if isinstance(compat_cell, Node):
             assert compat_cell.start == compat_cell.end
             compat_cell = []
-        assert isinstance(compat_cell, list), type(compat_cell)
-        for item in compat_cell:
-            assert isinstance(item, dict)
-        td_open['type'] = 'td'
-        compat_cell.insert(0, td_open)
-        return compat_cell
+        else:
+            assert isinstance(compat_cell, list), type(compat_cell)
+            for item in compat_cell:
+                assert isinstance(item, dict)
+                compat_row.append(item)
+
+        return compat_row
 
     #
     # Browser Compatibility table cells
@@ -595,9 +628,15 @@ class PageVisitor(NodeVisitor):
             'start': node.start, 'end': node.end}
 
     def visit_cell_footnote_id(self, node, children):
+        item = children[4]
+        raw_id = item.match.group('footnote_id')
+        if raw_id.isnumeric():
+            footnote_id = raw_id
+        else:
+            footnote_id = str(len(raw_id))
         return {
             'type': 'footnote_id',
-            'footnote_id': node.match.group('footnote_id'),
+            'footnote_id': footnote_id,
             'start': node.start, 'end': node.end}
 
     def visit_cell_removed(self, node, children):
@@ -659,8 +698,8 @@ class PageVisitor(NodeVisitor):
         return item
 
     def visit_footnote_p(self, node, children):
-        footnote_id = children[2]
-        text = children[4]
+        footnote_id = children[3]
+        text = children[5]
         assert isinstance(text, text_type), type(text)
         fixed = self.render_footnote_kuma(text, node.children[4].start)
         data = {
@@ -671,7 +710,11 @@ class PageVisitor(NodeVisitor):
         return data
 
     def visit_footnote_id(self, node, children):
-        footnote_id = children[1].match.group('content')
+        raw_id = children[1].match.group('content')
+        if raw_id.isnumeric():
+            footnote_id = raw_id
+        else:
+            footnote_id = str(len(raw_id))
         return footnote_id
 
     visit_footnote_p_text = _visit_content
@@ -682,14 +725,19 @@ class PageVisitor(NodeVisitor):
             attrs = []
         else:
             assert isinstance(attrs_node, list), type(attrs_node)
-            assert len(attrs_node) == 1
             attrs = attrs_node[0]
         assert isinstance(attrs, list), type(attrs)
+
+        attr_dict = {}
+        for attr in attrs:
+            ident = attr.pop('ident')
+            assert ident not in attr_dict
+            attr_dict[ident] = attr
 
         text = children[3]
         assert isinstance(text, text_type), type(text)
         return {
-            'type': 'pre', 'attributes': dict(attrs), 'content': text,
+            'type': 'pre', 'attributes': attr_dict, 'content': text,
             'start': node.start, 'end': node.end}
 
     visit_footnote_pre_text = _visit_content
@@ -752,43 +800,87 @@ class PageVisitor(NodeVisitor):
         assert isinstance(ident, text_type), type(ident)
         assert isinstance(value, text_type), type(value)
 
-        return (ident, value)
+        return {
+            'ident': ident,
+            'value': value,
+            'start': node.start,
+            'end': node.end,
+        }
 
     visit_ident = _visit_content
     visit_bare_text = _visit_content
     visit_single_quoted_text = _visit_content
     visit_double_quoted_text = _visit_content
 
-    def _visit_open(self, node, children, tag, expected):
+    def _visit_open(self, node, children, tag):
         """Parse an opening tag with an expected attributes list"""
         attrs = children[2]
         assert isinstance(attrs, list), type(attrs)
         for attr in attrs:
-            assert len(attr) == 2, attr
+            assert isinstance(attr, dict)
 
-        # Filter attributes
+        # Index by attribute ident
         attr_dict = {}
-        for name, value in attrs:
-            if name not in expected:
-                self.issues.append((
-                    node.start, node.end,
-                    "Unexpected attribute <%s %s=\"%s\">" % (
-                        tag, name, value)))
+        for attr in attrs:
+            ident = attr.pop('ident')
+            assert ident not in attr_dict
+            attr_dict[ident] = attr
+
+        return {
+            'type': tag,
+            'attributes': attr_dict,
+            'start': node.start,
+            'end': node.end,
+        }
+
+    def _consume_attributes(self, node_dict, expected):
+        """Move attributes to node dict, or add issue."""
+        node_out = node_dict.copy()
+        attrs = node_out.pop('attributes', {})
+        for ident, attr in attrs.items():
+            if ident in expected:
+                assert ident not in node_out
+                node_out[ident] = attr['value']
             else:
-                attr_dict[name] = value
-        return attr_dict
+                self.issues.append((
+                    attr['start'], attr['end'],
+                    "Unexpected attribute <%s %s=\"%s\">" % (
+                        node_dict['type'], ident, attr['value'])))
+        return node_out
+
+    def visit_th_elem(self, node, children):
+        th_open = children[0]
+        content = children[2][0]
+        assert isinstance(th_open, dict), type(th_open)
+        if isinstance(content, dict):
+            th_open['content'] = content
+        else:
+            assert isinstance(content, text_type)
+            th_open['content'] = {
+                'start': children[1].end,
+                'end': children[3].start,
+                'text': self.cleanup_whitespace(content)
+            }
+        return th_open
 
     def visit_td_open(self, node, children):
-        expected = ('rowspan', 'colspan')
-        return self._visit_open(node, children, 'td', expected)
+        return self._visit_open(node, children, 'td')
 
     def visit_th_open(self, node, children):
-        expected = ('colspan',)
-        return self._visit_open(node, children, 'th', expected)
+        return self._visit_open(node, children, 'th')
 
     def visit_tr_open(self, node, children):
-        expected = []
-        return self._visit_open(node, children, 'tr', expected)
+        return self._visit_open(node, children, 'tr')
+
+    def visit_strong_text(self, node, children):
+        text = children[2]
+        assert isinstance(text, text_type), type(text)
+        return {
+            'start': children[1].end,
+            'end': children[3].start,
+            'text': self.cleanup_whitespace(text),
+            'strong': True
+        }
 
     #
     # Utility methods
@@ -825,6 +917,7 @@ class PageVisitor(NodeVisitor):
     browser_name_fixes = {
         'Firefox (Gecko)': 'Firefox',
         'Firefox Mobile (Gecko)': 'Firefox Mobile',
+        'Firefox OS (Gecko)': 'Firefox OS',
         'Safari (WebKit)': 'Safari',
         'Windows Phone': 'IE Mobile',
         'IE Phone': 'IE Mobile',
@@ -1075,6 +1168,52 @@ class PageVisitor(NodeVisitor):
                             self.errors.append((
                                 item['start'], item['end'],
                                 'Unknown Gecko version "%s"' % gversion))
+                elif kname == 'compatgeckofxos':
+                    gversion = self.unquote(item['args'][0])
+                    try:
+                        oversion = self.unquote(item['args'][1])
+                    except IndexError:
+                        oversion = ''
+                    try:
+                        nversion = float(gversion)
+                    except ValueError:
+                        nversion = -1
+                    if (nversion >= 0 and nversion < 19 and
+                       oversion in ('', '1.0')):
+                        version_found = '1.0'
+                    elif (nversion >= 0 and nversion < 21 and
+                          oversion == '1.0.1'):
+                        version_found = '1.0.1'
+                    elif (nversion >= 0 and nversion < 24 and
+                          oversion in ('1.1', '1.1.0', '1.1.1')):
+                        version_found = '1.1'
+                    elif (nversion >= 19 and nversion < 27 and
+                          oversion in ('', '1.2')):
+                        version_found = '1.2'
+                    elif (nversion >= 27 and nversion < 29 and
+                          oversion in ('', '1.3')):
+                        version_found = '1.3'
+                    elif (nversion >= 29 and nversion < 31 and
+                          oversion in ('', '1.4')):
+                        version_found = '1.4'
+                    elif (nversion >= 31 and nversion < 33 and
+                          oversion in ('', '2.0')):
+                        version_found = '2.0'
+                    elif (nversion >= 33 and nversion < 35 and
+                          oversion in ('', '2.1')):
+                        version_found = '2.1'
+                    elif (nversion >= 35 and nversion < 38 and
+                          oversion in ('', '2.2')):
+                        version_found = '2.2'
+                    elif nversion < 0 or nversion >= 38:
+                        self.errors.append((
+                            item['start'], item['end'],
+                            'Unknown Gecko version "%s"' % gversion))
+                    else:
+                        self.errors.append((
+                            item['start'], item['end'],
+                            ('Override "%s" is invalid for '
+                             'Gecko version "%s"' % (oversion, gversion))))
                 elif kname == 'compatgeckomobile':
                     gversion = self.unquote(item['args'][0])
                     version_found = gversion.split('.', 1)[0]
@@ -1180,9 +1319,11 @@ class PageVisitor(NodeVisitor):
             for item in footnote:
                 i = item.copy()
                 if i.get('attributes'):
-                    attrs = " ".join(
-                        '%s="%s"' % a for a in i['attributes'].items())
-                    i['tag'] = '<%s %s>' % (i['type'], attrs)
+                    attrs = [
+                        (k, v['value']) for k, v in i['attributes'].items()]
+                    attrs.sort()
+                    attr_out = " ".join('%s="%s"' % a for a in attrs)
+                    i['tag'] = '<%s %s>' % (i['type'], attr_out)
                 else:
                     i['tag'] = '<%s>' % i['type']
                 bits.append(fmt % i)

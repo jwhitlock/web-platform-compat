@@ -3,9 +3,11 @@
 
 from __future__ import unicode_literals
 
+from django.test import override_settings
 from jinja2 import Markup
 
-from webplatformcompat.helpers import pick_translation, trans_span, trans_str
+from webplatformcompat.helpers import (
+    is_debug, pick_translation, trans_span, trans_str)
 
 from .base import TestCase
 
@@ -118,3 +120,14 @@ class TestTransStr(TestCase):
         self.context['lang'] = 'ru'
         result = trans_str(self.context, self.trans_obj)
         self.assertEqual('English', result)
+
+
+class TestDebug(TestCase):
+
+    @override_settings(DEBUG=True)
+    def test_debug_on(self):
+        self.assertTrue(is_debug())
+
+    @override_settings(DEBUG=False)
+    def test_debug_off(self):
+        self.assertFalse(is_debug())

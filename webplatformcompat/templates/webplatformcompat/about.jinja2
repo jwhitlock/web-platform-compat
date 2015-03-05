@@ -1,0 +1,42 @@
+{% extends "webplatformcompat/base.jinja2" %}
+{% block title %}Web Platform Compatibility API - About{% endblock %}
+
+{% block body_title %}About the Web Platform Compatibility API{% endblock %}
+
+{% block content %}
+<p>
+    The <strong>web-platform-compat</strong> project is a part of a long process
+    to improve the quality of compatibility data on the web.
+</p><p>
+    The <a href="https://developer.mozilla.org/">Mozilla Developer Network</a>
+    (MDN) hosts a huge amount of documentation of web technologies, including
+    browser compatibility tables, such as data about the
+    <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/display#Browser_compatibility">CSS display property</a>.
+    This data is maintained by the MDN community to keep it accurate and
+    up-to-date.  These hand-written tables are useful for developers, but are
+    challenging to maintain, hard to sync across translations, and are
+    unsuitable as a data source for scripts or alternate displays.
+</p><p>
+    In December 2013, Mozilla began planning for a significat update to the
+    technology used to maintain the compatibility tables.
+    In June 2014, work started on the <strong>web-platform-compat</strong>
+    project, to define the data schema, build a data store, and provide an API
+    for reading and contributing compatibility data.  In February 2015, the
+    service began extracting data from MDN pages.  Later this year, MDN will
+    start displaying compatibility data from the API, and new data
+    contributions will be made to the service rather than as MDN page edits.
+</p><p>
+    Some useful links:
+    <ul>
+      <li>
+        <a href="https://wiki.mozilla.org/MDN/Development/CompatibilityTables">CompatibilityTables on the Mozilla Wiki</a>
+        - Project plan for the compatibility tables technology project.</li>
+      <li>
+        <a href="https://github.com/jwhitlock/web-platform-compat">web-platform-compat on Github</a>
+          - This is the primary code repository during development.</li>
+      <li>
+        <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=996570">Bugzilla bug 996570</a>
+          - The tracking bug for the web-platform-compat project.</li>
+    </ul>
+</p>
+{% endblock %}

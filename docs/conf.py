@@ -15,13 +15,15 @@
 
 import sys
 import os
-
-cwd = os.getcwd()
-parent = os.path.dirname(cwd)
-sys.path.append(parent)
+try:
+    import webplatformcompat
+except ImportError:
+    cwd = os.getcwd()
+    parent = os.path.dirname(cwd)
+    sys.path.append(parent)
+    import webplatformcompat
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "wpcsite.settings")
 
-import webplatformcompat
 
 # -- General configuration ------------------------------------------------
 

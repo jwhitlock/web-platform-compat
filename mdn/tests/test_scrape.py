@@ -14,6 +14,114 @@ from webplatformcompat.tests.base import TestCase
 
 
 class TestGrammar(TestCase):
+    def test_other_h2_plain(self):
+        text = "<h2 id=\"Summary\">Summary</h2>"
+        parsed = page_grammar['other_h2'].parse(text)
+        capture = parsed.children[6]
+        self.assertEqual("Summary", capture.text)
+
+    def test_other_h2_code(self):
+        text = "<h2 id=\"Summary\"><code>Summary</code></h2>"
+        parsed = page_grammar['other_h2'].parse(text)
+        capture = parsed.children[6]
+        self.assertEqual("<code>Summary</code>", capture.text)
+
+    def test_spec_headers_scoped(self):
+        # Most common version
+        text = """<tr>
+          <th scope="col">Specification</th>
+          <th scope="col">Status</th>
+          <th scope="col">Comment</th>
+        </tr>"""
+        parsed = page_grammar['spec_headers'].parse(text)
+        th_elems = parsed.children[2]
+        col1 = th_elems.children[0]
+        tag = col1.children[0]
+        title = col1.children[2]
+        self.assertEqual('<th scope="col">', tag.text)
+        self.assertEqual('Specification', title.text)
+
+    def test_spec_headers_unscoped(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = """<tr>
+          <th>Specification</th>
+          <th>Status</th>
+          <th>Comment</th>
+        </tr>"""
+        parsed = page_grammar['spec_headers'].parse(text)
+        th_elems = parsed.children[2]
+        col1 = th_elems.children[0]
+        tag = col1.children[0]
+        title = col1.children[2]
+        self.assertEqual('<th>', tag.text)
+        self.assertEqual('Specification', title.text)
+
+    def test_spec_headers_strong(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+        text = """<tr>
+          <th scope="col"><strong>Specification</strong></th>
+          <th scope="col"><strong>Status</strong></th>
+          <th scope="col"><strong>Comment</strong></th>
+        </tr>"""
+        parsed = page_grammar['spec_headers'].parse(text)
+        th_elems = parsed.children[2]
+        col1 = th_elems.children[0]
+        tag = col1.children[0]
+        title = col1.children[2]
+        self.assertEqual('<th scope="col">', tag.text)
+        self.assertEqual('<strong>Specification</strong>', title.text)
+
+    def test_spec_row_standard(self):
+        text = """<tr>
+          <td>{{SpecName('CSS3 Backgrounds', '#the-background-size',
+            'background-size')}}</td>
+          <td>{{Spec2('CSS3 Backgrounds')}}</td>
+          <td></td>
+        </tr>"""
+        parsed = page_grammar['spec_row'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<tr>', tr.text)
+
+    def test_spec_row_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = """<tr style="vertical-align: top;">
+          <td>{{ SpecName('CSS2.1', "cascade.html#value-def-inherit",
+            "inherit") }}</td>
+          <td>{{ Spec2('CSS2.1') }}</td>
+          <td>Initial definition</td>
+        </tr>"""
+        parsed = page_grammar['spec_row'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<tr style="vertical-align: top;">', tr.text)
+
+    def test_specname_td_standard(self):
+        text = """<td>{{SpecName('CSS3 Backgrounds', '#the-background-size',
+            'background-size')}}</td>"""
+        parsed = page_grammar['specname_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td>', tr.text)
+
+    def test_specname_td_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = """<td style="vertical-align: top;">{{ SpecName('CSS2.1',
+            "cascade.html#value-def-inherit", "inherit") }}</td>"""
+        parsed = page_grammar['specname_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td style="vertical-align: top;">', tr.text)
+
+    def test_spec2_td_standard(self):
+        text = "<td>{{Spec2('CSS3 Backgrounds')}}</td>"
+        parsed = page_grammar['spec2_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td>', tr.text)
+
+    def test_spec2_td_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = '<td style="vertical-align: top;">{{ Spec2("CSS2.1") }}</td>'
+        parsed = page_grammar['spec2_td'].parse(text)
+        tr = parsed.children[0]
+        self.assertEqual('<td style="vertical-align: top;">', tr.text)
+
     def test_specdesc_td_empty(self):
         text = '<td></td>'
         parsed = page_grammar['specdesc_td'].parse(text)
@@ -32,6 +140,31 @@ class TestGrammar(TestCase):
         capture = parsed.children[2]
         self.assertEqual(
             'Defines <code>right</code> as animatable.', capture.text)
+
+    def test_specdesc_td_styled(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
+        text = "<td style=\"vertical-align: top;\">Initial definition.</td>"
+        parsed = page_grammar['specdesc_td'].parse(text)
+        td = parsed.children[0]
+        self.assertEqual('<td style="vertical-align: top;">', td.text)
+
+    def test_compat_headers_standard(self):
+        text = "<tr><th>Feature</th><th>Firefox</th></tr>"
+        parsed = page_grammar['compat_headers'].parse(text)
+        feature = parsed.children[2]
+        firefox = parsed.children[4]
+        self.assertEqual('<th>Feature</th>', feature.text)
+        self.assertEqual('<th>Firefox</th>', firefox.text)
+
+    def test_compat_headers_strong(self):
+        text = (
+            "<tr><th><strong>Feature</strong></th>"
+            "<th><strong>Firefox</strong></th></tr>")
+        parsed = page_grammar['compat_headers'].parse(text)
+        feature = parsed.children[2]
+        firefox = parsed.children[4]
+        self.assertEqual('<th><strong>Feature</strong></th>', feature.text)
+        self.assertEqual('<th><strong>Firefox</strong></th>', firefox.text)
 
     def assert_cell_version(self, text, version, eng_version=None):
         match = page_grammar['cell_version'].parse(text).match.groupdict()
@@ -397,6 +530,44 @@ class TestPageVisitor(ScrapeTestCase):
         expected = "This text has lots of extra whitespace."
         self.assertEqual(expected, self.visitor.cleanup_whitespace(text))
 
+    def assert_spec_h2(self, text, issues):
+        parsed = page_grammar['spec_h2'].parse(text)
+        self.visitor.visit(parsed)
+        self.assertEqual(issues, self.visitor.issues)
+
+    def test_spec_h2_expected(self):
+        self.assert_spec_h2('<h2 id="Specifications">Specifications</h2>', [])
+
+    def test_spec_h2_with_name(self):
+        self.assert_spec_h2(
+            '<h2 name="Specifications" id="Specifications">'
+            'Specifications</h2>', [])
+
+    def test_spec_h2_discards_extra(self):
+        self.assert_spec_h2(
+            '<h2 id="Specifications" extra="crazy">Specifications</h2>', [])
+
+    def test_spec_h2_specification_id(self):
+        self.assert_spec_h2('<h2 id="Specification">Specifications</h2>', [])
+
+    def test_spec_h2_specification_name(self):
+        self.assert_spec_h2(
+            '<h2 id="Specifications" name="Specification">Specifications</h2>',
+            [])
+
+    def test_spec_h2_browser_compat(self):
+        # Common bug from copying from Browser Compatibility section
+        self.assert_spec_h2(
+            '<h2 id="Browser_compatibility" name="Browser_compatibility">'
+            'Specifications</h2>',
+            [(4, 31,
+              ('In Specifications section, expected <h2 id="Specifications">,'
+               ' actual id="Browser_compatibility"')),
+             (31, 59,
+              ('In Specifications section, expected <h2'
+               ' name="Specifications"> or no name attribute, actual'
+               ' name="Browser_compatibility"'))])
+
     def test_specname_3_arg(self):
         self.add_spec_models()
         text = '<td>{{SpecName("CSS3 Backgrounds", "#subpath", "Name")}}</td>'
@@ -522,12 +693,50 @@ class TestPageVisitor(ScrapeTestCase):
         errors = [(166, 251, 'Unknown Specification "Web Audio API"')]
         self.assertEqual(errors, self.visitor.errors)
 
+    def test_compat_headers_standard(self):
+        text = "<tr><th>Feature</th><th>Firefox</th></tr>"
+        parsed = page_grammar['compat_headers'].parse(text)
+        headers = self.visitor.visit(parsed)
+        expected = [{'slug': '_Firefox', 'name': 'Firefox', 'id': "_Firefox"}]
+        self.assertEqual(expected, headers)
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual(
+            [(24, 31, 'Unknown Browser "Firefox"')], self.visitor.errors)
+
+    def test_compat_headers_strong(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+        text = (
+            "<tr><th><strong>Feature</strong></th>"
+            "<th><strong>Firefox</strong></th></tr>")
+        parsed = page_grammar['compat_headers'].parse(text)
+        headers = self.visitor.visit(parsed)
+        expected = [{'slug': '_Firefox', 'name': 'Firefox', 'id': "_Firefox"}]
+        self.assertEqual(expected, headers)
+        self.assertEqual(
+            [(49, 56, 'Unknown Browser "Firefox"')], self.visitor.errors)
+
+    def test_compat_headers_wrong_first_column_header(self):
+        # All known pages use "Features" for first column
+        text = (
+            "<tr><th><strong>Features</strong></th>"
+            "<th><strong>Firefox</strong></th></tr>")
+        parsed = page_grammar['compat_headers'].parse(text)
+        headers = self.visitor.visit(parsed)
+        expected = [{'slug': '_Firefox', 'name': 'Firefox', 'id': "_Firefox"}]
+        self.assertEqual(expected, headers)
+        self.assertEqual(
+            [(16, 24, 'Expected header "Feature"')], self.visitor.issues)
+        self.assertEqual(
+            [(50, 57, 'Unknown Browser "Firefox"')], self.visitor.errors)
+
     def test_compat_row_cell_feature_with_rowspan(self):
         text = '<td rowspan="2">Some Feature</td>'
         parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
             'rowspan': '2',
+            'start': 0,
+            'end': 16,
         }, {
             'type': 'text',
             'content': 'Some Feature',
@@ -549,6 +758,8 @@ class TestPageVisitor(ScrapeTestCase):
         parsed = page_grammar['compat_row_cell'].parse(text)
         expected_cell = [{
             'type': 'td',
+            'start': 0,
+            'end': 19,
         }, {
             'type': 'text',
             'content': 'Some Feature',
@@ -557,6 +768,9 @@ class TestPageVisitor(ScrapeTestCase):
         }]
         cell = self.visitor.visit(parsed)
         self.assertEqual(expected_cell, cell)
+        expected_issues = [
+            (4, 18, 'Unexpected attribute <td class="freaky">')]
+        self.assertEqual(expected_issues, self.visitor.issues)
 
     def test_compat_row_cell_feature_name_lookup(self):
         texts = [
@@ -957,6 +1171,51 @@ class TestPageVisitor(ScrapeTestCase):
             '{{CompatGeckoDesktop("1.1")}}',
             expected_errors=[(4, 33, 'Unknown Gecko version "1.1"')])
 
+    def test_compat_row_cell_support_compatgeckofxos_7(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("7")}}',
+            [{'version': '1.0'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_7_version_1_0_1(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("7","1.0.1")}}',
+            [{'version': '1.0.1'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_7_version_1_1(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("7","1.1")}}',
+            [{'version': '1.1'}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_range(self):
+        versions = {'10': '1.0',
+                    '24': '1.2',
+                    '28': '1.3',
+                    '29': '1.4',
+                    '32': '2.0',
+                    '34': '2.1',
+                    '35': '2.2'
+                    }
+        for gversion, oversion in versions.items():
+            self.assert_compat_row_cell_support(
+                '{{CompatGeckoFxOS("%s")}}' % gversion,
+                [{'version': oversion}], [{'support': 'yes'}])
+
+    def test_compat_row_cell_support_compatgeckofxos_bad_gecko(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("9999999")}}',
+            expected_errors=[(4, 34, 'Unknown Gecko version "9999999"')])
+
+    def test_compat_row_cell_support_compatgeckofxos_bad_text(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("Yep")}}',
+            expected_errors=[(4, 30, 'Unknown Gecko version "Yep"')])
+
+    def test_compat_row_cell_support_compatgeckofxos_bad_version(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoFxOS("18","5.0")}}',
+            expected_errors=[(4, 35, ('Override "5.0" is invalid for '
+                                      'Gecko version "18"'))])
+
     def test_compat_row_cell_support_compatgeckomobile_1(self):
         self.assert_compat_row_cell_support(
             '{{CompatGeckoMobile("1")}}',
@@ -1062,6 +1321,22 @@ class TestPageVisitor(ScrapeTestCase):
             expected_errors=[
                 (38, 41, 'Only one footnote allowed.')])
 
+    def test_compat_row_cell_support_double_footnote_link_sup(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/flex
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("20.0")}} '
+            '<sup><a href="#bc2">[2]</a><a href="#bc3">[3]</a></sup>',
+            [{'version': '20.0'}],
+            [{'support': 'yes', 'footnote_id': ('2', 35, 62)}],
+            expected_errors=[
+                (62, 90, 'Only one footnote allowed.')])
+
+    def test_compat_row_cell_support_star_footnote(self):
+        self.assert_compat_row_cell_support(
+            '{{CompatGeckoDesktop("20.0")}} [***]',
+            [{'version': '20.0'}],
+            [{'support': 'yes', 'footnote_id': ('3', 35, 40)}])
+
     def test_compat_row_cell_support_nbsp(self):
         self.assert_compat_row_cell_support(
             '15&nbsp;{{property_prefix("webkit")}}',
@@ -1110,7 +1385,7 @@ class TestPageVisitor(ScrapeTestCase):
             '1': ('Footnote  but the beat continues.', 0, 59)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (16, 31, "Unknown footnote kuma function UnknownKuma")]
+            (15, 30, "Unknown footnote kuma function UnknownKuma")]
         self.assertEqual(expected_errors, self.visitor.errors)
 
     def test_compat_footnotes_unknown_kumascript_with_args(self):
@@ -1119,7 +1394,7 @@ class TestPageVisitor(ScrapeTestCase):
         expected = {'1': ('Footnote ', 0, 42)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (16, 38, 'Unknown footnote kuma function UnknownKuma("arg")')]
+            (15, 37, 'Unknown footnote kuma function UnknownKuma("arg")')]
         self.assertEqual(expected_errors, self.visitor.errors)
 
     def test_compat_footnotes_pre_section(self):
@@ -1191,6 +1466,79 @@ class TestPageVisitor(ScrapeTestCase):
             "SpecName",
             ["CSS3 Backgrounds", "#the-background-size",
              "background-size"])
+
+    def assert_th(self, text, expected):
+        parsed = page_grammar['th_elem'].parse(text)
+        self.assertEqual(expected, self.visitor.visit(parsed))
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual([], self.visitor.errors)
+
+    def test_th_elem_simple(self):
+        text = '<th>Simple</th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 4,
+            'content': {
+                'start': 4,
+                'end': 10,
+                'text': 'Simple',
+            },
+            'attributes': {}
+        }
+        self.assert_th(text, expected)
+
+    def test_th_elem_eat_whitespace(self):
+        text = '<th> Eats Whitespace </th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 4,
+            'content': {
+                'start': 5,
+                'end': 21,
+                'text': 'Eats Whitespace',
+            },
+            'attributes': {}
+        }
+        self.assert_th(text, expected)
+
+    def test_th_elem_attrs(self):
+        text = '<th scope="col">Col Scope</th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 16,
+            'content': {
+                'start': 16,
+                'end': 25,
+                'text': 'Col Scope',
+            },
+            'attributes': {
+                'scope': {
+                    'start': 4,
+                    'end': 15,
+                    'value': 'col'
+                }
+            }
+        }
+        self.assert_th(text, expected)
+
+    def test_th_elem_in_strong(self):
+        text = '<th><strong>Strong</strong></th>'
+        expected = {
+            'type': 'th',
+            'start': 0,
+            'end': 4,
+            'content': {
+                'start': 12,
+                'end': 18,
+                'text': 'Strong',
+                'strong': True
+            },
+            'attributes': {}
+        }
+        self.assert_th(text, expected)
 
     def test_unquote_double(self):
         self.assertEqual('foo', self.visitor.unquote('"foo"'))
@@ -1674,7 +2022,7 @@ class TestScrape(ScrapeTestCase):
         }
         self.assertScrape(page, expected)
 
-    def test_unable_to_parse_compat(self):
+    def test_unable_to_parse_compat_first(self):
         good = '<td>{{CompatGeckoDesktop("1")}}</td>'
         bad = '<td><kuma>CompatGeckoDesktop("1")</kuma></td>'
         self.assertTrue(good in self.simple_compat_section)
@@ -1687,9 +2035,47 @@ class TestScrape(ScrapeTestCase):
             'issues': [],
             'errors': [
                 (377, 418,
-                 'Section <h2>Browser compatibility</h2> was not parsed,'
-                 ' because rule "compat_cell_item" failed to match.'
-                 '  Definition:',
+                 'Section <h2>Browser compatibility</h2> was not parsed.'
+                 ' The parser failed on rule "compat_cell_item", but the'
+                 ' real cause may be unexpected content after this'
+                 ' position. Definition:',
+                 'compat_cell_item = kuma / cell_break / code_block /'
+                 ' cell_p_open / cell_p_close / cell_version /'
+                 ' cell_footnote_id / cell_removed / cell_other')
+            ]
+        }
+        self.assertScrape(page, expected)
+
+    def test_unable_to_parse_compat_second(self):
+        good_spec = "{{SpecName('CSS3 Backgrounds',"
+        bad_spec = "{{SpecName('CRAZY',"
+        self.assertTrue(good_spec in self.simple_spec_section)
+        page = self.simple_spec_section.replace(good_spec, bad_spec)
+        good_compat = '<td>{{CompatGeckoDesktop("1")}}</td>'
+        bad_compat = '<td><kuma>CompatGeckoDesktop("1")</kuma></td>'
+        self.assertTrue(good_compat in self.simple_compat_section)
+        page += self.simple_compat_section.replace(good_compat, bad_compat)
+        expected = {
+            'locale': 'en',
+            'specs': [{
+                'section.id': None,
+                'section.name': u'background-size',
+                'section.note': u'',
+                'section.subpath': u'#the-background-size',
+                'specification.id': None,
+                'specification.mdn_key': u'CRAZY'}],
+            'compat': [],
+            'footnotes': None,
+            'issues': [],
+            'errors': [
+                (251, 324, 'Unknown Specification "CRAZY"'),
+                (243, 389,
+                 'SpecName(CSS3 Backgrounds, ...) does not match'
+                 ' Spec2(CRAZY)'),
+                (784, 825,
+                 'Section <h2>Browser compatibility</h2> was not parsed.'
+                 ' The parser failed on rule "compat_cell_item", but the'
+                 ' real cause is probably earlier issues. Definition:',
                  'compat_cell_item = kuma / cell_break / code_block /'
                  ' cell_p_open / cell_p_close / cell_version /'
                  ' cell_footnote_id / cell_removed / cell_other')
@@ -1717,10 +2103,10 @@ class TestScrape(ScrapeTestCase):
             'compat': [],
             'footnotes': None,
             'issues': [
-                (0, 79,
+                (4, 31,
                  'In Specifications section, expected <h2 id="Specifications">'
                  ', actual id="Browser_Compatibility"'),
-                (0, 79,
+                (31, 59,
                  'In Specifications section, expected <h2'
                  ' name="Specifications"> or no name attribute,'
                  ' actual name="Browser_Compatibility"'),
@@ -1915,6 +2301,72 @@ class TestScrapeFeaturePage(ScrapeTestCase):
             self.simple_spec_section +
             self.simple_compat_section.replace(orig, new) +
             "<p>[1] Footnote</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        version = self.versions[('ie', '4.0')]
+        expected = {'__basic support-%d' % version.id: 1}
+        self.assertDataEqual(
+            expected, fp.data['meta']['compat_table']['footnotes'])
+
+    def test_scrape_with_footnote_link(self):
+        orig = "<td>4.0</td>"
+        new = "<td>4.0 <a href=\"#note-1\">[1]</a></td>"
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        assert orig in self.simple_compat_section
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section.replace(orig, new) +
+            "<p><a name=\"note-1\"></a>[1] Footnote</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        version = self.versions[('ie', '4.0')]
+        expected = {'__basic support-%d' % version.id: 1}
+        self.assertDataEqual(
+            expected, fp.data['meta']['compat_table']['footnotes'])
+
+    def test_scrape_with_footnote_link_sup(self):
+        orig = "<td>4.0</td>"
+        new = "<td>4.0 <sup><a href=\"#note-1\">[1]</a></sup></td>"
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        assert orig in self.simple_compat_section
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section.replace(orig, new) +
+            "<p><a name=\"note-1\"></a>[1] Footnote</p>")
+        en_content.save()
+
+        scrape_feature_page(self.page)
+        fp = FeaturePage.objects.get(id=self.page.id)
+        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertFalse(fp.has_issues)
+        version = self.versions[('ie', '4.0')]
+        expected = {'__basic support-%d' % version.id: 1}
+        self.assertDataEqual(
+            expected, fp.data['meta']['compat_table']['footnotes'])
+
+    def test_scrape_with_footnote_star(self):
+        orig = "<td>4.0</td>"
+        new = "<td>4.0 [*]</td>"
+        en_content = TranslatedContent.objects.get(
+            page=self.page, locale='en-US')
+        assert orig in self.simple_compat_section
+        en_content.raw = (
+            self.simple_spec_section +
+            self.simple_compat_section.replace(orig, new) +
+            "<p><a name=\"note-1\"></a>[*] Footnote</p>")
         en_content.save()
 
         scrape_feature_page(self.page)
