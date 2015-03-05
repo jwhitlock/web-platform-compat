@@ -1343,6 +1343,91 @@ class TestPageVisitor(ScrapeTestCase):
             '15&nbsp;{{property_prefix("webkit")}}',
             [{'version': '15.0'}], [{'support': 'yes', 'prefix': 'webkit'}])
 
+    def test_compat_table_success(self):
+        self.add_compat_models()
+        chrome = self.browsers['chrome']
+        chrome_10 = self.versions[('chrome', '1.0')]
+        text = """<table class="compat-table">
+            <tbody>
+            <tr>
+                <th>Feature</th>
+                <th>Chrome</th>
+            </tr>
+            <tr>
+                <td>Basic support</td>
+                <td>1.0</td>
+            </tr>
+            </tbody>
+            </table>"""
+        parsed = page_grammar['compat_table'].parse(text)
+        table = self.visitor.visit(parsed)
+        expected = {
+            'browsers': [{
+                'id': chrome.id,
+                'name': 'Chrome',
+                'slug': 'chrome'}],
+            'features': [{
+                'id': '_basic support',
+                'name': 'Basic support',
+                'slug': 'web-css-background-size_basic_support'}],
+            'supports': [{
+                'feature': '_basic support',
+                'id': '__basic support-%s' % chrome_10.id,
+                'support': 'yes',
+                'version': chrome_10.id}],
+            'versions': [{
+                'browser': chrome.id,
+                'id': chrome_10.id,
+                'version': '1.0'}]}
+        self.assertEqual(expected, table)
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual([], self.visitor.errors)
+
+    def test_compat_table_extra_feature_column(self):
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/
+        # Reference/Global_Objects/WeakSet, March 2015
+        self.add_compat_models()
+        chrome = self.browsers['chrome']
+        chrome_10 = self.versions[('chrome', '1.0')]
+        text = """<table class="compat-table">
+            <tbody>
+            <tr>
+                <th>Feature</th>
+                <th>Chrome</th>
+            </tr>
+            <tr>
+                <td>Basic support</td>
+                <td>1.0</td>
+                <td>{{CompatUnknown()}}</td>
+            </tr>
+            </tbody>
+            </table>"""
+        parsed = page_grammar['compat_table'].parse(text)
+        table = self.visitor.visit(parsed)
+        expected = {
+            'browsers': [{
+                'id': chrome.id,
+                'name': 'Chrome',
+                'slug': 'chrome'}],
+            'features': [{
+                'id': '_basic support',
+                'name': 'Basic support',
+                'slug': 'web-css-background-size_basic_support'}],
+            'supports': [{
+                'feature': '_basic support',
+                'id': '__basic support-%s' % chrome_10.id,
+                'support': 'yes',
+                'version': chrome_10.id}],
+            'versions': [{
+                'browser': chrome.id,
+                'id': chrome_10.id,
+                'version': '1.0'}]}
+        self.assertEqual(expected, table)
+        self.assertEqual([], self.visitor.issues)
+        self.assertEqual(
+            [(250, 273, u'Extra cell in table')],
+            self.visitor.errors)
+
     def test_complex_footnotes_empty(self):
         text = "\n"
         parsed = page_grammar['compat_footnotes'].parse(text)

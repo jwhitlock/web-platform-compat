@@ -478,7 +478,12 @@ class PageVisitor(NodeVisitor):
         for row, compat_row in enumerate(compat_rows):
             for cell in compat_row['cells']:
                 td = cell[0]
-                col = table[row].index(None)
+                try:
+                    col = table[row].index(None)
+                except ValueError:
+                    error = "Extra cell in table"
+                    self.errors.append((td['start'], cell[-1]['end'], error))
+                    continue
                 rowspan = int(td.get('rowspan', 1))
                 colspan = int(td.get('colspan', 1))
                 if col == 0:
