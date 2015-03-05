@@ -68,21 +68,21 @@ spec_tbody = "<tbody>"
 spec_body = spec_rows "</tbody>"
 spec_rows = spec_row+
 spec_row = tr_open _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
-specname_td = td_open _ kuma "</td>"
-spec2_td = td_open _ kuma "</td>"
+specname_td = td_open _ kumascript "</td>"
+spec2_td = td_open _ kumascript "</td>"
 specdesc_td = td_open _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
 #
 # Browser Compatibility section
 #
-compat_section = _ compat_h2 _ compat_kuma _ compat_divs p_empty*
+compat_section = _ compat_h2 _ compat_kumascript _ compat_divs p_empty*
     compat_footnotes?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
-compat_kuma = (compat_kuma_div / compat_kuma_p)
-compat_kuma_div = "<div>" _ kuma "</div>"
-compat_kuma_p = "<p>" _ kuma "</p>"
+compat_kumascript = (compat_kumascript_div / compat_kumascript_p)
+compat_kumascript_div = "<div>" _ kumascript "</div>"
+compat_kumascript_p = "<p>" _ kumascript "</p>"
 compat_divs = compat_div+
 compat_div = "<div" _ "id" _ equals _ compat_div_id ">" _ compat_table
     _ "</div>" _
@@ -104,7 +104,7 @@ compat_row_cell = td_open _ compat_cell _ "</td>" _
 #   or a support until we visit the table.
 #
 compat_cell = compat_cell_item*
-compat_cell_item = (kuma / cell_break / code_block / cell_p_open /
+compat_cell_item = (kumascript / cell_break / code_block / cell_p_open /
     cell_p_close / cell_version / cell_footnote_id / cell_removed / cell_other)
 cell_break = "<" _ "br" _ ("/>" / ">") _
 code_block = "<code>" _ code_text _ "</code>" _
@@ -132,17 +132,17 @@ footnote_pre_text = ~r"(?P<content>.*?(?=</pre>))"s
 #
 # Common tokens
 #
-kuma = kuma_esc_start kuma_name kuma_arglist? kuma_esc_end
-kuma_esc_start = "{{" _
-kuma_name = ~r"(?P<content>[^\(\}\s]*)\s*"s
-kuma_arglist = kuma_func_start kuma_arg kuma_arg_rest* kuma_func_end
-kuma_func_start = "(" _
-kuma_func_arg = _ "," _
-kuma_func_end = _ ")" _
-kuma_esc_end = "}}" _
-kuma_arg = (double_quoted_text / single_quoted_text / kuma_bare_arg)
-kuma_bare_arg = ~r"(?P<content>.*?(?=[,)]))"
-kuma_arg_rest = kuma_func_arg kuma_arg
+kumascript = ks_esc_start ks_name ks_arglist? ks_esc_end
+ks_esc_start = "{{" _
+ks_name = ~r"(?P<content>[^\(\}\s]*)\s*"s
+ks_arglist = ks_func_start ks_arg ks_arg_rest* ks_func_end
+ks_func_start = "(" _
+ks_func_arg = _ "," _
+ks_func_end = _ ")" _
+ks_esc_end = "}}" _
+ks_arg = (double_quoted_text / single_quoted_text / ks_bare_arg)
+ks_bare_arg = ~r"(?P<content>.*?(?=[,)]))"
+ks_arg_rest = ks_func_arg ks_arg
 
 th_elems = th_elem+
 th_elem = th_open _ (strong_text / bare_text) "</th>" _
@@ -341,15 +341,15 @@ class PageVisitor(NodeVisitor):
             'section.id': section_id})
 
     def visit_specname_td(self, node, children):
-        kuma = children[2]
-        assert isinstance(kuma, dict), type(kuma)
-        assert kuma['name'].lower() == 'specname'
-        key = self.unquote(kuma["args"][0])
+        kumascript = children[2]
+        assert isinstance(kumascript, dict), type(kumascript)
+        assert kumascript['name'].lower() == 'specname'
+        key = self.unquote(kumascript["args"][0])
         subpath = ""
         name = ""
         try:
-            subpath = self.unquote(kuma["args"][1])
-            name = self.unquote(kuma["args"][2])
+            subpath = self.unquote(kumascript["args"][1])
+            name = self.unquote(kumascript["args"][2])
         except IndexError:
             pass  # subpath and name can be empty
 
@@ -364,11 +364,11 @@ class PageVisitor(NodeVisitor):
         return (key, spec_id, subpath, name)
 
     def visit_spec2_td(self, node, children):
-        kuma = children[2]
-        assert isinstance(kuma, dict), type(kuma)
-        assert kuma['name'].lower() == 'spec2'
-        assert len(kuma["args"]) == 1
-        key = self.unquote(kuma["args"][0])
+        kumascript = children[2]
+        assert isinstance(kumascript, dict), type(kumascript)
+        assert kumascript['name'].lower() == 'spec2'
+        assert len(kumascript["args"]) == 1
+        key = self.unquote(kumascript["args"][0])
         assert isinstance(key, text_type), type(key)
         return key
 
@@ -417,12 +417,12 @@ class PageVisitor(NodeVisitor):
         self.compat = compat_divs
         self.footnotes = footnotes
 
-    def visit_compat_kuma(self, node, children):
+    def visit_compat_kumascript(self, node, children):
         assert isinstance(children, list), type(children)
-        kuma = children[0][2]
-        assert isinstance(kuma, dict), type(kuma)
-        assert kuma['type'] == 'kuma'
-        assert kuma['name'].lower() == 'compatibilitytable'
+        kumascript = children[0][2]
+        assert isinstance(kumascript, dict), type(kumascript)
+        assert kumascript['type'] == 'kumascript'
+        assert kumascript['name'].lower() == 'compatibilitytable'
 
     def visit_compat_div(self, node, children):
         compat_div_id = children[6][0]
@@ -701,7 +701,7 @@ class PageVisitor(NodeVisitor):
         footnote_id = children[3]
         text = children[5]
         assert isinstance(text, text_type), type(text)
-        fixed = self.render_footnote_kuma(text, node.children[4].start)
+        fixed = self.render_footnote_kumascript(text, node.children[4].start)
         data = {
             'type': 'p', 'content': fixed,
             'start': node.start, 'end': node.end}
@@ -745,7 +745,7 @@ class PageVisitor(NodeVisitor):
     #
     # Other visitors
     #
-    def visit_kuma(self, node, children):
+    def visit_kumascript(self, node, children):
         name = children[1]
         assert isinstance(name, text_type), type(name)
 
@@ -760,12 +760,12 @@ class PageVisitor(NodeVisitor):
         assert isinstance(args, list), type(args)
 
         return {
-            'type': 'kuma', 'name': name, 'args': args,
+            'type': 'kumascript', 'name': name, 'args': args,
             'start': node.start, 'end': node.end}
 
-    visit_kuma_name = _visit_content
+    visit_ks_name = _visit_content
 
-    def visit_kuma_arglist(self, node, children):
+    def visit_ks_arglist(self, node, children):
         arg0 = children[1]
         argrest = children[2]
         args = []
@@ -779,14 +779,14 @@ class PageVisitor(NodeVisitor):
                 args.append(arg)
         return args
 
-    def visit_kuma_arg(self, node, children):
+    def visit_ks_arg(self, node, children):
         assert isinstance(children, list)
         assert len(children) == 1
         item = children[0]
         assert isinstance(item, text_type)
         return item
 
-    visit_kuma_bare_arg = _visit_content
+    visit_ks_bare_arg = _visit_content
 
     def visit_attrs(self, node, children):
         return children  # Even if empty list
@@ -903,7 +903,7 @@ class PageVisitor(NodeVisitor):
         """Unquote strings.
 
         Used in the footnotes parser.  Might be removed if it is replaced with
-        a compat_cell tokenizer using kuma rule
+        a compat_cell tokenizer using kumascript rule
         """
         if text.startswith('"') or text.startswith("'"):
             if text[0] != text[-1]:
@@ -1043,7 +1043,7 @@ class PageVisitor(NodeVisitor):
                 name_bits.append(v)
             elif item['type'] == 'code_block':
                 name_bits.append('<code>%s</code>' % item['content'])
-            elif item['type'] == 'kuma':
+            elif item['type'] == 'kumascript':
                 kname = item['name'].lower()
                 if kname == 'experimental_inline':
                     assert 'experimental' not in feature
@@ -1068,9 +1068,10 @@ class PageVisitor(NodeVisitor):
                         args = '(' + ', '.join(item['args']) + ')'
                     else:
                         args = ''
-                    self.errors.append((
-                        item['start'], item['end'],
-                        'Unknown kuma function %s%s' % (item['name'], args)))
+                    error = (
+                        'Unknown kumascript function %s%s'
+                        % (item['name'], args))
+                    self.errors.append((item['start'], item['end'], error))
             elif item['type'] == 'footnote_id':
                 self.errors.append((
                     item['start'], item['end'],
@@ -1122,7 +1123,7 @@ class PageVisitor(NodeVisitor):
         support = {}
         p_depth = 0
 
-        kuma_compat_versions = [
+        kumascript_compat_versions = [
             'compat' + b for b in ('android', 'chrome', 'ie', 'opera',
                                    'operamobile', 'safari')]
 
@@ -1140,7 +1141,7 @@ class PageVisitor(NodeVisitor):
                 else:
                     support['footnote_id'] = (
                         item['footnote_id'], item['start'], item['end'])
-            elif item['type'] == 'kuma':
+            elif item['type'] == 'kumascript':
                 kname = item['name'].lower()
                 # See https://developer.mozilla.org/en-US/docs/Template:<name>
                 if kname == 'compatversionunknown':
@@ -1219,16 +1220,17 @@ class PageVisitor(NodeVisitor):
                     version_found = gversion.split('.', 1)[0]
                     if version_found == '2':
                         version_found = '4'
-                elif kname in kuma_compat_versions:
+                elif kname in kumascript_compat_versions:
                     version_found = self.unquote(item['args'][0])
                 else:
                     if item['args']:
                         args = '(' + ', '.join(item['args']) + ')'
                     else:
                         args = ''
-                    self.errors.append((
-                        item['start'], item['end'],
-                        'Unknown kuma function %s%s' % (item['name'], args)))
+                    error = (
+                        'Unknown kumascript function %s%s' %
+                        (item['name'], args))
+                    self.errors.append((item['start'], item['end'], error))
             elif item['type'] == 'p_open':
                 p_depth += 1
                 if p_depth > 1:
@@ -1329,7 +1331,7 @@ class PageVisitor(NodeVisitor):
                 bits.append(fmt % i)
             return "\n".join(bits)
 
-    re_kuma = re.compile(r'''(?x)(?s)  # Be verbose, . include newlines
+    re_kumascript = re.compile(r'''(?x)(?s)  # Be verbose, . include newlines
     {{\s*               # Kuma start, with optional whitespace
     (?P<name>\w+)       # Function name, optionally followed by...
       (\((?P<args>\s*   # Open parens and whitespace,
@@ -1338,12 +1340,11 @@ class PageVisitor(NodeVisitor):
     \s*}}               # Whitespace and Kuma close
     ''')
 
-    def render_footnote_kuma(self, text, start):
+    def render_footnote_kumascript(self, text, start):
         rendered = text
-        for match in self.re_kuma.finditer(text):
+        for match in self.re_kumascript.finditer(text):
             name = match.group('name')
             kname = name.lower()
-            kuma = match.group()
             if match.group('args'):
                 arglist = match.group('args').split(',')
             else:
@@ -1353,18 +1354,19 @@ class PageVisitor(NodeVisitor):
                 # https://developer.mozilla.org/en-US/docs/Template:cssxref
                 # The MDN version does a lookup and creates a link
                 # This version just turns it into a code block
-                kuma = "<code>%s</code>" % self.unquote(arglist[0])
+                kumascript = "<code>%s</code>" % self.unquote(arglist[0])
             else:
-                kuma = ""
+                kumascript = ""
                 if arglist:
                     args = '(' + ', '.join(arglist) + ')'
                 else:
                     args = ''
                 self.errors.append((
                     start + match.start(), start + match.end(),
-                    "Unknown footnote kuma function %s%s" % (name, args)))
+                    "Unknown footnote kumascript function %s%s" %
+                    (name, args)))
             rendered = (
-                rendered[:match.start()] + kuma + rendered[match.end():])
+                rendered[:match.start()] + kumascript + rendered[match.end():])
         return rendered
 
 

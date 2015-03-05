@@ -900,21 +900,21 @@ class TestPageVisitor(ScrapeTestCase):
         }
         self.assert_compat_row_cell_feature(text, expected_feature)
 
-    def test_compat_row_cell_feature_unknown_kuma(self):
+    def test_compat_row_cell_feature_unknown_kumascript(self):
         text = 'feature foo {{bar}}'
         feature = {
             'id': '_feature foo', 'name': 'feature foo',
             'slug': 'web-css-background-size_feature_foo',
         }
-        expected_errors = [(16, 23, 'Unknown kuma function bar')]
+        expected_errors = [(16, 23, 'Unknown kumascript function bar')]
         self.assert_compat_row_cell_feature(
             text, feature, expected_errors=expected_errors)
 
-    def test_compat_row_cell_feature_unknown_kuma_with_args(self):
+    def test_compat_row_cell_feature_unknown_kumascript_with_args(self):
         text = 'foo {{bar("baz")}}'
         feature = {
             'id': '_foo', 'name': 'foo', 'slug': 'web-css-background-size_foo'}
-        expected_errors = [(8, 22, 'Unknown kuma function bar(baz)')]
+        expected_errors = [(8, 22, 'Unknown kumascript function bar(baz)')]
         self.assert_compat_row_cell_feature(
             text, feature, expected_errors=expected_errors)
 
@@ -1236,16 +1236,17 @@ class TestPageVisitor(ScrapeTestCase):
             '{{CompatAndroid("3.0")}}',
             [{'version': '3.0'}], [{'support': 'yes'}])
 
-    def test_compat_row_cell_support_unknown_kuma(self):
+    def test_compat_row_cell_support_unknown_kumascript(self):
         self.assert_compat_row_cell_support(
             '{{UnknownKuma}}',
-            expected_errors=[(4, 19, "Unknown kuma function UnknownKuma")])
+            expected_errors=[
+                (4, 19, "Unknown kumascript function UnknownKuma")])
 
-    def test_compat_row_cell_support_unknown_kuma_args(self):
+    def test_compat_row_cell_support_unknown_kumascript_args(self):
         self.assert_compat_row_cell_support(
             '{{UnknownKuma("foo")}}',
             expected_errors=[
-                (4, 26, 'Unknown kuma function UnknownKuma(foo)')])
+                (4, 26, 'Unknown kumascript function UnknownKuma(foo)')])
 
     def test_compat_row_cell_support_nested_p(self):
         self.assert_compat_row_cell_support(
@@ -1370,7 +1371,7 @@ class TestPageVisitor(ScrapeTestCase):
         }
         self.assertEqual(expected, self.visitor.visit(parsed))
 
-    def test_compat_footnotes_kuma_cssxref(self):
+    def test_compat_footnotes_kumascript_cssxref(self):
         text = '<p>[1] Use {{cssxref("-moz-border-image")}}</p>'
         parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {
@@ -1378,23 +1379,24 @@ class TestPageVisitor(ScrapeTestCase):
         }
         self.assertEqual(expected, self.visitor.visit(parsed))
 
-    def test_compat_footnotes_unknown_kumascript(self):
+    def test_compat_footnotes_unknown_kumascriptscript(self):
         text = "<p>[1] Footnote {{UnknownKuma}} but the beat continues.</p>"
         parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {
             '1': ('Footnote  but the beat continues.', 0, 59)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (15, 30, "Unknown footnote kuma function UnknownKuma")]
+            (15, 30, "Unknown footnote kumascript function UnknownKuma")]
         self.assertEqual(expected_errors, self.visitor.errors)
 
-    def test_compat_footnotes_unknown_kumascript_with_args(self):
+    def test_compat_footnotes_unknown_kumascriptscript_with_args(self):
         text = '<p>[1] Footnote {{UnknownKuma("arg")}}</p>'
         parsed = page_grammar['compat_footnotes'].parse(text)
         expected = {'1': ('Footnote ', 0, 42)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         expected_errors = [
-            (15, 37, 'Unknown footnote kuma function UnknownKuma("arg")')]
+            (15, 37,
+             'Unknown footnote kumascript function UnknownKuma("arg")')]
         self.assertEqual(expected_errors, self.visitor.errors)
 
     def test_compat_footnotes_pre_section(self):
@@ -1433,34 +1435,34 @@ class TestPageVisitor(ScrapeTestCase):
         errors = [(0, 18, 'No ID in footnote.')]
         self.assertEqual(errors, self.visitor.errors)
 
-    def assert_kuma(self, text, name, args, errors=None):
-        parsed = page_grammar['kuma'].parse(text)
+    def assert_kumascript(self, text, name, args, errors=None):
+        parsed = page_grammar['kumascript'].parse(text)
         expected = {
-            'type': 'kuma', 'name': name, 'args': args,
+            'type': 'kumascript', 'name': name, 'args': args,
             'start': 0, 'end': len(text)}
         self.assertEqual(expected, self.visitor.visit(parsed))
         self.assertEqual(errors or [], self.visitor.errors)
 
-    def test_kuma_no_parens(self):
-        self.assert_kuma('{{CompatNo}}', 'CompatNo', [])
+    def test_kumascript_no_parens(self):
+        self.assert_kumascript('{{CompatNo}}', 'CompatNo', [])
 
-    def test_kuma_no_parens_and_spaces(self):
-        self.assert_kuma('{{ CompatNo }}', 'CompatNo', [])
+    def test_kumascript_no_parens_and_spaces(self):
+        self.assert_kumascript('{{ CompatNo }}', 'CompatNo', [])
 
-    def test_kuma_empty_parens(self):
-        self.assert_kuma('{{CompatNo()}}', 'CompatNo', [])
+    def test_kumascript_empty_parens(self):
+        self.assert_kumascript('{{CompatNo()}}', 'CompatNo', [])
 
-    def test_kuma_one_arg(self):
-        self.assert_kuma(
+    def test_kumascript_one_arg(self):
+        self.assert_kumascript(
             '{{cssxref("-moz-border-image")}}', 'cssxref',
             ['-moz-border-image'])
 
-    def test_kuma_one_arg_no_quotes(self):
-        self.assert_kuma(
+    def test_kumascript_one_arg_no_quotes(self):
+        self.assert_kumascript(
             '{{CompatGeckoDesktop(27)}}', 'CompatGeckoDesktop', ['27'])
 
-    def test_kuma_three_args(self):
-        self.assert_kuma(
+    def test_kumascript_three_args(self):
+        self.assert_kumascript(
             ("{{SpecName('CSS3 Backgrounds', '#the-background-size',"
              " 'background-size')}}"),
             "SpecName",
@@ -2024,7 +2026,7 @@ class TestScrape(ScrapeTestCase):
 
     def test_unable_to_parse_compat_first(self):
         good = '<td>{{CompatGeckoDesktop("1")}}</td>'
-        bad = '<td><kuma>CompatGeckoDesktop("1")</kuma></td>'
+        bad = '<td><ks>CompatGeckoDesktop("1")</ks></td>'
         self.assertTrue(good in self.simple_compat_section)
         page = self.simple_compat_section.replace(good, bad)
         expected = {
@@ -2034,12 +2036,12 @@ class TestScrape(ScrapeTestCase):
             'footnotes': None,
             'issues': [],
             'errors': [
-                (377, 418,
+                (377, 414,
                  'Section <h2>Browser compatibility</h2> was not parsed.'
                  ' The parser failed on rule "compat_cell_item", but the'
                  ' real cause may be unexpected content after this'
                  ' position. Definition:',
-                 'compat_cell_item = kuma / cell_break / code_block /'
+                 'compat_cell_item = kumascript / cell_break / code_block /'
                  ' cell_p_open / cell_p_close / cell_version /'
                  ' cell_footnote_id / cell_removed / cell_other')
             ]
@@ -2052,7 +2054,7 @@ class TestScrape(ScrapeTestCase):
         self.assertTrue(good_spec in self.simple_spec_section)
         page = self.simple_spec_section.replace(good_spec, bad_spec)
         good_compat = '<td>{{CompatGeckoDesktop("1")}}</td>'
-        bad_compat = '<td><kuma>CompatGeckoDesktop("1")</kuma></td>'
+        bad_compat = '<td><ks>CompatGeckoDesktop("1")</ks></td>'
         self.assertTrue(good_compat in self.simple_compat_section)
         page += self.simple_compat_section.replace(good_compat, bad_compat)
         expected = {
@@ -2072,11 +2074,11 @@ class TestScrape(ScrapeTestCase):
                 (243, 389,
                  'SpecName(CSS3 Backgrounds, ...) does not match'
                  ' Spec2(CRAZY)'),
-                (784, 825,
+                (784, 821,
                  'Section <h2>Browser compatibility</h2> was not parsed.'
                  ' The parser failed on rule "compat_cell_item", but the'
                  ' real cause is probably earlier issues. Definition:',
-                 'compat_cell_item = kuma / cell_break / code_block /'
+                 'compat_cell_item = kumascript / cell_break / code_block /'
                  ' cell_p_open / cell_p_close / cell_version /'
                  ' cell_footnote_id / cell_removed / cell_other')
             ]
