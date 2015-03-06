@@ -1,43 +1,43 @@
 # Requirements for development
 
 # Documentation
-Pygments==2.0.1
+Pygments==2.0.2
 Sphinx==1.2.3
 docutils==0.12
 
 # Multi-environment testing
 py==1.4.26
-virtualenv==1.11.6
-tox==1.8.1
+virtualenv==12.0.7
+tox==1.9.0
 
 # PEP8, PEP257 and static analysis
-mccabe==0.2.1
-pep8==1.5.7
+mccabe==0.3
+pep8==1.6.2
 pyflakes==0.8.1
-flake8==2.2.5
-pep257==0.3.2
-flake8-docstrings==0.2.1
+flake8==2.3.0
+pep257==0.4.1
+flake8-docstrings==0.2.1.post1
 
 # MANIFEST.in checker
-check-manifest==0.21
+check-manifest==0.23
 
 # Package QA
 pyroma==1.7
 
 # For ./manage.py runserver_plus
-Werkzeug==0.9.6
+Werkzeug==0.10.1
 
 # Better shell, debugger
 gnureadline==6.3.3
-ipython==2.3.1
+ipython==3.0.0
 ipdb==0.8
 
 # Debugging
-sqlparse==0.1.13
+sqlparse==0.1.14
 django-debug-toolbar==1.2.2
 
 # Test coverage
 coverage==3.7.1
 docopt==0.6.2
 PyYAML==3.11
-coveralls==0.4.4
+coveralls==0.5

@@ -2,13 +2,16 @@
 
 import os
 import sys
-os.environ['DJANGO_SETTINGS_MODULE'] = 'wpcsite.settings'
-test_dir = os.path.dirname(__file__)
-sys.path.insert(0, test_dir)
+try:
+    from django.conf import settings
+except:
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'wpcsite.settings'
+    test_dir = os.path.dirname(__file__)
+    sys.path.insert(0, test_dir)
+    from django.conf import settings
 
 from django import setup
 from django.test.utils import get_runner
-from django.conf import settings
 
 
 def runtests():

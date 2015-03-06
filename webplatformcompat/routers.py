@@ -2,9 +2,9 @@
 
 from collections import OrderedDict
 
+from django.conf.urls import url
 from django.core.urlresolvers import RegexURLResolver
 from django.views.generic import RedirectView
-from rest_framework.compat import url
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.routers import DefaultRouter
@@ -83,8 +83,8 @@ class GroupedRouter(DefaultRouter):
         for u in furls:
             assert not isinstance(u, RegexURLResolver)
             match = (
-                u.name == 'viewfeatures-detail'
-                and 'api|json' in u.regex.pattern)
+                u.name == 'viewfeatures-detail' and
+                'api|json' in u.regex.pattern)
             if match:
                 pattern = u.regex.pattern.replace('api|json', 'api|json|html')
                 view = u._callback or u._callback_str

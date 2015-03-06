@@ -4,9 +4,15 @@ web-platform-compat
 
 .. image:: https://travis-ci.org/jwhitlock/web-platform-compat.png?branch=master
     :target: https://travis-ci.org/jwhitlock/web-platform-compat
+    :alt: Build Status
 
 .. image:: https://coveralls.io/repos/jwhitlock/web-platform-compat/badge.png?branch=master
     :target: https://coveralls.io/r/jwhitlock/web-platform-compat?branch=master
+    :alt: Test Coverage
+
+.. image:: https://requires.io/github/jwhitlock/web-platform-compat/requirements.svg?branch=master
+     :target: https://requires.io/github/jwhitlock/web-platform-compat/requirements/?branch=master
+     :alt: Requirements Status
 
 .. image:: https://www.herokucdn.com/deploy/button.png
     :target: https://heroku.com/deploy?template=https://github.com/jwhitlock/web-platform-compat
@@ -22,6 +28,10 @@ across languages and different presentations.
 
 .. _Mozilla Developer Network: https://developer.mozilla.org
 .. _CSS display property: https://developer.mozilla.org/en-US/docs/Web/CSS/display#Browser_compatibility
+
+*Note: This project will be renamed to browsercompat in the near future, to
+syncronize the project name with the planned production domain name
+https://browsercompat.org.*
 
 The project started in December 2013.  The goals, requirements, and current
 status are documented on the MozillaWiki_.

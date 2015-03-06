@@ -1,0 +1,104 @@
+{% extends "account/base.jinja2" %}
+{% block head_title %}Profile{% block head_subtitle%}{% endblock %}{% endblock %}
+{% block body_title %}Profile Summary{% endblock %}
+
+{% macro render_breadcrumbs(breadcrumblist) %}
+<pre>{{breadcrumblist}}</pre>
+<ol class="breadcrumb">
+    {% for breadcrumb_name, breadcrumb_url in path_components %}
+        <li><a href="{{ breadcrumb_url }}"{% if loop.last %} class="active"{% endif %}>{{ breadcrumb_name }}</a></li>
+    {% endfor %}
+</ol>
+{% endmacro %}
+
+{% block navbar %}
+{{super()}}
+<div class="container">
+  <nav>
+    <ul class="nav nav-tabs">
+      <li role="presentation" {%- if request.path.startswith(url('account_profile')) %} class="active" {% endif %}>
+        <a href="{{url('account_profile')}}">Profile</a>
+      </li>
+      <li role="presentation" {%- if request.path.startswith('/accounts/password/') %} class="active" {% endif %}>
+        <a href="{{url("account_change_password")}}">Password</a>
+      </li>
+      <li role="presentation" {%- if request.path.startswith('/accounts/social/') %} class="active" {% endif %}>
+        <a href="{{url("socialaccount_connections")}}">Linked Accounts</a>
+      </li>
+      <li role="presentation" {%- if request.path.startswith('/accounts/email/') %} class="active" {% endif %}>
+        <a href="{{url("account_email")}}">Email</a>
+      </li>
+      <li role="presentation" {%- if request.path.startswith(url('account_logout')) %} class="active" {% endif %}>
+        <a href="{{url("account_logout")}}">Sign Out</a>
+      </li>
+    </ul>
+  </nav>
+</div>
+{% endblock navbar %}
+
+{% block content %}
+    <dl>
+        <dt>Username</dt>
+        <dl>{{user_display(user)}}</dl>
+        <dt>Password</dt>
+        <dl>
+          {% if user.has_usable_password() %}
+            <span class="glyphicon glyphicon-ok" aria-hidden="true" style="color:green"></span>
+            You can login with
+            <a href="{{url("account_change_password")}}">a password</a>.
+          {% else %}
+            <span class="glyphicon glyphicon-ok" aria-hidden="true" style="color:red"></span>
+            No password, can only login with a linked account.
+            <a href="{{url("account_set_password")}}">Set a password</a>?
+          {% endif %}
+        </dl>
+        <dt>Linked Accounts</dt>
+        <dl>
+          {% set social_count = user.socialaccount_set.count() %}
+          {% if social_count > 0 %}
+            <span class="glyphicon glyphicon-ok" aria-hidden="true" style="color:green"></span>
+            You can login with
+            <a href="{{url("socialaccount_connections")}}">{{social_count}}
+                linked account{% if social_count > 1 %}s{% endif %}</a>.
+          {% else %}
+            <span class="glyphicon glyphicon-remove" aria-hidden="true" style="color:red"></span>
+            No linked accounts, can only login with username and password.
+            <a href="{{url("socialaccount_connections")}}">Add a linked account</a>?
+          {% endif %}
+        </dl>
+        <dt>Email</dt>
+        <dl>
+          {% if user.email %}
+            {% set primary = user.emailaddress_set.get(email=user.email) %}
+            {% set verified_cnt = user.emailaddress_set.exclude(email=user.email).filter(verified=True).count() %}
+            {% set unverified_cnt = user.emailaddress_set.exclude(email=user.email).exclude(verified=True).count() %}
+            {% if primary.verified %}
+            <span class="glyphicon glyphicon-ok" aria-hidden="true" style="color:green"></span>
+            {{primary.email}} (verified)
+            {% else %}
+            <span class="glyphicon glyphicon-remove" aria-hidden="true" style="color:red"></span>
+            {{primary.email}}
+            <a href="{{url("account_email")}}">unverified</a>)
+            {% endif %}
+            {% if verified_cnt or unverified_cnt %}
+              plus
+              <a href="{{url("account_email")}}">
+            {% if verified_cnt %}
+              {{verified_cnt}} Verified
+            {% endif %}
+            {% if verified_cnt and unverified_cnt %}
+              and
+            {% endif %}
+            {% if unverified_cnt %}
+              {{unverified_cnt}} unverified
+            {% endif %}
+              email{% if verified_cnt + unverified_cnt > 1 %}s{% endif %}</a>.
+            {% endif %}
+          {% else %}
+            <span class="glyphicon glyphicon-remove" aria-hidden="true" style="color:red"></span>
+            You have no email address.
+            <a href="{{url("account_email")}}">Add your email</a>?
+          {% endif %}
+        </dl>
+    </dl>
+{% endblock %}
