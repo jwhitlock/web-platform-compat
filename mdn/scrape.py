@@ -123,7 +123,8 @@ cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 #
 compat_footnotes = footnote_item* _
 footnote_item = (footnote_p / footnote_pre)
-footnote_p = "<p>" a_both? _ footnote_id? _ footnote_p_text "</p>" _
+footnote_p = "<p>" (a_both / a_open)? _ footnote_id? _ "</a>"? _
+    footnote_p_text "</p>" _
 footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
 footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
 footnote_pre = "<pre" attrs? ">" footnote_pre_text "</pre>" _
@@ -704,7 +705,7 @@ class PageVisitor(NodeVisitor):
 
     def visit_footnote_p(self, node, children):
         footnote_id = children[3]
-        text = children[5]
+        text = children[7]
         assert isinstance(text, text_type), type(text)
         fixed = self.render_footnote_kumascript(text, node.children[4].start)
         data = {

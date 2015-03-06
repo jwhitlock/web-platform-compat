@@ -2431,7 +2431,7 @@ class TestScrapeFeaturePage(ScrapeTestCase):
         en_content.raw = (
             self.simple_spec_section +
             self.simple_compat_section.replace(orig, new) +
-            "<p><a name=\"note-1\"></a>[1] Footnote</p>")
+            "<p><a name=\"note-1\">[1] </a>Footnote</p>")
         en_content.save()
 
         scrape_feature_page(self.page)
