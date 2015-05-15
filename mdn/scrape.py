@@ -1644,6 +1644,8 @@ class ScrapedViewFeature(object):
                 ('supports', support_ids),
                 ('parent', parent_id),
                 ('children', children_ids))))))
+        if list(feature.name.keys()) == ['zxx']:
+            feature_content['name'] = feature.name['zxx']
         return feature_content
 
     def new_feature(self, feature_entry):

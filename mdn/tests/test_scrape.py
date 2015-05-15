@@ -1753,6 +1753,21 @@ class TestScrapedViewFeature(FeaturePageTestCase):
                 'sections': [], 'supports': []}}
         self.assertDataEqual(expected, feature_content)
 
+    def test_load_feature_canonical_name(self):
+        feature = self.create(
+            Feature, slug='web-css-background-size_list-item',
+            name={'zxx': 'list-item'}, parent=self.feature)
+        view = ScrapedViewFeature(self.page, self.empty_scrape())
+        feature_content = view.load_feature(feature.id)
+        expected = {
+            'id': str(feature.id), 'name': 'list-item',
+            'slug': feature.slug, 'mdn_uri': None, 'obsolete': False,
+            'stable': True, 'standardized': True, 'experimental': False,
+            'links': {
+                'children': [], 'parent': str(self.feature.id),
+                'sections': [], 'supports': []}}
+        self.assertDataEqual(expected, feature_content)
+
     def test_new_feature(self):
         feature_entry = {
             'id': '_feature', 'name': 'Basic support',
