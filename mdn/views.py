@@ -4,12 +4,12 @@ from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, JsonResponse
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, ListView, TemplateView
 from django.views.generic.base import TemplateResponseMixin, View
 from django.views.generic.detail import BaseDetailView
 from django.views.generic.edit import CreateView, FormMixin, UpdateView
 
-from .models import FeaturePage, validate_mdn_url
+from .models import FeaturePage, Issue, ISSUES, SEVERITIES, validate_mdn_url
 from .tasks import start_crawl, parse_page
 
 
@@ -187,6 +187,24 @@ class FeaturePageReset(UpdateView):
         return redirect
 
 
+class IssuesSummary(TemplateView):
+    template_name = "mdn/issues_summary.jinja2"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(IssuesSummary, self).get_context_data(**kwargs)
+        issues = []
+        for slug, (severity_num, brief, lengthy) in ISSUES.items():
+            severity = SEVERITIES[severity_num]
+            target = Issue.objects.filter(slug=slug)
+            count = target.count()
+            examples = set(target.values_list('page_id', 'page__url')[:10])
+            issues.append((count, slug, severity, brief, examples))
+        issues.sort(reverse=True)
+        ctx['total_issues'] = Issue.objects.count()
+        ctx['issues'] = issues
+        return ctx
+
+
 feature_page_create = user_passes_test(can_create)(
     FeaturePageCreateView.as_view())
 feature_page_detail = FeaturePageDetailView.as_view()
@@ -197,3 +215,4 @@ feature_page_reset = user_passes_test(can_refresh)(
     FeaturePageReset.as_view())
 feature_page_reparse = user_passes_test(can_refresh)(
     FeaturePageReParse.as_view())
+issues_summary = IssuesSummary.as_view()

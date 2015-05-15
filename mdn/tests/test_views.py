@@ -169,3 +169,10 @@ class TestFeaturePageResetView(TestCase):
         mocked_crawl.assertCalledOnce(self.fp.pk)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_STARTING, fp.status)
+
+
+class TestIssuesSummary(TestCase):
+    def test_get(self):
+        url = reverse('issues_summary')
+        response = self.client.get(url)
+        self.assertEqual(200, response.status_code)

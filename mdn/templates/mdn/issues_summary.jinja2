@@ -1,0 +1,28 @@
+{% extends "webplatformcompat/base.jinja2" %}
+
+{% block head_title %}MDN Importer - {{ total_issues}} Issue{% if total_issues != 1%}s{% endif %}{% endblock %}
+{% block body_title %}MDN Importer - {{ total_issues}} Issue{% if total_issues != 1%}s{% endif %}{% endblock %}
+
+{% block quick_nav %}
+<p><em>back to <a href="{{ url('feature_page_list') }}">list of imported pages</a></em></p>
+{% endblock %}
+
+{% block content %}
+{% if issues %}
+<ul>
+{% for count, slug, severity, brief, examples in issues %}
+  {% if count > 0 %}
+  <li>{{count}} count{% if count > 1 %}s{% endif %} of <code>{{slug}}</code> ({{severity}}): {{brief}}  Examples:
+    <ul>
+      {% for pk, mdn_url in examples %}
+      <li><a href="{{ url('feature_page_detail', pk=pk) }}">{{mdn_url}}</a></li>
+      {% endfor %}
+    </ul>
+  </li>
+  {% endif %}
+{% endfor %}
+</ul>
+{% else %}
+<p><i>No issues found.</i></p>
+{% endif %}
+{% endblock content %}
