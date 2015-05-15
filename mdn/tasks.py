@@ -30,7 +30,6 @@ def start_crawl(featurepage_id):
     else:
         assert meta.status == meta.STATUS_ERROR, meta.status
         fp.status = fp.STATUS_ERROR
-        fp.add_error("Failed to download %s: %s" % (meta.url(), meta.raw))
     fp.save()
     if next_task is not None:
         next_func, next_id = next_task
@@ -55,6 +54,9 @@ def fetch_meta(featurepage_id):
     next_task = None
     next_task_args = []
     if r.status_code != requests.codes.ok:
+        issue = (
+            'failed_download', 0, 0,
+            {'url': url, 'status': r.status_code, 'content': r.text})
         meta.raw = "Status %d, Content:\n%s" % (r.status_code, r.text)
         meta.status = meta.STATUS_ERROR
         next_task = r.raise_for_status
@@ -63,6 +65,7 @@ def fetch_meta(featurepage_id):
             meta.raw = dumps(r.json())
         except ValueError:
             meta.raw = "Response is not JSON:\n" + r.text
+            issue = ('bad_json', 0, 0, {'url': url, 'content': r.text})
             meta.status = meta.STATUS_ERROR
             next_task = r.json
         else:
@@ -72,7 +75,7 @@ def fetch_meta(featurepage_id):
     # Determine next state / task
     if meta.status == meta.STATUS_ERROR:
         fp.status = fp.STATUS_ERROR
-        fp.add_error("Failed to download %s: %s" % (url, meta.raw))
+        fp.add_issue(issue)
     else:
         assert meta.status == meta.STATUS_FETCHED, meta.status
         fp.status = fp.STATUS_PAGES
@@ -101,7 +104,6 @@ def fetch_all_translations(featurepage_id):
         elif t.status == t.STATUS_FETCHING:
             fetching += 1
         elif t.status == t.STATUS_ERROR:
-            fp.add_error("Failed to download %s: %s" % (t.url(), t.raw))
             errored += 1
         else:
             assert t.status == t.STATUS_FETCHED, t.status
@@ -137,6 +139,7 @@ def fetch_translation(featurepage_id, locale):
     t.save(update_fields=['status'])
 
     # Request the translation
+    url = t.url() + '?raw'
     r = requests.get(t.url() + "?raw")
     t.raw = r.text
     next_task = None
@@ -144,6 +147,9 @@ def fetch_translation(featurepage_id, locale):
     if r.status_code != requests.codes.ok:
         t.status = t.STATUS_ERROR
         t.raw = "Status %d, Content:\n%s" % (r.status_code, r.text)
+        issue = ((
+            'failed_download', 0, 0,
+            {'url': url, 'status': r.status_code, 'content': r.text}))
         next_task = r.raise_for_status
     else:
         t.status = t.STATUS_FETCHED
@@ -154,7 +160,7 @@ def fetch_translation(featurepage_id, locale):
     # Determine next state / task
     if t.status == t.STATUS_ERROR:
         fp.status = fp.STATUS_ERROR
-        fp.add_error("Failed to download %s: %s" % (t.url(), t.raw))
+        fp.add_issue(issue)
         fp.save()
     assert next_task
     next_task(*next_task_args)
@@ -170,6 +176,6 @@ def parse_page(featurepage_id):
         # Unexpected exceptions are added and re-raised
         # Expected exceptions are handled by scrape_feature_page
         fp.status = FeaturePage.STATUS_ERROR
-        fp.add_error(format_exc())
+        fp.add_issue(('exception', 0, 0, {'traceback': format_exc()}))
         fp.save()
         raise

@@ -9,10 +9,11 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
-from django.utils.html import escape
+from django.utils.six import text_type
 from django.utils.six.moves.urllib_parse import urlparse
 from django.utils.timesince import timesince
 from django_extensions.db.fields import ModificationDateTimeField
+from django_extensions.db.fields.json import JSONField
 
 from webplatformcompat.models import Feature
 
@@ -60,8 +61,6 @@ class FeaturePage(models.Model):
     modified = ModificationDateTimeField(
         help_text="Last modification time", db_index=True)
     raw_data = models.TextField(help_text="JSON-encoded parsed content")
-    has_issues = models.BooleanField(
-        help_text="Issues found when parsing the page", default=False)
 
     def __str__(self):
         return "%s for %s" % (self.get_status_display(), self.slug())
@@ -112,6 +111,7 @@ class FeaturePage(models.Model):
         drop_cache - Delete cached MDN content
         """
         self.status = FeaturePage.STATUS_STARTING
+        self.issues.all().delete()
         self.reset_data()
         self.save()
         meta = self.meta()
@@ -165,11 +165,10 @@ class FeaturePage(models.Model):
                 ))),
                 ("scrape", OrderedDict((
                     ("phase", "Starting Import"),
-                    ("errors", []),
+                    ("issues", []),
                     ("raw", None)))))))))
 
         self.data = view_feature
-        self.has_issues = False
         return view_feature
 
     @property
@@ -181,6 +180,14 @@ class FeaturePage(models.Model):
             data = {}
         if not data:
             data = self.reset_data()
+
+        # Add issues
+        issues = []
+        for issue in self.issues.order_by('id'):
+            issues.append([
+                issue.slug, issue.start, issue.end, issue.params])
+        data['meta']['scrape']['issues'] = issues
+
         return data
 
     @data.setter
@@ -188,22 +195,287 @@ class FeaturePage(models.Model):
         """Serialize the data for storage"""
         self.raw_data = dumps(value, indent=2)
 
-    def add_error(self, error, safe=False):
-        """Add an error to the JSON data"""
-        data = self.data
-        errors = data['meta']['scrape']['errors']
-        if safe:
-            err = error
+    @property
+    def has_issues(self):
+        return self.issues.exists()
+
+    @property
+    def issue_counts(self):
+        if not getattr(self, '_issue_counts', None):
+            self._issue_counts = {WARNING: 0, ERROR: 0, CRITICAL: 0}
+            for issue in self.issues.all():
+                self._issue_counts[issue.severity] += 1
+        return self._issue_counts
+
+    @property
+    def warnings(self):
+        return self.issue_counts[WARNING]
+
+    @property
+    def errors(self):
+        return self.issue_counts[ERROR]
+
+    @property
+    def critical(self):
+        return self.issue_counts[CRITICAL]
+
+    def add_issue(self, issue, locale=None):
+        """Add an issue to the page."""
+        slug, start, end, params = issue
+        if locale:
+            content = self.translatedcontent_set.get(locale=locale)
         else:
-            err = '<pre>%s</pre>' % escape(error)
-        if err not in errors:
-            errors.append(err)
-        self.data = data
-        self.has_issues = True
+            content = None
+
+        # Did we already add this issue?
+        if self.issues.filter(slug=slug, start=start, end=end).exists():
+            raise ValueError("Duplicate issue")
+        self.issues.create(
+            slug=slug, start=start, end=end, params=params, content=content)
+        self._issue_counts = None
 
     @models.permalink
     def get_absolute_url(self):
         return ('mdn.views.feature_page_detail', [str(self.id)])
+
+# Issue severity
+WARNING = 1
+ERROR = 2
+CRITICAL = 3
+SEVERITIES = {
+    WARNING: 'Warning',
+    ERROR: 'Error',
+    CRITICAL: 'Critical',
+}
+
+# Issue slugs, severity, brief templates, and long templates
+# This was a database model, but it was cumbersome to update text with a
+#  database migration, and changing slugs require code changes as well.
+ISSUES = {
+    'bad_json': (
+        CRITICAL,
+        'Response from {url} is not JSON',
+        'Actual content:\n{content}'),
+    'compatgeckodesktop_unknown': (
+        ERROR,
+        'Unknown Gecko version "{version}"',
+        'The importer does not recognize this version for CompatGeckoDesktop.'
+        ' Change the MDN page or update the importer.'),
+    'compatgeckofxos_override': (
+        ERROR,
+        'Override "{override}" is invalid for Gecko version "{version}".',
+        'The importer does not recognize this override for CompatGeckoFxOS.'
+        ' Change the MDN page or update the importer.'),
+    'compatgeckofxos_unknown': (
+        ERROR,
+        'Unknown Gecko version "{version}"',
+        'The importer does not recognize this version for CompatGeckoFxOS.'
+        ' Change the MDN page or update the importer.'),
+    'exception': (CRITICAL, 'Unhandled exception', '{traceback}'),
+    'extra_cell': (
+        ERROR,
+        'Extra cell in compatibility table row.',
+        'A row in the compatibility table has more cells than the header'
+        ' row. It may be the cell identified in the context, a different'
+        ' cell in the row, or a missing header cell.'),
+    'failed_download': (
+        CRITICAL, 'Failed to download {url}.',
+        'Status {status}, Content:\n{text}'),
+    'false_start': (
+        CRITICAL,
+        'No <h2> found in page.',
+        'A compatibility table must be after a proper <h2> to be imported.'),
+    'feature_header': (
+        WARNING,
+        'Expected first header to be "Feature"',
+        'The first header is "{header}", not "Feature"'),
+    'footnote_feature': (
+        ERROR,
+        'Footnotes are not allowed on features',
+        'The Feature model does not include a notes field. Remove the'
+        ' footnote from the feature.'),
+    'footnote_missing': (
+        ERROR,
+        'Footnote [{footnote_id}] not found.',
+        'The compatibility table has a reference to footnote'
+        ' "{footnote_id}", but no matching footnote was found. This may'
+        ' be due to parse issues in the footnotes section, a typo in the MDN'
+        ' page, or a footnote that was removed without removing the footnote'
+        ' reference from the table.'),
+    'footnote_multiple': (
+        ERROR,
+        'Only one footnote allowed per compatibility cell.',
+        'The API supports only one footnote per support assertion. Combine'
+        ' footnotes [{prev_footnote_id}] and [{footnote_id}], or remove'
+        ' one of them.'),
+    'footnote_no_id': (
+        ERROR,
+        'Footnote has no ID.',
+        'Footnote references, such as [1], are used to link the footnote to'
+        ' the support assertion in the compatibility table. Reformat the MDN'
+        ' page to use footnote references.'),
+    'footnote_unused': (
+        ERROR,
+        'Footnote [{footnote_id}] is unused.',
+        'No cells in the compatibility table included the footnote reference'
+        ' [{footnote_id}]. This could be due to a issue importing the'
+        ' compatibility cell, a typo on the MDN page, or an extra footnote'
+        ' that should be removed from the MDN page.'),
+    'halt_import': (
+        CRITICAL,
+        'Unable to finish importing MDN page.',
+        'The importer was unable to finish parsing the MDN page. This may be'
+        ' due to a duplicated section, or other unexpected content.'),
+    'inline_text': (
+        ERROR,
+        'Unknown inline support text "{text}".',
+        'The API schema does not include inline notes. This text needs to be'
+        ' converted to a footnote, converted to a support attribute (which'
+        ' may require an importer update), or removed.'),
+    'nested_p': (
+        ERROR,
+        'Nested <p> tags are not supported.',
+        'Edit the MDN page to remove the nested <p> tag'),
+    'section_skipped': (
+        CRITICAL,
+        'Section <h2>{title}</h2> has unexpected content.',
+        'The parser was trying to match rule "{rule_name}", but was unable to'
+        ' understand some unexpected content. This may be markup or'
+        ' text, or a side-effect of previous issues. Look closely at the'
+        ' context (as well as any previous issues) to find the problem'
+        ' content.'),
+    'section_missed': (
+        CRITICAL,
+        'Section <h2>{title}</h2> was not imported.',
+        'The import of section {title} failed, but no parse error was'
+        ' detected. This is usually because of a previous critical error,'
+        ' which must be cleared before any parsing can be attempted.'),
+    'spec_h2_id': (
+        WARNING,
+        'Expected <h2 id="Specifications">, actual id={{h2_id}}',
+        'Fix the id so that the table of contents, other feature work.'),
+    'spec_h2_name': (
+        WARNING,
+        'Expected <h2 name="Specifications">, actual name={{h2_name}}',
+        'Fix or remove the name attribute.'),
+    'spec_mismatch': (
+        ERROR,
+        'SpecName({specname_key}, ...) does not match'
+        ' Spec2({spec2_key}).',
+        'SpecName and Spec2 must refer to the same mdn_key. Update the MDN'
+        ' page.'),
+    'unexpected_attribute': (
+        WARNING,
+        'Unexpected attribute <{node_type} {ident}="{value}">',
+        'For <{node_type}>, the importer is ready for the attributes'
+        ' {expected}. This unexpected attribute will be discarded.'),
+    'unknown_browser': (
+        ERROR,
+        'Unknown Browser "{name}".',
+        'The API does not have a browser with the name "{name}".'
+        ' This could be a typo on the MDN page, or the browser needs to'
+        ' be added to the API.'),
+    'unknown_kumascript': (
+        ERROR,
+        'Unknown KumaScript {display} in {scope}.',
+        'The importer has to run custom code to import KumaScript, and it'
+        ' hasn\'t been taught how to import {name} when it appears in a'
+        ' {scope}. File a bug, or convert the MDN page to not use this'
+        ' KumaScript macro.'),
+    'unknown_spec': (
+        ERROR,
+        'Unknown Specification "{key}".',
+        'The API does not have a specification with mdn_key "{key}".'
+        ' This could be a typo on the MDN page, or the specfication needs to'
+        ' be added to the API.'),
+    'unknown_version': (
+        ERROR,
+        'Unknown version "{version}" for browser "{browser_name}"',
+        'The API does not have the version "{version}" for browser'
+        ' "{browser_name}" (id {browser_id}, slug "{browser_slug}").'
+        ' This could be a typo on the MDN page, or the version needs to'
+        ' be added to the API.'),
+}
+
+
+@python_2_unicode_compatible
+class Issue(models.Model):
+    """An issue on a FeaturePage."""
+    page = models.ForeignKey(FeaturePage, related_name='issues')
+    slug = models.SlugField(
+        help_text="Human-friendly slug for issue.",
+        choices=[(slug, slug) for slug in ISSUES])
+    start = models.IntegerField(
+        help_text="Start position in source text")
+    end = models.IntegerField(
+        help_text="End position in source text")
+    params = JSONField(
+        help_text="Parameters for description templates")
+    content = models.ForeignKey(
+        'TranslatedContent', null=True, blank=True,
+        help_text="Content the issue was found on")
+
+    def __str__(self):
+        if self.content:
+            url = self.content.url()
+        else:
+            url = self.page.url
+        return "{slug} [{start}:{end}] on {url}".format(
+            slug=self.slug, start=self.start, end=self.end, url=url)
+
+    @property
+    def severity(self):
+        return ISSUES[self.slug][0]
+
+    @property
+    def brief_description(self):
+        return ISSUES[self.slug][1].format(**self.params)
+
+    @property
+    def long_description(self):
+        return ISSUES[self.slug][2].format(**self.params)
+
+    @property
+    def context(self):
+        if not self.content:
+            return ''
+
+        raw = self.content.raw
+        start_line = raw.count('\n', 0, self.start)
+        end_line = raw.count('\n', 0, self.end)
+        ctx_start_line = max(0, start_line - 2)
+        ctx_end_line = min(end_line + 3, raw.count('\n'))
+        digits = len(text_type(ctx_end_line))
+        context_lines = raw.split('\n')[ctx_start_line:ctx_end_line]
+
+        # Highlight the errored portion
+        err_page_bits = []
+        err_line_count = 1
+        for p, c in enumerate(raw):  # pragma: no branch
+            if c == '\n':
+                err_page_bits.append(c)
+                err_line_count += 1
+                if err_line_count > ctx_end_line:
+                    break
+            elif p < self.start or p >= self.end:
+                err_page_bits.append(' ')
+            else:
+                err_page_bits.append('^')
+        err_page = ''.join(err_page_bits)
+        err_lines = err_page.split('\n')[ctx_start_line:ctx_end_line]
+
+        out = []
+        for num, (line, err_line) in enumerate(zip(context_lines, err_lines)):
+            lnum = ctx_start_line + num
+            out.append(
+                text_type(lnum).rjust(digits) + ' ' + line)
+            if '^' in err_line:
+                out.append('*' * digits + ' ' + err_line)
+
+        return '\n'.join(out)
+
+    def get_severity_display(self):
+        return SEVERITIES[self.severity]
 
 
 @python_2_unicode_compatible

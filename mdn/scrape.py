@@ -27,7 +27,6 @@ from itertools import chain
 import re
 import string
 
-from django.utils.html import escape
 from django.utils.six import text_type
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
@@ -187,8 +186,7 @@ class PageVisitor(NodeVisitor):
     - 'compat': Data scraped from the Browser Compatibility table
     - 'footnotes': Footnotes appearing after the Browser Compatibility table,
       but not referenced in the table
-    - 'issues': Ignorable issues with the parsed page
-    - 'errors': Problems that a human should deal with.
+    - 'issues': Issues with the parsed page
     """
     def __init__(self, feature, locale='en'):
         super(PageVisitor, self).__init__()
@@ -197,7 +195,6 @@ class PageVisitor(NodeVisitor):
         self.locale = locale
         self.specs = []
         self.issues = []
-        self.errors = []
         self.compat = []
         self.footnotes = None
         self._browser_data = None
@@ -217,7 +214,6 @@ class PageVisitor(NodeVisitor):
             'specs': self.specs,
             'locale': self.locale,
             'issues': self.issues,
-            'errors': self.errors,
             'compat': self.compat,
             'footnotes': self.footnotes,
         }
@@ -251,35 +247,18 @@ class PageVisitor(NodeVisitor):
                 try:
                     page_grammar[section].parse(text)
                 except ParseError as pe:
-                    if self.errors:
-                        rule = pe.expr
-                        description = (
-                            'Section <h2>%s</h2> was not parsed.'
-                            ' The parser failed on rule "%s", but the real'
-                            ' cause is probably earlier issues. Definition:'
-                            % (title, rule.name))
-                        self.errors.append((
-                            pe.pos + start,
-                            end_of_line(pe.text, pe.pos) + start,
-                            description, rule.as_rule()))
-                    else:
-                        rule = pe.expr
-                        description = (
-                            'Section <h2>%s</h2> was not parsed. The parser'
-                            ' failed on rule "%s", but the real cause may be'
-                            ' unexpected content after this position.'
-                            ' Definition:' % (title, rule.name))
-                        self.errors.append((
-                            pe.pos + start,
-                            end_of_line(pe.text, pe.pos) + start,
-                            description, rule.as_rule()))
-
+                    expr = pe.expr
+                    self.issues.append((
+                        'section_skipped',
+                        pe.pos + start, end_of_line(pe.text, pe.pos) + start,
+                        {'rule_name': expr.name, 'title': title,
+                         'rule': expr.as_rule()}))
                 else:
-                    error = (
-                        start, end_of_line(text, 0) + start,
-                        "Section %s not parsed, probably due to earlier"
-                        " errors." % title)
-                    self.errors.append(error)
+                    self.issues.append((
+                        'section_missed',
+                        start,
+                        end_of_line(text, 0) + start,
+                        {'title': title}))
 
     visit_last_section = visit_other_section
 
@@ -296,18 +275,15 @@ class PageVisitor(NodeVisitor):
             if attr['ident'] == 'id':
                 h2_id = attr['value']
                 if h2_id not in expected:
-                    issue = (
-                        'In Specifications section, expected <h2'
-                        ' id="Specifications">, actual id=' '"%s"' % h2_id)
-                    self.issues.append((attr['start'], attr['end'], issue))
+                    self.issues.append((
+                        'spec_h2_id', attr['start'], attr['end'],
+                        {'h2_id': h2_id}))
             elif attr['ident'] == 'name':
                 h2_name = attr['value']
                 if h2_name not in expected:
-                    issue = (
-                        'In Specifications section, expected <h2'
-                        ' name="Specifications"> or no name attribute,'
-                        ' actual name="%s"' % h2_name)
-                    self.issues.append((attr['start'], attr['end'], issue))
+                    self.issues.append((
+                        'spec_h2_name', attr['start'], attr['end'],
+                        {'h2_name': h2_name}))
 
     def visit_spec_row(self, node, children):
         specname = children[2]
@@ -317,10 +293,9 @@ class PageVisitor(NodeVisitor):
         spec2_key = children[4]
         assert isinstance(spec2_key, text_type), spec2_key
         if spec2_key != key:
-            self.errors.append((
-                node.start, node.end,
-                ('SpecName(%s, ...) does not match Spec2(%s)'
-                 % (spec2_key, key))))
+            self.issues.append((
+                'spec_mismatch', node.start, node.end,
+                {'spec2_key': spec2_key, 'specname_key': key}))
             spec2_key = key
 
         desc = children[6]
@@ -357,8 +332,8 @@ class PageVisitor(NodeVisitor):
             spec = Specification.objects.get(mdn_key=key)
         except Specification.DoesNotExist:
             spec_id = None
-            self.errors.append(
-                (node.start, node.end, 'Unknown Specification "%s"' % key))
+            self.issues.append((
+                'unknown_spec', node.start, node.end, {'key': key}))
         else:
             spec_id = spec.id
         return (key, spec_id, subpath, name)
@@ -400,9 +375,9 @@ class PageVisitor(NodeVisitor):
                     try:
                         text, start, end = footnotes[f_id]
                     except KeyError:
-                        self.errors.append(
-                            (f_start, f_end,
-                             'Footnote [%s] not found' % f_id))
+                        self.issues.append((
+                            'footnote_missing', f_start, f_end,
+                            {'footnote_id': f_id}))
                     else:
                         support['footnote'] = text
                         used_footnotes.add(f_id)
@@ -411,8 +386,8 @@ class PageVisitor(NodeVisitor):
             del footnotes[f_id]
 
         for f_id, (text, start, end) in footnotes.items():
-            self.errors.append(
-                (start, end, 'Footnote [%s] not used' % f_id))
+            self.issues.append((
+                'footnote_unused', start, end, {'footnote_id': f_id}))
 
         self.compat = compat_divs
         self.footnotes = footnotes
@@ -481,8 +456,8 @@ class PageVisitor(NodeVisitor):
                 try:
                     col = table[row].index(None)
                 except ValueError:
-                    error = "Extra cell in table"
-                    self.errors.append((td['start'], cell[-1]['end'], error))
+                    self.issues.append((
+                        'extra_cell', td['start'], cell[-1]['end'], {}))
                     continue
                 rowspan = int(td.get('rowspan', 1))
                 colspan = int(td.get('colspan', 1))
@@ -527,8 +502,9 @@ class PageVisitor(NodeVisitor):
         # Verify feature header
         fcontent = feature['content']
         if fcontent['text'] != 'Feature':
-            issue = 'Expected header "Feature"'
-            self.issues.append((fcontent['start'], fcontent['end'], issue))
+            self.issues.append((
+                'feature_header', fcontent['start'], fcontent['end'],
+                {'header': fcontent['text']}))
 
         # Process client headers
         expected_attrs = ('colspan',)
@@ -542,8 +518,9 @@ class PageVisitor(NodeVisitor):
             assert isinstance(name, text_type), type(name)
             b_id, b_name, b_slug = self.browser_id_name_and_slug(name)
             if is_fake_id(b_id):
-                issue = 'Unknown Browser "%s"' % name
-                self.errors.append((content['start'], content['end'], issue))
+                self.issues.append((
+                    'unknown_browser', content['start'], content['end'],
+                    {'name': name}))
             client = {
                 'name': b_name,
                 'id': b_id,
@@ -683,8 +660,8 @@ class PageVisitor(NodeVisitor):
                 if 'footnote_id' in item:
                     footnote.append(item)
                 else:
-                    self.errors.append((
-                        item['start'], item['end'], "No ID in footnote."))
+                    self.issues.append((
+                        'footnote_no_id', item['start'], item['end'], {}))
             elif item.get('footnote_id'):
                 # New footnote
                 add_footnote(footnote)
@@ -847,10 +824,12 @@ class PageVisitor(NodeVisitor):
                 assert ident not in node_out
                 node_out[ident] = attr['value']
             else:
+                expected_text = (
+                    ', '.join(expected[:-1]) + ' or ' + expected[-1])
                 self.issues.append((
-                    attr['start'], attr['end'],
-                    "Unexpected attribute <%s %s=\"%s\">" % (
-                        node_dict['type'], ident, attr['value'])))
+                    'unexpected_attribute', attr['start'], attr['end'],
+                    {'node_type': node_dict['type'], 'ident': ident,
+                        'value': attr['value'], 'expected': expected_text}))
         return node_out
 
     def visit_th_elem(self, node, children):
@@ -915,6 +894,17 @@ class PageVisitor(NodeVisitor):
                 raise ValueError(text)
             return text[1:-1]
         return text
+
+    def unknown_kumascript_issue(self, scope, item):
+        """Create an unknown_kumascript issue."""
+        if item['args']:
+            args = '(' + ', '.join(item['args']) + ')'
+        else:
+            args = ''
+        return (
+            'unknown_kumascript', item['start'], item['end'],
+            {'name': item['name'], 'args': item['args'], 'scope': scope,
+             'display': "{{%s%s}}" % (item['name'], args)})
 
     #
     # API lookup methods
@@ -1069,18 +1059,11 @@ class PageVisitor(NodeVisitor):
                 elif kname == 'domxref':
                     name_bits.append(self.unquote(item['args'][0]))
                 else:
-                    if item['args']:
-                        args = '(' + ', '.join(item['args']) + ')'
-                    else:
-                        args = ''
-                    error = (
-                        'Unknown kumascript function %s%s'
-                        % (item['name'], args))
-                    self.errors.append((item['start'], item['end'], error))
+                    self.issues.append(self.unknown_kumascript_issue(
+                        'compatibility feature', item))
             elif item['type'] == 'footnote_id':
-                self.errors.append((
-                    item['start'], item['end'],
-                    'Footnotes are not allowed on features'))
+                self.issues.append((
+                    'footnote_feature', item['start'], item['end'], {}))
             else:
                 raise ValueError("Unknown item!", item)
         assert name_bits
@@ -1140,9 +1123,10 @@ class PageVisitor(NodeVisitor):
                 version_found = item['version']
             elif item['type'] == 'footnote_id':
                 if 'footnote_id' in support:
-                    self.errors.append((
-                        item['start'], item['end'],
-                        'Only one footnote allowed.'))
+                    self.issues.append((
+                        'footnote_multiple', item['start'], item['end'],
+                        {'prev_footnote_id': support['footnote_id'][0],
+                         'footnote_id': item['footnote_id']}))
                 else:
                     support['footnote_id'] = (
                         item['footnote_id'], item['start'], item['end'])
@@ -1171,9 +1155,10 @@ class PageVisitor(NodeVisitor):
                             version_found = text_type(nversion)
                         else:
                             version_found = None
-                            self.errors.append((
+                            self.issues.append((
+                                'compatgeckodesktop_unknown',
                                 item['start'], item['end'],
-                                'Unknown Gecko version "%s"' % gversion))
+                                {'version': gversion}))
                 elif kname == 'compatgeckofxos':
                     gversion = self.unquote(item['args'][0])
                     try:
@@ -1212,14 +1197,14 @@ class PageVisitor(NodeVisitor):
                           oversion in ('', '2.2')):
                         version_found = '2.2'
                     elif nversion < 0 or nversion >= 38:
-                        self.errors.append((
-                            item['start'], item['end'],
-                            'Unknown Gecko version "%s"' % gversion))
+                        self.issues.append((
+                            'compatgeckofxos_unknown',
+                            item['start'], item['end'], {'version': gversion}))
                     else:
-                        self.errors.append((
+                        self.issues.append((
+                            'compatgeckofxos_override',
                             item['start'], item['end'],
-                            ('Override "%s" is invalid for '
-                             'Gecko version "%s"' % (oversion, gversion))))
+                            {'override': oversion, 'version': gversion}))
                 elif kname == 'compatgeckomobile':
                     gversion = self.unquote(item['args'][0])
                     version_found = gversion.split('.', 1)[0]
@@ -1228,20 +1213,13 @@ class PageVisitor(NodeVisitor):
                 elif kname in kumascript_compat_versions:
                     version_found = self.unquote(item['args'][0])
                 else:
-                    if item['args']:
-                        args = '(' + ', '.join(item['args']) + ')'
-                    else:
-                        args = ''
-                    error = (
-                        'Unknown kumascript function %s%s' %
-                        (item['name'], args))
-                    self.errors.append((item['start'], item['end'], error))
+                    self.issues.append(self.unknown_kumascript_issue(
+                        'compatibility cell', item))
             elif item['type'] == 'p_open':
                 p_depth += 1
                 if p_depth > 1:
-                    self.errors.append((
-                        item['start'], item['end'],
-                        'Nested <p> tags not supported'))
+                    self.issues.append((
+                        'nested_p', item['start'], item['end'], {}))
             elif item['type'] == 'p_close' and p_depth > 1:
                 # No support for nested <p> tags
                 p_depth -= 1
@@ -1266,16 +1244,13 @@ class PageVisitor(NodeVisitor):
                 support['support'] = 'no'
             elif item['type'] == 'text':
                 if item['content']:
-                    # Inline text requires human intervention to move to a
-                    #  footnote, convert to a normal version, or remove.
-                    self.errors.append((
-                        item['start'], item['end'],
-                        'Unknown support text "%s"' % item['content']))
+                    self.issues.append((
+                        'inline_text', item['start'], item['end'],
+                        {'text': item['content']}))
             elif item['type'] == 'code_block':
-                self.errors.append((
-                    item['start'], item['end'],
-                    'Unknown support text <code>%s</code>' %
-                    item['content']))
+                self.issues.append((
+                    'inline_text', item['start'], item['end'],
+                    {'text': '<code>{}</code>'.format(item['content'])}))
             else:
                 raise ValueError("Unknown item", item)
 
@@ -1286,12 +1261,12 @@ class PageVisitor(NodeVisitor):
                 new_version = is_fake_id(version_id)
                 new_browser = is_fake_id(browser['id'])
                 if new_version and not new_browser:
-                    self.errors.append((
-                        item['start'], item['end'],
-                        'Unknown version "%s" for browser "%s"'
-                        ' (id %d, slug "%s")' % (
-                            version_found, browser['name'], browser['id'],
-                            browser.get('slug', '<not loaded>'))))
+                    self.issues.append((
+                        'unknown_version', item['start'], item['end'],
+                        {'browser_id': browser['id'],
+                         'browser_name': browser['name'],
+                         'version': version_found,
+                         'browser_slug': browser.get('slug', '<not loaded>')}))
                 version['id'] = version_id
                 version['version'] = version_name
                 support_id = self.support_id(version_id, feature['id'])
@@ -1364,14 +1339,12 @@ class PageVisitor(NodeVisitor):
                 kumascript = "<code>%s</code>" % self.unquote(arglist[0])
             else:
                 kumascript = ""
-                if arglist:
-                    args = '(' + ', '.join(arglist) + ')'
-                else:
-                    args = ''
-                self.errors.append((
-                    start + match.start(), start + match.end(),
-                    "Unknown footnote kumascript function %s%s" %
-                    (name, args)))
+                item = {
+                    'name': name, 'args': arglist,
+                    'start': start + match.start(),
+                    'end': start + match.end()}
+                self.issues.append(self.unknown_kumascript_issue(
+                    'footnote', item))
             rendered = (
                 rendered[:match.start()] + kumascript + rendered[match.end():])
         return rendered
@@ -1384,39 +1357,22 @@ def scrape_page(mdn_page, feature, locale='en'):
         ('compat', []),
         ('footnotes', None),
         ('issues', []),
-        ('errors', []),
     ))
     if '<h2' not in mdn_page:
-        data['errors'].append('No <h2> found in page')
+        data['issues'].append(('false_start', 0, len(mdn_page), {}))
         return data
 
     try:
         page_parsed = page_grammar.parse(mdn_page)
     except IncompleteParseError as ipe:
-        error = (
-            ipe.pos, end_of_line(ipe.text, ipe.pos),
-            'Unable to finish parsing MDN page, starting at this position.')
-        data['errors'].append(error)
-        return data
-    except ParseError as pe:  # pragma: no cover
-        # TODO: Add a test once we know how to trigger
-        # Because the rules include optional sections, parse issues mostly
-        # appear as IncompleteParseError or skipping a section.  A small
-        # change to the rules may turn these into ParseErrors instead.
-        # PageVisitor.visit_other_section() handles skipped sections.
-        rule = pe.expr
-        error = (
-            pe.pos, end_of_line(pe.text, pe.pos),
-            'Rule "%s" failed to match.  Rule definition:' % rule.name,
-            rule.as_rule())
-        data['errors'].append(error)
+        data['issues'].append((
+            'halt_import', ipe.pos, end_of_line(ipe.text, ipe.pos), {}))
         return data
     page_data = PageVisitor(feature).visit(page_parsed)
 
     data['specs'] = page_data.get('specs', [])
     data['compat'] = page_data.get('compat', [])
     data['issues'] = page_data.get('issues', [])
-    data['errors'] = page_data.get('errors', [])
     data['footnotes'] = page_data.get('footnotes', None)
     return data
 
@@ -1791,12 +1747,8 @@ def scrape_feature_page(feature_page):
     feature_page.data = view_feature.generate_data()
 
     # Add issues
-    for err in chain(scraped_data['issues'], scraped_data['errors']):
-        if isinstance(err, tuple):
-            html = range_error_to_html(en_content.raw, *err)
-            feature_page.add_error(html, True)
-        else:
-            feature_page.add_error(err)
+    for issue in scraped_data['issues']:
+        feature_page.add_issue(issue, 'en-US')
 
     # Update status, issues
     feature_page.status = feature_page.STATUS_PARSED
@@ -1825,49 +1777,6 @@ def end_of_line(text, pos):
 def is_fake_id(_id):
     # Detect if an ID is a real ID
     return isinstance(_id, text_type) and _id[0] == '_'
-
-
-def range_error_to_html(page, start, end, reason, rule=None):
-    """Convert a range error to HTML"""
-    assert page, "Page can not be empty"
-    html_bits = ["<div><p>", escape(reason), "</p>"]
-    if rule:
-        html_bits.extend(("<p><code>", escape(rule), "</code></p>"))
-
-    # Get 2 lines of context around error
-    html_bits.append('<p>Context:<pre>')
-    start_line = page.count('\n', 0, start)
-    end_line = page.count('\n', 0, end)
-    ctx_start_line = max(0, start_line - 2)
-    ctx_end_line = min(end_line + 3, page.count('\n'))
-    digits = len(text_type(ctx_end_line))
-    context_lines = page.split('\n')[ctx_start_line:ctx_end_line]
-
-    # Highlight the errored portion
-    err_page_bits = []
-    err_line_count = 1
-    for p, c in enumerate(page):  # pragma: no branch
-        if c == '\n':
-            err_page_bits.append(c)
-            err_line_count += 1
-            if err_line_count > ctx_end_line:
-                break
-        elif p < start or p >= end:
-            err_page_bits.append(' ')
-        else:
-            err_page_bits.append('^')
-    err_page = ''.join(err_page_bits)
-    err_lines = err_page.split('\n')[ctx_start_line:ctx_end_line]
-
-    for num, (line, err_line) in enumerate(zip(context_lines, err_lines)):
-        lnum = ctx_start_line + num
-        html_bits.append(
-            text_type(lnum).rjust(digits) + ' ' + escape(line) + '\n')
-        if '^' in err_line:
-            html_bits.append('*' * digits + ' ' + err_line + '\n')
-
-    html_bits.append("</pre></p></div>")
-    return ''.join(html_bits)
 
 
 def slugify(word, length=50, suffix=""):

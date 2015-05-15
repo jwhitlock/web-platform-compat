@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.utils.six import text_type
 
 from mdn.models import (
-    validate_mdn_url, FeaturePage, PageMeta, TranslatedContent)
+    validate_mdn_url, FeaturePage, Issue, PageMeta, TranslatedContent)
 from webplatformcompat.models import Feature
 from webplatformcompat.tests.base import TestCase
 
@@ -113,8 +113,9 @@ class TestFeaturePageModel(TestCase):
         self.assertEqual(t_de.status, PageMeta.STATUS_STARTING)
 
     def test_get_data_existing(self):
-        self.fp.raw_data = '{"foo": "bar"}'
-        self.assertEqual({"foo": "bar"}, self.fp.data)
+        self.fp.raw_data = '{"meta": {"scrape": {"issues": "x"}}}'
+        expected = {"meta": {"scrape": {"issues": []}}}
+        self.assertEqual(expected, self.fp.data)
 
     def test_get_data_none(self):
         self.fp.raw_data = None
@@ -128,27 +129,100 @@ class TestFeaturePageModel(TestCase):
             ['features', 'linked', 'meta'],
             list(self.fp.data.keys()))
 
-    def test_add_error(self):
-        error = "This is an error"
-        self.fp.add_error(error)
-        self.assertEqual(
-            ['<pre>This is an error</pre>'],
-            self.fp.data['meta']['scrape']['errors'])
+    def test_add_issue(self):
+        issue = ['exception', 0, 0, {'traceback': 'TRACEBACK'}]
+        self.fp.add_issue(issue)
+        self.assertEqual([issue], self.fp.data['meta']['scrape']['issues'])
 
-    def test_add_error_safe(self):
-        error = "This is an error"
-        self.fp.add_error(error, True)
-        self.assertEqual(
-            ['This is an error'],
-            self.fp.data['meta']['scrape']['errors'])
+    def test_add_duplicate_issue(self):
+        issue = ['exception', 0, 0, {'traceback': 'TRACEBACK'}]
+        self.fp.add_issue(issue)
+        self.assertRaises(ValueError, self.fp.add_issue, issue)
 
-    def test_add_duplicate_error(self):
-        error = "Duplicate error"
-        self.fp.add_error(error)
-        self.fp.add_error(error)
-        self.assertEqual(
-            ['<pre>Duplicate error</pre>'],
-            self.fp.data['meta']['scrape']['errors'])
+    def test_warnings_none(self):
+        self.assertEqual(0, self.fp.warnings)
+
+    def test_warnings_one(self):
+        self.fp.add_issue(('spec_h2_id', 1, 15, {'h2_id': 'other'}))
+        self.assertEqual(1, self.fp.warnings)
+
+    def test_errors_none(self):
+        self.assertEqual(0, self.fp.errors)
+        self.assertEqual(0, self.fp.errors)  # Coverage for issue_counts
+
+    def test_errors_one(self):
+        self.fp.add_issue(('footnote_feature', 100, 115, {}))
+        self.assertEqual(1, self.fp.errors)
+
+    def test_critical_none(self):
+        self.assertEqual(0, self.fp.critical)
+
+    def test_critical_one(self):
+        self.fp.add_issue(('false_start', 0, 0, {}))
+        self.assertEqual(1, self.fp.critical)
+
+
+class TestIssue(TestCase):
+    def setUp(self):
+        self.fp = FeaturePage(
+            url="https://developer.mozilla.org/en-US/docs/Web/CSS/float",
+            feature_id=666, status=FeaturePage.STATUS_PARSED)
+        self.en_content = TranslatedContent(
+            page=self.fp, locale="en-US", path="/en-US/docs/Web/CSS/float")
+        self.de_content = TranslatedContent(
+            page=self.fp, locale="de", path="/de/docs/Web/CSS/float")
+        self.issue = Issue(
+            page=self.fp, slug='bad_json', start=0, end=0,
+            params={'url': 'THE URL', 'content': 'NOT JSON'},
+            content=self.en_content)
+
+    def test_str_no_content(self):
+        self.issue.content = None
+        expected = (
+            'bad_json [0:0] on'
+            ' https://developer.mozilla.org/en-US/docs/Web/CSS/float')
+        self.assertEqual(expected, text_type(self.issue))
+
+    def test_str_content(self):
+        self.issue.content = self.de_content
+        expected = (
+            'bad_json [0:0] on'
+            ' https://developer.mozilla.org/de/docs/Web/CSS/float')
+        self.assertEqual(expected, text_type(self.issue))
+
+    def test_brief_description(self):
+        expected = "Response from THE URL is not JSON"
+        self.assertEqual(expected, self.issue.brief_description)
+
+    def test_long_description(self):
+        expected = "Actual content:\nNOT JSON"
+        self.assertEqual(expected, self.issue.long_description)
+
+    def test_severity(self):
+        self.assertEqual(3, self.issue.severity)
+
+    def test_get_severity_display(self):
+        self.assertEqual('Critical', self.issue.get_severity_display())
+
+    def test_context(self):
+        content = """\
+Here's the error:
+---> ERROR <-----
+Enjoy.
+"""
+        self.en_content.raw = content
+        self.issue.start = content.find('ERROR')
+        self.issue.end = self.issue.start + len('ERROR')
+        expected = """\
+0 Here's the error:
+1 ---> ERROR <-----
+*      ^^^^^       \n\
+2 Enjoy."""
+        self.assertEqual(expected, self.issue.context)
+
+    def test_context_without_content(self):
+        self.issue.content = None
+        self.assertEqual("", self.issue.context)
 
 
 class TestPageMetaModel(TestCase):

@@ -25,7 +25,7 @@
       <th>Feature ID</th>
       <th>MDN Slug</th>
       <th>Status</th>
-      <th>Has Issues?</th>
+      <th>Warnings /<br/>Errors /<br/>Critical Errors</th>
     </tr>
   </thead>
   <tbody>
@@ -38,12 +38,17 @@
       <td>
         <a href="{{ url('feature_page_detail', pk=page.id) }}">
         {%- if page.status == page.STATUS_PARSED -%}
-          {%- if page.has_issues %}<strong>Yes</strong>{% else %}No{%endif -%}
+          {%- if page.has_issues %}
+            {{page.warnings}} / {{page.errors}} / {{ page.critical }}
+          {% else %}
+            No Issues
+          {% endif %}
         {%- elif page.status == page.STATUS_ERROR %}
           Scraping Failed
         {%- else %}
           <em>Still Processing</em>
         {%- endif -%}
+        </a>
       </td>
     </tr>
     {% endfor %}
