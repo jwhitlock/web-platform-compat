@@ -615,7 +615,7 @@ class PageVisitor(NodeVisitor):
         if raw_id.isnumeric():
             footnote_id = raw_id
         else:
-            footnote_id = str(len(raw_id))
+            footnote_id = text_type(len(raw_id))
         return {
             'type': 'footnote_id',
             'footnote_id': footnote_id,
@@ -696,7 +696,7 @@ class PageVisitor(NodeVisitor):
         if raw_id.isnumeric():
             footnote_id = raw_id
         else:
-            footnote_id = str(len(raw_id))
+            footnote_id = text_type(len(raw_id))
         return footnote_id
 
     visit_footnote_p_text = _visit_content
@@ -1462,7 +1462,7 @@ class ScrapedViewFeature(object):
             else:
                 browser_content = self.load_browser(browser_entry['id'])
             self.add_resource('browsers', browser_content)
-            tab['browsers'].append(str(browser_content['id']))
+            tab['browsers'].append(text_type(browser_content['id']))
 
         # Load Features (first column)
         for feature_entry in table['features']:
@@ -1472,7 +1472,7 @@ class ScrapedViewFeature(object):
                 feature_content = self.load_feature(feature_entry['id'])
             self.add_resource_if_new('features', feature_content)
             self.compat_table_supports.setdefault(
-                str(feature_content['id']), OrderedDict())
+                text_type(feature_content['id']), OrderedDict())
 
         # Load Versions (explicit or implied in cells)
         for version_entry in table['versions']:
