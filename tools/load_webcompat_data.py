@@ -67,7 +67,7 @@ def get_compat_data(filename, url):
 
 
 def load_compat_data(client, compat_data, all_data=False, confirm=None):
-    """Load a dictionary of compatiblity data into the API"""
+    """Load a dictionary of compatibility data into the API"""
     api_collection = Collection(client)
     local_collection = Collection()
 
