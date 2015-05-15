@@ -9,7 +9,7 @@ source =
 omit =
     tools/client.py
     tools/download_data.py
-    tools/gather_import_errors.py
+    tools/gather_import_issues.py
     tools/import_mdn.py
     tools/integration_requests.py
     tools/load_spec_data.py
