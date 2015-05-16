@@ -63,7 +63,7 @@ celery==3.1.17
 django-mptt==0.7.1
 
 # Sorted ManyToManyField
-django-sortedm2m==0.9.4
+django-sortedm2m==0.9.5
 
 # Cached instances for Django REST Framework
 drf-cached-instances==0.3.0
@@ -73,7 +73,9 @@ drf-cached-instances==0.3.0
 git+git://github.com/ottoyiu/django-cors-headers@b419817a2f#egg=django-cors-headers
 
 # Parsing Expression Grammar, for MDN scraping
-parsimonious==0.6.2
+# parsimonious==0.6.2
+# TravisCI is now using ascii as system encoding, breaking setup.py
+git+git://github.com/jwhitlock/parsimonious@68_fix_open#egg=parsimonious
 
 # Social loging support (Firefox Accounts)
 # python-openid >= 2.2.5  # Python 2.x - unused by app

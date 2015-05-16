@@ -476,7 +476,7 @@ if __name__ == '__main__':
         password = args.password
 
     # Load data
-    with open(args.cases, 'r') as cases_file:
+    with open(args.cases, 'r', encoding='utf8') as cases_file:
         cases = json.load(cases_file, object_pairs_hook=OrderedDict)
     runner = CaseRunner(
         cases=cases, api=api, raw_dir=args.raw, mode=mode,
