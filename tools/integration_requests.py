@@ -12,6 +12,8 @@ import re
 
 import requests
 
+logger = logging.getLogger('tools.integration_requests')
+
 my_dir = os.path.dirname(os.path.realpath(__file__))
 doc_dir = os.path.realpath(os.path.join(my_dir, '..', 'docs'))
 default_api = 'http://localhost:8000'
@@ -397,18 +399,16 @@ class CaseRunner(object):
 
 
 if __name__ == '__main__':
-    import argparse
     import getpass
     import sys
+    from common import ToolParser
 
-    description = 'Make raw requests to API'
-    parser = argparse.ArgumentParser(description=description)
+    parser = ToolParser(
+        description='Make raw requests to API',
+        include=['api', 'user', 'password'], logger=logger)
     parser.add_argument(
         'casenames', metavar="case name", nargs="*",
         help='Case names to run, defaults to all cases')
-    parser.add_argument(
-        '-a', '--api', default=default_api,
-        help='Base URL of the API (default: http://localhost:8000)')
     parser.add_argument(
         '-r', '--raw', default=default_raw_dir,
         help="Path to requests/responses folder")
@@ -416,60 +416,20 @@ if __name__ == '__main__':
         '-c', '--cases', default=default_cases_file,
         help="Path to cases JSON")
     parser.add_argument(
-        '-v', '--verbose', action="store_true",
-        help='Print extra debug information')
-    parser.add_argument(
-        '-q', '--quiet', action="store_true",
-        help='Only print warnings')
-    parser.add_argument(
         '-m', '--mode', choices=("display", "generate", "verify"),
         default="display",
         help="Run test cases in the specified mode, default display")
     parser.add_argument(
-        '-u', '--user',
-        help="Regular user to use for API requests")
-    parser.add_argument(
-        '-p', '--password',
-        help="Password to use for regular user")
-    parser.add_argument(
         '--include-mod', action="store_true",
         help="In display mode, include cases that modify data")
-
     args = parser.parse_args()
-
-    # Setup logging
-    verbose = args.verbose
-    quiet = args.quiet
-    console = logging.StreamHandler(sys.stderr)
-    formatter = logging.Formatter('%(levelname)s - %(message)s')
-    fmat = '%(levelname)s - %(message)s'
-    logger_name = 'tools'
-    if quiet:
-        level = logging.WARNING
-    elif verbose:
-        level = logging.DEBUG
-        logger_name = ''
-        fmat = '%(name)s - %(levelname)s - %(message)s'
-    else:
-        level = logging.INFO
-    formatter = logging.Formatter(fmat)
-    console.setLevel(level)
-    console.setFormatter(formatter)
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-    logger.addHandler(console)
-
-    # Parse arguments
     api = args.api
-    if api.endswith('/'):
-        api = api[:-1]
     mode = args.mode
     logger.info("Making API requests against %s for %s", api, mode)
     if mode == 'display':
         include_mod = args.include_mod
     else:
         include_mod = True
-
     if args.user and not args.password:
         password = getpass.getpass("API password: ")
     else:

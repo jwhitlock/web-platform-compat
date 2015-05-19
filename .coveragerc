@@ -8,6 +8,7 @@ source =
     webplatformcompat
 omit =
     tools/client.py
+    tools/common.py
     tools/download_data.py
     tools/gather_import_issues.py
     tools/import_mdn.py
