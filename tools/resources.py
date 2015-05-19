@@ -222,7 +222,18 @@ class Resource(object):
         data = OrderedDict()
         for field in self._writeable_property_fields:
             if field in self._data:
-                data[field] = self._data[field]
+                raw_value = self._data[field]
+                if hasattr(raw_value, 'keys') and 'en' in raw_value:
+                    # Sort languages
+                    value = OrderedDict()
+                    value['en'] = raw_value['en']
+                    for lang in sorted(raw_value.keys()):
+                        if lang != 'en':
+                            value[lang] = raw_value[lang]
+                else:
+                    value = raw_value
+
+                data[field] = value
         for field, attr in self._writeable_link_fields.items():
             is_sorted = attr[1] == Resource.SORTED
             if not with_sorted and is_sorted:
