@@ -745,6 +745,34 @@ class TestCollection(TestCase):
         self.col.remove(firefox)
         self.assertEqual([], self.col.get_resources('browsers'))
 
+    def test_load_collection(self):
+        firefox = Browser(slug='firefox')
+        self.col.add(firefox)
+        key = ('browsers', 'firefox')
+        self.assertEqual(
+            {key: firefox}, self.col.get_resources_by_data_id('browsers'))
+        copy_col = Collection()
+        copy_col.load_collection(self.col)
+        new_resources = copy_col.get_resources_by_data_id('browsers')
+        self.assertEqual([key], list(new_resources.keys()))
+        new_firefox = new_resources[key]
+        self.assertEqual(firefox.to_json_api(), new_firefox.to_json_api())
+        self.assertIsNone(firefox.id)
+
+    def test_load_collection_with_id(self):
+        firefox = Browser(slug='firefox', id=6)
+        self.col.add(firefox)
+        key = ('browsers', 'firefox')
+        self.assertEqual(
+            {key: firefox}, self.col.get_resources_by_data_id('browsers'))
+        copy_col = Collection()
+        copy_col.load_collection(self.col)
+        new_resources = copy_col.get_resources_by_data_id('browsers')
+        self.assertEqual([key], list(new_resources.keys()))
+        new_firefox = new_resources[key]
+        self.assertEqual(firefox.to_json_api(), new_firefox.to_json_api())
+        self.assertEqual(new_firefox.id.id, 6)
+
 
 class TestCollectionChangeset(TestCase):
 

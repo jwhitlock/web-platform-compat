@@ -462,6 +462,23 @@ class Collection(object):
         done_count = len(self._repository.get(resource_type, []))
         return done_count - original_count
 
+    def load_collection(self, from_collection):
+        """Load data from another collection.
+
+        This is useful for loading an original collection, altering the
+        resources, and then syncing the changes back to the original
+        collection.
+        """
+        assert not self.client, "Don't set client when using load_collection."
+        assert not self._repository, "Can't load with existing resources"
+        for data_id, resource in from_collection.get_all_by_data_id().items():
+            json_api = resource.to_json_api()
+            if resource.id:
+                json_api[resource._resource_type]['id'] = resource.id.id
+            new_resource = type(resource)()
+            new_resource.from_json_api(json_api)
+            self.add(new_resource)
+
     def override_ids_to_match(self, sync_collection):
         """Change IDs to match another collection."""
         self._override_ids = {}
