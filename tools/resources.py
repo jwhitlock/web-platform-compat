@@ -104,7 +104,7 @@ class Resource(object):
         self._collection = collection
 
         assert hasattr(self, '_resource_type'), "Must set _resource_type"
-        assert hasattr(self, '_id_data'), "Must set _unique index"
+        assert hasattr(self, '_id_data'), "Must set _id_data"
         assert tuple(sorted(self._id_data)) == tuple(self._id_data), \
             "_id_data must be sorted"
 
@@ -682,9 +682,8 @@ class CollectionChangeset(object):
 
         # Summarize new resources
         for item in self.changes['new'].values():
-            resource_type = item._resource_type
             rep = self.format_item(item)
-            out.append("New %s:\n%s" % (resource_type, rep))
+            out.append("New:\n%s" % rep)
 
         # Summarize deleted resources
         for item in self.changes['deleted'].values():

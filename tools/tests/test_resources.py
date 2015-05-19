@@ -825,13 +825,13 @@ class TestCollectionChangeset(TestCase):
     def test_summary_new_items(self):
         _, cc = self.setup_new()
         expected = """\
-New browsers:
+New:
 {
   "browsers": {
     "slug": "chrome"
   }
 }
-New versions:
+New:
 {
   "versions": {
     "version": "2.0",
@@ -908,13 +908,13 @@ New versions:
     def test_summary_new_items_with_dependencies(self):
         _, cc = self.setup_new_with_dependencies()
         expected = """\
-New features:
+New:
 {
   "features": {
     "slug": "parent"
   }
 }
-New features:
+New:
 {
   "features": {
     "slug": "child1",
@@ -923,7 +923,7 @@ New features:
     }
   }
 }
-New features:
+New:
 {
   "features": {
     "slug": "child2",
@@ -932,7 +932,7 @@ New features:
     }
   }
 }
-New features:
+New:
 {
   "features": {
     "slug": "child3",
@@ -941,7 +941,7 @@ New features:
     }
   }
 }
-New features:
+New:
 {
   "features": {
     "slug": "grandchild",
