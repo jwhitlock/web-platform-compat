@@ -339,13 +339,13 @@ class Section(Resource):
         'history': ('historical_sections', True),
         'history_current': ('historical_sections', False),
     }
-    _id_data = ('number_en', 'specification.mdn_key')
+    _id_data = ('specification.mdn_key', 'subpath_en')
 
     @property
-    def number_en(self):
-        if self.number is None:
+    def subpath_en(self):
+        if self.subpath is None:
             return None
-        return self.number.get('en', None)
+        return self.subpath.get('en', None)
 
 
 class Maturity(Resource):

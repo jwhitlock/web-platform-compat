@@ -367,13 +367,13 @@ class TestSection(TestCase):
         feature = Feature(id="222")
         section = Section(
             id="_sec", specification="22", features=["222"],
-            number={"en": "1.2.3"})
+            number={"en": "1.2.3"}, subpath={"en": "#123"})
         collection = Collection()
         collection.add(maturity)
         collection.add(spec)
         collection.add(feature)
         collection.add(section)
-        self.assertEqual(('sections', '1.2.3', 'SPEC'), section.get_data_id())
+        self.assertEqual(('sections', 'SPEC', '#123'), section.get_data_id())
 
     def test_without_number(self):
         section = Section(
@@ -388,7 +388,7 @@ class TestSection(TestCase):
                 }}}
         self.assertEqual(expected, section.to_json_api())
 
-    def test_get_data_id_without_number(self):
+    def test_get_data_id_without_subpath(self):
         maturity = Maturity(id="2")
         spec = Specification(id="22", maturity="2", mdn_key="SPEC")
         feature = Feature(id="222")
@@ -398,7 +398,7 @@ class TestSection(TestCase):
         collection.add(spec)
         collection.add(feature)
         collection.add(section)
-        self.assertEqual(('sections', '', 'SPEC'), section.get_data_id())
+        self.assertEqual(('sections', 'SPEC', ''), section.get_data_id())
 
     def test_with_empty_number(self):
         section = Section(
@@ -414,18 +414,18 @@ class TestSection(TestCase):
                 }}}
         self.assertEqual(expected, section.to_json_api())
 
-    def test_get_data_id_with_empty_number(self):
+    def test_get_data_id_with_empty_subpath(self):
         maturity = Maturity(id="2")
         spec = Specification(id="22", maturity="2", mdn_key="SPEC")
         feature = Feature(id="222")
         section = Section(
-            id="_sec", specification="22", features=["222"], number={})
+            id="_sec", specification="22", features=["222"], subpath={})
         collection = Collection()
         collection.add(maturity)
         collection.add(spec)
         collection.add(feature)
         collection.add(section)
-        self.assertEqual(('sections', '', 'SPEC'), section.get_data_id())
+        self.assertEqual(('sections', 'SPEC', ''), section.get_data_id())
 
 
 class TestMaturity(TestCase):
@@ -478,7 +478,7 @@ class TestCollection(TestCase):
         specification = Specification(
             id='6', slug='css1', mdn_key='CSS1', maturity='5')
         self.col.add(specification)
-        section = Section(id='7', number={'en': '5.6.1'}, specification='6')
+        section = Section(id='7', subpath={'en': '#561'}, specification='6')
         self.col.add(section)
 
         index = self.col.get_all_by_data_id()
@@ -489,7 +489,7 @@ class TestCollection(TestCase):
             ('supports', 'the-feature', 'chrome', '1.0'): support,
             ('maturities', 'REC'): maturity,
             ('specifications', 'CSS1'): specification,
-            ('sections', '5.6.1', 'CSS1'): section,
+            ('sections', 'CSS1', '#561'): section,
         }
         self.assertEqual(expected, index)
 
