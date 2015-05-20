@@ -109,6 +109,14 @@ class TestFeaturePageSearch(TestCase):
         next_url = reverse('feature_page_detail', kwargs={'pk': fp.id})
         self.assertRedirects(response, next_url)
 
+    def test_post_found_with_anchor(self):
+        fp = FeaturePage.objects.create(
+            url=self.mdn_url, feature_id=741, data='{"foo": "bar"}')
+        url = self.mdn_url + "#Browser_Compat"
+        response = self.client.get(self.url, {'url': url})
+        next_url = reverse('feature_page_detail', kwargs={'pk': fp.id})
+        self.assertRedirects(response, next_url)
+
     def test_not_found_with_perms(self):
         self.login_user(groups=['import-mdn'])
         response = self.client.get(self.url, {'url': self.mdn_url})

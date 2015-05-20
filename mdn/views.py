@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, JsonResponse
+from django.utils.six.moves.urllib.parse import urlparse, urlunparse
 from django.views.generic import DetailView, ListView, TemplateView
 from django.views.generic.base import TemplateResponseMixin, View
 from django.views.generic.detail import BaseDetailView
@@ -82,8 +83,10 @@ class SearchForm(forms.Form):
 
     def clean_url(self):
         data = self.cleaned_data['url']
-        validate_mdn_url(data)
-        return data
+        scheme, netloc, path, params, query, fragment = urlparse(data)
+        cleaned = urlunparse((scheme, netloc, path, '', '', ''))
+        validate_mdn_url(cleaned)
+        return cleaned
 
 
 class FeaturePageSearch(TemplateResponseMixin, View, FormMixin):

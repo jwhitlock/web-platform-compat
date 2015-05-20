@@ -23,7 +23,7 @@ def validate_mdn_url(value):
     disallowed_chars = '?$#'
     for c in disallowed_chars:
         if c in value:
-            raise ValidationError('"?" is not allowed in URL')
+            raise ValidationError('"{}" is not allowed in URL'.format(c))
     allowed_prefix = False
     for allowed in settings.MDN_ALLOWED_URLS:
         allowed_prefix = allowed_prefix or value.startswith(allowed)
