@@ -210,13 +210,16 @@ class TranslatedTextField(CharField):
         if value:
             value = value.strip()
         if value:
-            try:
-                native = json.loads(value)
-            except ValueError as e:
-                if self.allow_canonical:
-                    native = str(value)
-                else:
-                    raise ValidationError(str(e))
+            if value[0] in '"{':
+                try:
+                    native = json.loads(value)
+                except ValueError as e:
+                    if self.allow_canonical:
+                        native = value
+                    else:
+                        raise ValidationError(str(e))
+            else:
+                native = value
             if isinstance(native, six.string_types) and self.allow_canonical:
                 return {'zxx': native}
             else:
