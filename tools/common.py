@@ -4,12 +4,14 @@ from __future__ import print_function
 import argparse
 import codecs
 import getpass
+import hashlib
 import logging
 import os.path
 import string
 import sys
 
 import requests
+from requests.exceptions import ConnectionError
 
 from client import Client
 from resources import CollectionChangeset
@@ -125,16 +127,33 @@ class Tool(object):
         self.logger = logging.getLogger(self.logger_name)
         self.data = 'data'
 
-    def cached_download(self, filename, url):
+    def cached_download(self, filename, url, headers=None, retries=1):
         """Download a file, then serve it from the cache."""
         path = self.data_file(filename)
         if not os.path.exists(path):
-            self.logger.info("Downloading " + path)
-            r = requests.get(url)
+            retry = 0
+            while retry < retries:
+                if retry == 0:
+                    msg = "Downloading {path} from {url}..."
+                else:
+                    msg = "Retry #{retry} downloading {path} from {url}..."
+                self.logger.info(msg.format(path=path, url=url, retry=retry))
+                try:
+                    response = requests.get(url, headers=headers)
+                except ConnectionError as e:
+                    retry += 1
+                    if retry == retries:
+                        raise
+                    else:
+                        self.logger.warning("Got exception {}".format(e))
+                else:
+                    response.raise_for_status()
+                    break
             with codecs.open(path, 'wb', 'utf8') as f:
-                f.write(r.text)
+                f.write(response.text)
         else:
-            self.logger.info("Using existing " + path)
+            self.logger.info(
+                "Using existing {} downloaded from {}".format(path, url))
 
         with codecs.open(path, 'r', 'utf8') as f:
             content = f.read()
@@ -224,6 +243,7 @@ class Tool(object):
 
     def slugify(self, word, attempt=0):
         """Slugify a word, mixing in an attempt count as needed."""
+        md5 = hashlib.md5(word.encode('utf-8')).hexdigest()
         raw = word.lower().encode('utf-8')
         out = []
         acceptable = string.ascii_lowercase + string.digits + '_-'
@@ -239,6 +259,9 @@ class Tool(object):
             suffix = str(attempt)
         else:
             suffix = ""
+
+        if len(slugged) > 50:
+            slugged = slugged[:45] + md5[:5]
         return slugged[slice(50 - len(suffix))] + suffix
 
     def sync_changes(self, api_collection, local_collection):

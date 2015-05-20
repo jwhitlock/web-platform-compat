@@ -15,6 +15,7 @@ omit =
     tools/integration_requests.py
     tools/load_spec_data.py
     tools/load_webcompat_data.py
+    tools/mirror_mdn_features.py
     tools/sample_mdn.py
     tools/sync_from_api.py
     tools/upload_data.py
