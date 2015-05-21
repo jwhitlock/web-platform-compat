@@ -1597,7 +1597,7 @@ class FeaturePageTestCase(ScrapeTestCase):
                            'Web/CSS/background-size'),
                     'fr': ('https://developer.mozilla.org/fr/docs/'
                            'Web/CSS/background-size')},
-                'name': {'zxx': 'background-size'},
+                'name': 'background-size',
                 'obsolete': False,
                 'slug': 'web-css-background-size',
                 'stable': True,

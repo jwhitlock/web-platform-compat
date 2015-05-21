@@ -112,6 +112,11 @@ class TestFeaturePageModel(TestCase):
         t_de = TranslatedContent.objects.get(page=self.fp, locale='de')
         self.assertEqual(t_de.status, PageMeta.STATUS_STARTING)
 
+    def test_get_data_canonical(self):
+        self.fp.feature.name = {'zxx': 'canonical'}
+        data = self.fp.data
+        self.assertEqual('canonical', data['features']['name'])
+
     def test_get_data_existing(self):
         self.fp.raw_data = '{"meta": {"scrape": {"issues": "x"}}}'
         expected = {"meta": {"scrape": {"issues": []}}}

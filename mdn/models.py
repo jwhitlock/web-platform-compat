@@ -145,6 +145,8 @@ class FeaturePage(models.Model):
         for t in self.translations():
             if t.locale != 'en-US':
                 feature['mdn_uri'][t.locale] = t.url()
+        if ['zxx'] == list(feature['name'].keys()):
+            feature['name'] = feature['name']['zxx']
 
         view_feature = OrderedDict((
             ('features', feature),
