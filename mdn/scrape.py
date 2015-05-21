@@ -1367,6 +1367,15 @@ def scrape_page(mdn_page, feature, locale='en'):
         data['issues'].append((
             'halt_import', ipe.pos, end_of_line(ipe.text, ipe.pos), {}))
         return data
+    except ParseError as pe:
+        if pe.expr.name == 'doc':
+            data['issues'].append((
+                'doc_parse_error', pe.pos, end_of_line(pe.text, pe.pos), {}))
+            return data
+        else:  # pragma: no cover
+            # Raise as 'exception' issue to flag for future work
+            raise pe
+
     page_data = PageVisitor(feature).visit(page_parsed)
 
     data['specs'] = page_data.get('specs', [])

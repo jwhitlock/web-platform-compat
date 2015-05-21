@@ -1544,6 +1544,10 @@ class TestScrape(ScrapeTestCase):
         page = "<h2>Incomplete</h2><p>Incomplete</p>"
         self.assertScrape(page, [], [('halt_import', 0, 36, {})])
 
+    def test_not_compat_page(self):
+        page = "<h3>I'm not a compat page</h3>"
+        self.assertScrape(page, [], [('doc_parse_error', 0, 30, {})])
+
     def test_spec_only(self):
         """Test with a only a Specification section."""
         page = self.sample_spec_section
