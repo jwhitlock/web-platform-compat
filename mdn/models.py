@@ -47,6 +47,7 @@ class FeaturePage(models.Model):
     STATUS_PARSING = 3
     STATUS_PARSED = 4
     STATUS_ERROR = 5
+    STATUS_NO_DATA = 6
     STATUS_CHOICES = (
         (STATUS_STARTING, "Starting Import"),
         (STATUS_META, "Fetching Metadata"),
@@ -54,6 +55,7 @@ class FeaturePage(models.Model):
         (STATUS_PARSING, "Parsing MDN pages"),
         (STATUS_PARSED, "Parsing Complete"),
         (STATUS_ERROR, "Scraping Failed"),
+        (STATUS_NO_DATA, "No Compat Data"),
     )
     status = models.IntegerField(
         help_text="Status of MDN Parsing process",

@@ -1538,7 +1538,7 @@ class TestScrape(ScrapeTestCase):
 
     def test_empty(self):
         page = ""
-        self.assertScrape(page, [], [('false_start', 0, 0, {})])
+        self.assertScrape(page, [], [])
 
     def test_incomplete_parse_error(self):
         page = "<h2>Incomplete</h2><p>Incomplete</p>"
@@ -2013,14 +2013,13 @@ class TestScrapeFeaturePage(FeaturePageTestCase):
             translation.save()
 
     def test_empty_page(self):
-        self.set_content('')
+        self.set_content('  ')
         scrape_feature_page(self.page)
         fp = FeaturePage.objects.get(id=self.page.id)
-        self.assertEqual(fp.STATUS_PARSED, fp.status)
+        self.assertEqual(fp.STATUS_NO_DATA, fp.status)
         self.assertEqual(
-            [['false_start', 0, 0, {}]],
-            fp.data['meta']['scrape']['raw']['issues'])
-        self.assertTrue(fp.has_issues)
+            [], fp.data['meta']['scrape']['raw']['issues'])
+        self.assertFalse(fp.has_issues)
 
     def test_parse_issue(self):
         bad_page = '''\

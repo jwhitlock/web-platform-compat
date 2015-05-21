@@ -45,8 +45,10 @@
           {% else %}
             No Issues
           {% endif %}
+        {%- elif page.status == page.STATUS_NO_DATA %}
+          No Data
         {%- elif page.status == page.STATUS_ERROR %}
-          Scraping Failed
+          <strong>Scraping Failed</strong>
         {%- else %}
           <em>Still Processing</em>
         {%- endif -%}
