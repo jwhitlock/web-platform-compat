@@ -3,7 +3,20 @@ from django.contrib import admin
 
 from .models import Issue, FeaturePage, PageMeta, TranslatedContent
 
-admin.site.register(Issue)
-admin.site.register(FeaturePage)
-admin.site.register(PageMeta)
-admin.site.register(TranslatedContent)
+
+class IssueAdmin(admin.ModelAdmin):
+    readonly_fields = ('page', 'content')
+
+
+class FeaturePageAdmin(admin.ModelAdmin):
+    readonly_fields = ('feature',)
+
+
+class ContentAdmin(admin.ModelAdmin):
+    readonly_fields = ('page',)
+
+
+admin.site.register(Issue, IssueAdmin)
+admin.site.register(FeaturePage, FeaturePageAdmin)
+admin.site.register(PageMeta, ContentAdmin)
+admin.site.register(TranslatedContent, ContentAdmin)
