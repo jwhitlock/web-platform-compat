@@ -27,6 +27,7 @@ from itertools import chain
 import re
 import string
 
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.six import text_type
 from parsimonious import IncompleteParseError, ParseError
 from parsimonious.grammar import Grammar
@@ -169,6 +170,14 @@ single_quoted_text = ~r"'(?P<content>[^']*)'"
 # Whitespace
 _ = ~r"[ \t\r\n]*"s
 """)
+
+
+@python_2_unicode_compatible
+class EmptyString(object):
+    """Non-falsy placeholder for empty string"""
+
+    def __str__(self):
+        return text_type('')
 
 
 class PageVisitor(NodeVisitor):
@@ -328,21 +337,32 @@ class PageVisitor(NodeVisitor):
         except IndexError:
             pass  # subpath and name can be empty
 
-        try:
-            spec = Specification.objects.get(mdn_key=key)
-        except Specification.DoesNotExist:
-            spec_id = None
-            self.issues.append((
-                'unknown_spec', node.start, node.end, {'key': key}))
+        if key:
+            try:
+                spec = Specification.objects.get(mdn_key=key)
+            except Specification.DoesNotExist:
+                spec_id = None
+                self.issues.append((
+                    'unknown_spec', node.start, node.end, {'key': key}))
+            else:
+                spec_id = spec.id
         else:
-            spec_id = spec.id
+            self.issues.append((
+                'specname_blank_key', node.start, node.end, {}))
+            spec_id = None
         return (key, spec_id, subpath, name)
 
     def visit_spec2_td(self, node, children):
         kumascript = children[2]
         assert isinstance(kumascript, dict), type(kumascript)
-        assert kumascript['name'].lower() == 'spec2'
-        assert len(kumascript["args"]) == 1
+        if kumascript['name'].lower() != 'spec2':
+            self.issues.append(
+                self.kumascript_issue(
+                    'spec2_wrong_kumascript', kumascript, 'spec2'))
+        if len(kumascript['args']) != 1:
+            self.issues.append(
+                self.kumascript_issue('spec2_arg_count', kumascript, 'spec2'))
+            return ''
         key = self.unquote(kumascript["args"][0])
         assert isinstance(key, text_type), type(key)
         return key
@@ -740,6 +760,8 @@ class PageVisitor(NodeVisitor):
             assert len(argslist) == 1
             args = argslist[0]
         assert isinstance(args, list), type(args)
+        if args == ['']:
+            args = []
 
         return {
             'type': 'kumascript', 'name': name, 'args': args,
@@ -750,23 +772,22 @@ class PageVisitor(NodeVisitor):
     def visit_ks_arglist(self, node, children):
         arg0 = children[1]
         argrest = children[2]
-        args = []
-        if arg0:
-            args.append(arg0)
+        args = [arg0]
         if isinstance(argrest, Node):
             # No additional args
             assert argrest.start == argrest.end
         else:
             for _, arg in argrest:
                 args.append(arg)
-        return args
+        arglist = [text_type(a) for a in args]
+        return arglist
 
     def visit_ks_arg(self, node, children):
         assert isinstance(children, list)
         assert len(children) == 1
         item = children[0]
         assert isinstance(item, text_type)
-        return item
+        return item or EmptyString()
 
     visit_ks_bare_arg = _visit_content
 
@@ -884,27 +905,23 @@ class PageVisitor(NodeVisitor):
         return normal.strip()
 
     def unquote(self, text):
-        """Unquote strings.
-
-        Used in the footnotes parser.  Might be removed if it is replaced with
-        a compat_cell tokenizer using kumascript rule
-        """
+        """Unquote strings."""
         if text.startswith('"') or text.startswith("'"):
             if text[0] != text[-1]:
                 raise ValueError(text)
             return text[1:-1]
         return text
 
-    def unknown_kumascript_issue(self, scope, item):
-        """Create an unknown_kumascript issue."""
+    def kumascript_issue(self, issue, item, scope):
+        """Create an kumascript issue."""
         if item['args']:
             args = '(' + ', '.join(item['args']) + ')'
         else:
             args = ''
         return (
-            'unknown_kumascript', item['start'], item['end'],
+            issue, item['start'], item['end'],
             {'name': item['name'], 'args': item['args'], 'scope': scope,
-             'display': "{{%s%s}}" % (item['name'], args)})
+             'kumascript': "{{%s%s}}" % (item['name'], args)})
 
     #
     # API lookup methods
@@ -1059,8 +1076,8 @@ class PageVisitor(NodeVisitor):
                 elif kname == 'domxref':
                     name_bits.append(self.unquote(item['args'][0]))
                 else:
-                    self.issues.append(self.unknown_kumascript_issue(
-                        'compatibility feature', item))
+                    self.issues.append(self.kumascript_issue(
+                        'unknown_kumascript', item, 'compatibility feature'))
             elif item['type'] == 'footnote_id':
                 self.issues.append((
                     'footnote_feature', item['start'], item['end'], {}))
@@ -1213,8 +1230,8 @@ class PageVisitor(NodeVisitor):
                 elif kname in kumascript_compat_versions:
                     version_found = self.unquote(item['args'][0])
                 else:
-                    self.issues.append(self.unknown_kumascript_issue(
-                        'compatibility cell', item))
+                    self.issues.append(self.kumascript_issue(
+                        'unknown_kumascript', item, 'compatibility cell'))
             elif item['type'] == 'p_open':
                 p_depth += 1
                 if p_depth > 1:
@@ -1343,8 +1360,8 @@ class PageVisitor(NodeVisitor):
                     'name': name, 'args': arglist,
                     'start': start + match.start(),
                     'end': start + match.end()}
-                self.issues.append(self.unknown_kumascript_issue(
-                    'footnote', item))
+                self.issues.append(self.kumascript_issue(
+                    'unknown_kumascript', item, 'footnote'))
             rendered = (
                 rendered[:match.start()] + kumascript + rendered[match.end():])
         return rendered

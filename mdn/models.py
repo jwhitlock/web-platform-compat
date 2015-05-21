@@ -373,6 +373,19 @@ ISSUES = {
         ' Spec2({spec2_key}).',
         'SpecName and Spec2 must refer to the same mdn_key. Update the MDN'
         ' page.'),
+    'specname_blank_key': (
+        ERROR,
+        'KumaScript SpecName has a blank key',
+        'Update the MDN page to include a valid mdn_key'),
+    'spec2_wrong_kumascript': (
+        ERROR,
+        'Expected KumaScript Spec2(), got {kumascript}',
+        'Change to Spec2(mdn_key), using the mdn_key from the SpecName()'
+        ' KumaScript.'),
+    'spec2_arg_count': (
+        ERROR,
+        'KumaScript {kumascript} should have 1 argument',
+        'Argument should be the MDN key that will return a maturity'),
     'unexpected_attribute': (
         WARNING,
         'Unexpected attribute <{node_type} {ident}="{value}">',
@@ -386,7 +399,7 @@ ISSUES = {
         ' be added to the API.'),
     'unknown_kumascript': (
         ERROR,
-        'Unknown KumaScript {display} in {scope}.',
+        'Unknown KumaScript {kumascript} in {scope}.',
         'The importer has to run custom code to import KumaScript, and it'
         ' hasn\'t been taught how to import {name} when it appears in a'
         ' {scope}. File a bug, or convert the MDN page to not use this'

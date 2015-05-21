@@ -522,10 +522,11 @@ class TestPageVisitor(ScrapeTestCase):
             'specification.id': spec.id}]
         self.assert_spec_row(self.sample_spec_row, expected_specs, [])
 
-    def assert_specname_td(self, specname_td, expected):
+    def assert_specname_td(self, specname_td, expected, issues):
         parsed = page_grammar['specname_td'].parse(specname_td)
         specname = self.visitor.visit(parsed)
         self.assertEqual(expected, specname)
+        self.assertEqual(issues, self.visitor.issues)
 
     def test_specname_td_3_arg(self):
         # Common usage of SpecName
@@ -533,13 +534,53 @@ class TestPageVisitor(ScrapeTestCase):
         specname_td = (
             '<td>{{SpecName("CSS3 Backgrounds", "#subpath", "Name")}}</td>')
         expected = ('CSS3 Backgrounds', spec.id, "#subpath", "Name")
-        self.assert_specname_td(specname_td, expected)
+        issues = []
+        self.assert_specname_td(specname_td, expected, issues)
 
     def test_specname_td_1_arg(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent
         specname_td = '<td>{{SpecName("Device Orientation")}}</td>'
         expected = ("Device Orientation", None, '', '')
-        self.assert_specname_td(specname_td, expected)
+        issues = [('unknown_spec', 0, 43, {'key': 'Device Orientation'})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def test_specname_td_empty_key(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/MIDIConnectionEvent
+        specname_td = "<td>{{SpecName('', '#midiconnection')}}</td>"
+        expected = ('', None, '#midiconnection', '')
+        issues = [('specname_blank_key', 0, 44, {})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def assert_spec2_td(self, spec2_td, expected, issues):
+        parsed = page_grammar['spec2_td'].parse(spec2_td)
+        spec2 = self.visitor.visit(parsed)
+        self.assertEqual(expected, spec2)
+        self.assertEqual(self.visitor.issues, issues)
+
+    def test_spec2_td_standard(self):
+        spec2_td = '<td>{{Spec2("File API")}}</td>'
+        expected = 'File API'
+        self.assert_spec2_td(spec2_td, expected, [])
+
+    def test_spec2_td_empty(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/MIDIInput
+        spec2_td = '<td>{{Spec2()}}</td>'
+        expected = ''
+        issues = [(
+            'spec2_arg_count', 4, 15,
+            {'name': 'Spec2', 'args': [], 'scope': 'spec2',
+             'kumascript': '{{Spec2}}'})]
+        self.assert_spec2_td(spec2_td, expected, issues)
+
+    def test_spec2_td_specname(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/tabIndex
+        spec2_td = "<td>{{SpecName('HTML WHATWG')}}</td>"
+        expected = 'HTML WHATWG'
+        issues = [(
+            'spec2_wrong_kumascript', 4, 31,
+            {'name': 'SpecName', 'args': ["HTML WHATWG"], 'scope': 'spec2',
+             'kumascript': '{{SpecName(HTML WHATWG)}}'})]
+        self.assert_spec2_td(spec2_td, expected, issues)
 
     def assert_compat_section(self, compat_section, compat, footnotes, issues):
         parsed = page_grammar['compat_section'].parse(compat_section)
@@ -855,7 +896,7 @@ class TestPageVisitor(ScrapeTestCase):
             'slug': 'web-css-background-size_feature_foo'}
         issues = [
             ('unknown_kumascript', 16, 23,
-             {'name': 'bar', 'args': [], 'display': '{{bar}}',
+             {'name': 'bar', 'args': [], 'kumascript': '{{bar}}',
               'scope': 'compatibility feature'})]
         self.assert_cell_to_feature(cell, expected_feature, issues)
 
@@ -865,7 +906,7 @@ class TestPageVisitor(ScrapeTestCase):
             'id': '_foo', 'name': 'foo', 'slug': 'web-css-background-size_foo'}
         issues = [
             ('unknown_kumascript', 8, 22,
-             {'name': 'bar', 'args': ['baz'], 'display': '{{bar(baz)}}',
+             {'name': 'bar', 'args': ['baz'], 'kumascript': '{{bar(baz)}}',
               'scope': 'compatibility feature'})]
         self.assert_cell_to_feature(cell, expected_feature, issues)
 
@@ -1130,7 +1171,7 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [(
             'unknown_kumascript', 4, 19,
             {'name': 'UnknownKuma', 'args': [], 'scope': 'compatibility cell',
-             'display': "{{UnknownKuma}}"})]
+             'kumascript': "{{UnknownKuma}}"})]
         self.assert_cell_to_support('{{UnknownKuma}}', issues=issues)
 
     def test_cell_to_support_unknown_kumascript_args(self):
@@ -1138,7 +1179,7 @@ class TestPageVisitor(ScrapeTestCase):
             'unknown_kumascript', 4, 26,
             {'name': 'UnknownKuma', 'args': ['foo'],
              'scope': 'compatibility cell',
-             'display': "{{UnknownKuma(foo)}}"})]
+             'kumascript': "{{UnknownKuma(foo)}}"})]
         self.assert_cell_to_support('{{UnknownKuma("foo")}}', issues=issues)
 
     def test_cell_to_support_nested_p(self):
@@ -1335,7 +1376,7 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [(
             'unknown_kumascript', 15, 30,
             {'name': 'UnknownKuma', 'args': [], 'scope': 'footnote',
-             'display': '{{UnknownKuma}}'})]
+             'kumascript': '{{UnknownKuma}}'})]
         self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_unknown_kumascriptscript_with_args(self):
@@ -1344,7 +1385,7 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [(
             'unknown_kumascript', 15, 37,
             {'name': 'UnknownKuma', 'args': ['"arg"'], 'scope': 'footnote',
-             'display': '{{UnknownKuma("arg")}}'})]
+             'kumascript': '{{UnknownKuma("arg")}}'})]
         self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_pre_section(self):
