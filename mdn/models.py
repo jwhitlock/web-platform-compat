@@ -361,11 +361,11 @@ ISSUES = {
         ' which must be cleared before any parsing can be attempted.'),
     'spec_h2_id': (
         WARNING,
-        'Expected <h2 id="Specifications">, actual id={{h2_id}}',
+        'Expected <h2 id="Specifications">, actual id={h2_id}',
         'Fix the id so that the table of contents, other feature work.'),
     'spec_h2_name': (
         WARNING,
-        'Expected <h2 name="Specifications">, actual name={{h2_name}}',
+        'Expected <h2 name="Specifications">, actual name={h2_name}',
         'Fix or remove the name attribute.'),
     'spec_mismatch': (
         ERROR,
@@ -384,7 +384,7 @@ ISSUES = {
         ' KumaScript.'),
     'spec2_arg_count': (
         ERROR,
-        'KumaScript {kumascript} should have 1 argument',
+        'KumaScript {kumascript} should have 1 non-blank argument',
         'Argument should be the MDN key that will return a maturity'),
     'unexpected_attribute': (
         WARNING,
@@ -408,7 +408,7 @@ ISSUES = {
         ERROR,
         'Unknown Specification "{key}".',
         'The API does not have a specification with mdn_key "{key}".'
-        ' This could be a typo on the MDN page, or the specfication needs to'
+        ' This could be a typo on the MDN page, or the specification needs to'
         ' be added to the API.'),
     'unknown_version': (
         ERROR,
