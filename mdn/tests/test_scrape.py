@@ -1507,6 +1507,11 @@ class TestPageVisitor(ScrapeTestCase):
     def test_unquote_unbalanced(self):
         self.assertRaises(ValueError, self.visitor.unquote, "'Mixed\"")
 
+    def test_unquote_quote_plus_text(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/@viewport/max-zoom
+        text = '"max-zoom" descriptor'
+        self.assertEqual(text, self.visitor.unquote(text))
+
     def assert_browser_lookup(self, name, browser_id, fixed_name, slug):
         lookup = self.visitor.browser_id_name_and_slug(name)
         self.assertEqual(browser_id, lookup[0])

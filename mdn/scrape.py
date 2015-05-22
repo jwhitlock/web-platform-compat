@@ -907,9 +907,10 @@ class PageVisitor(NodeVisitor):
     def unquote(self, text):
         """Unquote strings."""
         if text.startswith('"') or text.startswith("'"):
-            if text[0] != text[-1]:
+            if text[0] == text[-1]:
+                return text[1:-1]
+            elif (text.count(text[0]) % 2) != 0:
                 raise ValueError(text)
-            return text[1:-1]
         return text
 
     def kumascript_issue(self, issue, item, scope):
