@@ -289,7 +289,7 @@ ISSUES = {
         ' cell in the row, or a missing header cell.'),
     'failed_download': (
         CRITICAL, 'Failed to download {url}.',
-        'Status {status}, Content:\n{text}'),
+        'Status {status}, Content:\n{content}'),
     'false_start': (
         CRITICAL,
         'No <h2> found in page.',
