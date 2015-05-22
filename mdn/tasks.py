@@ -50,7 +50,7 @@ def fetch_meta(featurepage_id):
 
     # Request and validate the metadata
     url = meta.url()
-    r = requests.get(url)
+    r = requests.get(url, headers={'Cache-Control': 'no-cache'})
     next_task = None
     next_task_args = []
     if r.status_code != requests.codes.ok:
@@ -140,7 +140,7 @@ def fetch_translation(featurepage_id, locale):
 
     # Request the translation
     url = t.url() + '?raw'
-    r = requests.get(t.url() + "?raw")
+    r = requests.get(t.url() + "?raw", headers={'Cache-Control': 'no-cache'})
     t.raw = r.text
     next_task = None
     next_task_args = []
