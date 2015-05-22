@@ -12,7 +12,9 @@
 <ul>
 {% for count, slug, severity, brief, examples in issues %}
   {% if count > 0 %}
-  <li>{{count}} count{% if count > 1 %}s{% endif %} of <code>{{slug}}</code> ({{severity}}): {{brief}}  Examples:
+  <li>{{count}} count{% if count > 1 %}s{% endif %} of
+      <a href="https://wiki.mozilla.org/MDN/Development/CompatibilityTables/Importer#{{slug}}"><code>{{slug}}</code></a>
+      ({{severity}}): {{brief}}  Example{% if count != 0 %}s{% endif %}:
     <ul>
       {% for pk, mdn_url in examples %}
       <li><a href="{{ url('feature_page_detail', pk=pk) }}">{{mdn_url}}</a></li>

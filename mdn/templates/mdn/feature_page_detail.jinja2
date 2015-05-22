@@ -54,7 +54,7 @@
 <form action="{{url('feature_page_reset', pk=object.pk)}}" method="post">
 {{ csrf() }}
 <input id="submit-reset" class="btn btn-primary" type="submit" value="Reset">
-<label for="submit-reset">Download MDN pages and reparse</label>
+<label for="submit-reset">Download MDN page and reparse</label>
 </form>
 <br/>
 {% endif %}
@@ -62,7 +62,7 @@
 <form id="form-reparse" action="{{url('feature_page_reparse', pk=object.pk)}}" method="post">
 {{ csrf() }}
 <input id="submit-reparse" class="btn btn-primary" type="submit" value="Reparse">
-<label for="submit-reparse">Re-parse the cached MDN pages</label>
+<label for="submit-reparse">Re-parse the cached MDN page</label>
 </form>
 <br/>
 {% endif %}
