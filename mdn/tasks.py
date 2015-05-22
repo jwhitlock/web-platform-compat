@@ -53,7 +53,14 @@ def fetch_meta(featurepage_id):
     r = requests.get(url, headers={'Cache-Control': 'no-cache'})
     next_task = None
     next_task_args = []
-    if r.status_code != requests.codes.ok:
+    if r.url != url:
+        # There was a redirect to the regular page
+        assert not r.url.endswith('$json')
+        meta.delete()
+        fp.url = r.url
+        fp.status = fp.STATUS_META
+        fp.save()
+    elif r.status_code != requests.codes.ok:
         issue = (
             'failed_download', 0, 0,
             {'url': url, 'status': r.status_code, 'content': r.text})
@@ -76,6 +83,9 @@ def fetch_meta(featurepage_id):
     if meta.status == meta.STATUS_ERROR:
         fp.status = fp.STATUS_ERROR
         fp.add_issue(issue)
+    elif meta.status == fp.STATUS_META:
+        next_task = fetch_meta.delay
+        next_task_args = (fp.id, )
     else:
         assert meta.status == meta.STATUS_FETCHED, meta.status
         fp.status = fp.STATUS_PAGES

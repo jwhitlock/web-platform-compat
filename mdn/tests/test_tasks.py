@@ -81,15 +81,17 @@ class TestFetchMetaTask(TestCase):
             'mdn.tasks.fetch_all_translations.delay')
         self.mocked_fetch_all = self.patcher_fetch_all.start()
         self.mocked_fetch_all.side_effect = Exception('Not Called')
+
         self.patcher_get = mock.patch('mdn.tasks.requests.get')
         self.mocked_get = self.patcher_get.start()
-        self.mocked_get.return_value = mock.Mock(
-            spec_set=['status_code', 'json', 'text', 'raise_for_status'])
+        self.mocked_get.return_value = mock.Mock(spec_set=[
+            'status_code', 'json', 'text', 'raise_for_status', 'url'])
         self.response = self.mocked_get.return_value
         self.response.status_code = 200
         self.response.json.side_effect = Exception('Not Called')
         self.response.text = ""
         self.response.raise_for_status.side_effect = Exception('Not Called')
+        self.response.url = self.fp.url + "$json"
 
     def tearDown(self):
         self.patcher_fetch_all.stop()
@@ -147,6 +149,17 @@ class TestFetchMetaTask(TestCase):
         meta = fp.meta()
         self.assertEqual(meta.STATUS_ERROR, meta.status)
         self.assertEqual("Response is not JSON:\n" + text, meta.raw)
+
+    @mock.patch('mdn.tasks.fetch_meta.delay')
+    def test_redirect(self, mocked_delay):
+        self.response.text = '<html>Some page</html>'
+        new_url = self.fp.url + '/'
+        self.response.url = new_url
+        fetch_meta(self.fp.id)
+        fp = FeaturePage.objects.get(id=self.fp.id)
+        self.assertEqual(fp.STATUS_META, fp.status)
+        self.assertEqual(new_url, fp.url)
+        mocked_delay.assertCalledOnce(self.fp.id)
 
 
 class TestFetchAllTranslationsTask(TestCase):
