@@ -98,12 +98,15 @@ class FeaturePage(models.Model):
         """Get the page translations, after fetching the meta data."""
         meta = self.meta()
         translations = []
-        for locale, path in meta.locale_paths():
+        for locale, path, title in meta.locale_paths():
             content, created = self.translatedcontent_set.get_or_create(
                 locale=locale, defaults={
-                    'path': path,
-                    'raw': '',
+                    'path': path, 'raw': '', 'title': title,
                     'status': TranslatedContent.STATUS_STARTING})
+            if content.title != title or content.path != path:
+                content.path = path
+                content.title = title
+                content.save()
             translations.append(content)
         return translations
 
@@ -142,11 +145,14 @@ class FeaturePage(models.Model):
                 ('parent', str(self.feature.parent_id)),
                 ('children', []),
             )))))
+        canonical = (list(feature['name'].keys()) == ['zxx'])
+        if canonical:
+            feature['name'] = feature['name']['zxx']
         for t in self.translations():
             if t.locale != 'en-US':
                 feature['mdn_uri'][t.locale] = t.url()
-        if ['zxx'] == list(feature['name'].keys()):
-            feature['name'] = feature['name']['zxx']
+                if not canonical:
+                    feature['name'][t.locale] = t.title
 
         view_feature = OrderedDict((
             ('features', feature),
@@ -504,7 +510,7 @@ class Issue(models.Model):
 class Content(models.Model):
     """The content of an MDN page."""
     page = models.ForeignKey(FeaturePage)
-    path = models.CharField(help_text="Path of MDN page", max_length=255)
+    path = models.CharField(help_text="Path of MDN page", max_length=1024)
     crawled = ModificationDateTimeField(
         help_text="Time when the content was retrieved")
     raw = models.TextField(help_text="Raw content of the page")
@@ -548,9 +554,9 @@ class PageMeta(Content):
         if self.status != self.STATUS_FETCHED:
             return []
         meta = self.data()
-        locale_paths = [(meta['locale'], meta['url'])]
+        locale_paths = [(meta['locale'], meta['url'], meta['title'])]
         for t in meta['translations']:
-            locale_paths.append((t['locale'], t['url']))
+            locale_paths.append((t['locale'], t['url'], t['title']))
         return locale_paths
 
 
@@ -559,3 +565,4 @@ class TranslatedContent(Content):
     locale = models.CharField(
         help_text="Locale for page translation",
         max_length=5, db_index=True)
+    title = models.TextField(help_text="Page title in locale", blank=True)

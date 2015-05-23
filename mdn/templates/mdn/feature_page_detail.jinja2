@@ -162,7 +162,7 @@ function load_tables(resources, lang) {
         mdn_uri = "https://developer.mozilla.org/";
     }
     $("#mdn_link").attr("href", mdn_uri);
-    $("#mdn_link").text(mdn_uri);
+    $("#mdn_link").text(decodeURIComponent(mdn_uri));
     $("#mdn_link_spec").attr("href", mdn_uri + "#Specifications")
     $("#mdn_link_compat").attr("href", mdn_uri + "#Browser_compatibility")
 

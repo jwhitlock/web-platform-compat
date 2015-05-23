@@ -1618,11 +1618,11 @@ class FeaturePageTestCase(ScrapeTestCase):
             url=url, feature=self.feature, status=FeaturePage.STATUS_PARSING)
         meta = self.page.meta()
         meta.raw = dumps({
-            'locale': 'en-US',
-            'url': path,
+            'locale': 'en-US', 'url': path, 'title': 'background-size',
             'translations': [{
                 'locale': 'fr',
-                'url': path.replace('en-US', 'fr')
+                'url': path.replace('en-US', 'fr'),
+                'title': 'background-size',
             }]})
         meta.status = meta.STATUS_FETCHED
         meta.save()

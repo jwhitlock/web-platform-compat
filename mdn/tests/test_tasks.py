@@ -99,13 +99,11 @@ class TestFetchMetaTask(TestCase):
 
     def test_good_call(self):
         data = {
-            'locale': 'en-US',
+            'locale': 'en-US', 'title': 'display',
             'url': '/en-US/docs/Web/CSS/display',
             'translations': [{
-                'locale': 'es',
-                'url': '/es/docs/Web/CSS/display',
-            }],
-        }
+                'locale': 'es', 'title': 'display',
+                'url': '/es/docs/Web/CSS/display'}]}
         self.response.json.side_effect = None
         self.response.json.return_value = data
         self.mocked_fetch_all.side_effect = None
@@ -171,13 +169,11 @@ class TestFetchAllTranslationsTask(TestCase):
         meta = self.fp.meta()
         meta.status = meta.STATUS_FETCHED
         meta.raw = dumps({
-            'locale': 'en-US',
+            'locale': 'en-US', 'title': 'display',
             'url': '/en-US/docs/Web/CSS/display',
             'translations': [{
-                'locale': 'es',
-                'url': '/es/docs/Web/CSS/display',
-            }],
-        })
+                'locale': 'es', 'title': 'display',
+                'url': '/es/docs/Web/CSS/display'}]})
         meta.save()
 
         self.patcher_fetch_trans = mock.patch(
@@ -241,13 +237,11 @@ class TestFetchTranslationTask(TestCase):
         meta = self.fp.meta()
         meta.status = meta.STATUS_FETCHED
         meta.raw = dumps({
-            'locale': 'en-US',
+            'locale': 'en-US', 'title': 'display',
             'url': '/en-US/docs/Web/CSS/display',
             'translations': [{
-                'locale': 'es',
-                'url': '/es/docs/Web/CSS/display',
-            }],
-        })
+                'locale': 'es', 'title': 'display',
+                'url': '/es/docs/Web/CSS/display'}]})
         meta.save()
         self.fp.translatedcontent_set.create(locale='en-US')
         self.fp.translatedcontent_set.create(locale='es')
