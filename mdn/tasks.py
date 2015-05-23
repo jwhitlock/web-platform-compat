@@ -152,28 +152,18 @@ def fetch_translation(featurepage_id, locale):
     url = t.url() + '?raw'
     r = requests.get(t.url() + "?raw", headers={'Cache-Control': 'no-cache'})
     t.raw = r.text
-    next_task = None
-    next_task_args = []
-    if r.status_code != requests.codes.ok:
+    if r.status_code == requests.codes.ok:
+        t.status = t.STATUS_FETCHED
+    else:
         t.status = t.STATUS_ERROR
-        t.raw = "Status %d, Content:\n%s" % (r.status_code, r.text)
         issue = ((
             'failed_download', 0, 0,
-            {'url': url, 'status': r.status_code, 'content': r.text}))
-        next_task = r.raise_for_status
-    else:
-        t.status = t.STATUS_FETCHED
-        next_task = fetch_all_translations.delay
-        next_task_args = (fp.id, )
-    t.save()
-
-    # Determine next state / task
-    if t.status == t.STATUS_ERROR:
-        fp.status = fp.STATUS_ERROR
+            {'url': url, 'status': r.status_code, 'content': r.text[:100]}))
         fp.add_issue(issue)
         fp.save()
-    assert next_task
-    next_task(*next_task_args)
+    t.save()
+
+    fetch_all_translations.delay(fp.id)
 
 
 @shared_task(ignore_result=True)

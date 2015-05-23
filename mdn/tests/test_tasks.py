@@ -301,20 +301,21 @@ class TestFetchTranslationTask(TestCase):
 
     def test_not_found(self):
         self.response.status_code = 404
-        self.response.text = 'Not Found'
-        self.response.raise_for_status.side_effect = RuntimeError('Was Called')
+        content = 'Not Found'
+        self.response.text = content
+        self.response.raise_for_status.side_effect = Exception('Not Called')
+        self.mocked_fetch_all.side_effect = None
 
-        self.assertRaises(RuntimeError, fetch_translation, self.fp.id, 'es')
+        fetch_translation(self.fp.id, 'es')
         fp = FeaturePage.objects.get(id=self.fp.id)
-        self.assertEqual(fp.STATUS_ERROR, fp.status)
+        self.assertEqual(fp.STATUS_PAGES, fp.status)
         trans = fp.translatedcontent_set.get(locale='es')
         self.assertEqual(trans.STATUS_ERROR, trans.status)
-        expected_msg = "Status 404, Content:\nNot Found"
-        self.assertEqual(expected_msg, trans.raw)
+        self.assertEqual(content, trans.raw)
         url = trans.url() + '?raw'
         issue = [[
             'failed_download', 0, 0,
-            {'url': url, 'status': 404, 'content': 'Not Found'}]]
+            {'url': url, 'status': 404, 'content': content}]]
         self.assertEqual(issue, fp.data['meta']['scrape']['issues'])
 
 
