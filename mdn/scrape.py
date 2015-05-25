@@ -364,13 +364,13 @@ class PageVisitor(NodeVisitor):
             except Specification.DoesNotExist:
                 spec_id = None
                 self.issues.append((
-                    'unknown_spec', node.start, node.end, {'key': key}))
+                    'unknown_spec', item['start'], item['end'], {'key': key}))
             else:
                 spec_id = spec.id
         else:
             if item['type'] == 'kumascript':
                 self.issues.append((
-                    'specname_blank_key', node.start, node.end, {}))
+                    'specname_blank_key', item['start'], item['end'], {}))
             spec_id = None
 
         return (key, spec_id, subpath, name)

@@ -504,7 +504,7 @@ class TestPageVisitor(ScrapeTestCase):
             'specification.mdn_key': 'HTML WHATWG',
             'section.id': None,
             'specification.id': None}]
-        issues = [('unknown_spec', 7, 179, {'key': 'HTML WHATWG'})]
+        issues = [('unknown_spec', 11, 174, {'key': 'HTML WHATWG'})]
         self.assert_spec_row(spec_row, expected_specs, issues)
 
     def test_spec_row_no_thead(self):
@@ -569,14 +569,14 @@ class TestPageVisitor(ScrapeTestCase):
         # https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent
         specname_td = '<td>{{SpecName("Device Orientation")}}</td>'
         expected = ("Device Orientation", None, '', '')
-        issues = [('unknown_spec', 0, 43, {'key': 'Device Orientation'})]
+        issues = [('unknown_spec', 4, 38, {'key': 'Device Orientation'})]
         self.assert_specname_td(specname_td, expected, issues)
 
     def test_specname_td_empty_key(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/MIDIConnectionEvent
         specname_td = "<td>{{SpecName('', '#midiconnection')}}</td>"
         expected = ('', None, '#midiconnection', '')
-        issues = [('specname_blank_key', 0, 44, {})]
+        issues = [('specname_blank_key', 4, 39, {})]
         self.assert_specname_td(specname_td, expected, issues)
 
     def test_specname_td_ES1_legacy(self):
@@ -586,7 +586,7 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [
             ('specname_converted', 4, 27,
              {'original': 'ECMAScript 1st Edition.', 'key': 'ES1'}),
-            ('unknown_spec', 0, 32, {'key': 'ES1'})]
+            ('unknown_spec', 4, 27, {'key': 'ES1'})]
         self.assert_specname_td(specname_td, expected, issues)
 
     def test_specname_td_ES3_legacy(self):
@@ -596,7 +596,7 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [
             ('specname_converted', 5, 29,
              {'original': 'ECMAScript 3rd Edition.', 'key': 'ES3'}),
-            ('unknown_spec', 0, 34, {'key': 'ES3'})]
+            ('unknown_spec', 5, 29, {'key': 'ES3'})]
         self.assert_specname_td(specname_td, expected, issues)
 
     def test_specname_td_other(self):
