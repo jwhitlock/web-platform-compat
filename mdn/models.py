@@ -402,6 +402,11 @@ ISSUES = {
         ERROR,
         'KumaScript {kumascript} should have 1 non-blank argument',
         'Argument should be the MDN key that will return a maturity'),
+    'spec2_converted': (
+        WARNING,
+        'Specification status should be converted to KumaScript',
+        'Expected KumaScript {{{{Spec2("{key}")}}}}, but got text'
+        ' "{original}".'),
     'unexpected_attribute': (
         WARNING,
         'Unexpected attribute <{node_type} {ident}="{value}">',

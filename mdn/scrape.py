@@ -70,7 +70,8 @@ spec_rows = spec_row+
 spec_row = tr_open _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
 specname_td = td_open _ specname_text "</td>"
 specname_text = kumascript / inner_td
-spec2_td = td_open _ kumascript "</td>"
+spec2_td = td_open _ spec2_text "</td>"
+spec2_text = kumascript / inner_td
 specdesc_td = td_open _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
@@ -300,13 +301,20 @@ class PageVisitor(NodeVisitor):
         assert isinstance(specname, tuple), type(specname)
         key, spec_id, path, name = specname
 
-        spec2_key = children[4]
-        assert isinstance(spec2_key, text_type), spec2_key
-        if spec2_key != key:
+        spec2 = children[4]
+        if isinstance(spec2, text_type):
+            # Standard Spec2 KumaScript
+            if spec2 and spec2 != key:
+                self.issues.append((
+                    'spec_mismatch', node.start, node.end,
+                    {'spec2_key': spec2, 'specname_key': key}))
+        else:
+            # Text like 'Standard'
+            assert isinstance(spec2, dict), spec2
+            assert spec2['type'] == 'text', spec2
             self.issues.append((
-                'spec_mismatch', node.start, node.end,
-                {'spec2_key': spec2_key, 'specname_key': key}))
-            spec2_key = key
+                'spec2_converted', spec2['start'], spec2['end'],
+                {'key': key, 'original': spec2['content']}))
 
         desc = children[6]
         assert isinstance(desc, text_type)
@@ -376,17 +384,24 @@ class PageVisitor(NodeVisitor):
         return (key, spec_id, subpath, name)
 
     def visit_spec2_td(self, node, children):
-        kumascript = children[2]
-        assert isinstance(kumascript, dict), type(kumascript)
-        if kumascript['name'].lower() != 'spec2':
-            self.issues.append(
-                self.kumascript_issue(
-                    'spec2_wrong_kumascript', kumascript, 'spec2'))
-        if len(kumascript['args']) != 1:
-            self.issues.append(
-                self.kumascript_issue('spec2_arg_count', kumascript, 'spec2'))
-            return ''
-        key = self.unquote(kumascript["args"][0])
+        spec2_text = children[2]
+        assert isinstance(spec2_text, list), type(spec2_text)
+        assert len(spec2_text) == 1, spec2_text
+        assert isinstance(spec2_text[0], dict)
+        item = spec2_text[0]
+        if item['type'] == 'kumascript':
+            if item['name'].lower() != 'spec2':
+                self.issues.append(
+                    self.kumascript_issue(
+                        'spec2_wrong_kumascript', item, 'spec2'))
+            if len(item['args']) != 1:
+                self.issues.append(
+                    self.kumascript_issue('spec2_arg_count', item, 'spec2'))
+                return ''
+            key = self.unquote(item["args"][0])
+        else:
+            assert item['type'] == 'text', item
+            return item  # Handle errors at row level
         assert isinstance(key, text_type), type(key)
         return key
 
