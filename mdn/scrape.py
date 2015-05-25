@@ -68,7 +68,8 @@ spec_tbody = "<tbody>"
 spec_body = spec_rows "</tbody>"
 spec_rows = spec_row+
 spec_row = tr_open _ specname_td _ spec2_td _ specdesc_td _ "</tr>" _
-specname_td = td_open _ kumascript "</td>"
+specname_td = td_open _ specname_text "</td>"
+specname_text = kumascript / inner_td
 spec2_td = td_open _ kumascript "</td>"
 specdesc_td = td_open _ inner_td _ "</td>"
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
@@ -325,17 +326,37 @@ class PageVisitor(NodeVisitor):
             'section.id': section_id})
 
     def visit_specname_td(self, node, children):
-        kumascript = children[2]
-        assert isinstance(kumascript, dict), type(kumascript)
-        assert kumascript['name'].lower() == 'specname'
-        key = self.unquote(kumascript["args"][0])
-        subpath = ""
-        name = ""
-        try:
-            subpath = self.unquote(kumascript["args"][1])
-            name = self.unquote(kumascript["args"][2])
-        except IndexError:
-            pass  # subpath and name can be empty
+        specname_text = children[2]
+        assert isinstance(specname_text, list)
+        assert len(specname_text) == 1, specname_text
+        assert isinstance(specname_text[0], dict)
+        item = specname_text[0]
+        if item['type'] == 'kumascript':
+            assert item['name'].lower() == 'specname'
+            key = self.unquote(item["args"][0])
+            subpath = ""
+            name = ""
+            try:
+                subpath = self.unquote(item["args"][1])
+                name = self.unquote(item["args"][2])
+            except IndexError:
+                pass  # subpath and name can be empty
+        else:
+            assert item['type'] == 'text', item
+            legacy_specs = {
+                'ECMAScript 1st Edition.': 'ES1',
+                'ECMAScript 3rd Edition.': 'ES3'}
+            key = legacy_specs.get(item['content'], '')
+            subpath = ''
+            name = ''
+            if key:
+                self.issues.append((
+                    'specname_converted', item['start'], item['end'],
+                    {'original': item['content'], 'key': key}))
+            else:
+                self.issues.append((
+                    'specname_not_kumascript', item['start'], item['end'],
+                    {'original': item['content']}))
 
         if key:
             try:
@@ -347,9 +368,11 @@ class PageVisitor(NodeVisitor):
             else:
                 spec_id = spec.id
         else:
-            self.issues.append((
-                'specname_blank_key', node.start, node.end, {}))
+            if item['type'] == 'kumascript':
+                self.issues.append((
+                    'specname_blank_key', node.start, node.end, {}))
             spec_id = None
+
         return (key, spec_id, subpath, name)
 
     def visit_spec2_td(self, node, children):
@@ -368,11 +391,17 @@ class PageVisitor(NodeVisitor):
         return key
 
     def visit_specdesc_td(self, node, children):
-        text = children[2]
-        assert isinstance(text, text_type), type(text)
-        return text
+        item = children[2]
+        assert isinstance(item, dict), type(item)
+        assert item['type'] == 'text'
+        return item['content']
 
-    visit_inner_td = _visit_content
+    def visit_inner_td(self, node, children):
+        text = self.cleanup_whitespace(node.text)
+        assert 'td>' not in text
+        return {
+            'type': 'text', 'content': text,
+            'start': node.start, 'end': node.end}
 
     #
     # Browser Compatibility section

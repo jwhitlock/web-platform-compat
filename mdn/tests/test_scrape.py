@@ -120,23 +120,40 @@ class TestGrammar(TestCase):
         expected_tag = '<tr style="vertical-align: top;">'
         self.assert_spec_row(spec_row, expected_tag)
 
-    def assert_specname_td(self, specname_td, expected_tag):
+    def assert_specname_td(self, specname_td, expected_tag, expected_text):
         parsed = page_grammar['specname_td'].parse(specname_td)
         tr = parsed.children[0]
+        specname_text = parsed.children[2]
         self.assertEqual(expected_tag, tr.text)
+        self.assertEqual(expected_text, specname_text.text)
 
     def test_specname_td_standard(self):
-        specname_td = """<td>{{SpecName('CSS3 Backgrounds', '#the-background-size',
-            'background-size')}}</td>"""
+        specname_td = (
+            "<td>{{SpecName('CSS3 Backgrounds', '#the-background-size',"
+            " 'background-size')}}</td>")
         expected_tag = '<td>'
-        self.assert_specname_td(specname_td, expected_tag)
+        expected_text = (
+            "{{SpecName('CSS3 Backgrounds', '#the-background-size',"
+            " 'background-size')}}")
+        self.assert_specname_td(specname_td, expected_tag, expected_text)
 
     def test_specname_td_styled(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
-        specname_td = """<td style="vertical-align: top;">{{ SpecName('CSS2.1',
-            "cascade.html#value-def-inherit", "inherit") }}</td>"""
+        specname_td = (
+            "<td style=\"vertical-align: top;\">{{ SpecName('CSS2.1',"
+            " \"cascade.html#value-def-inherit\", \"inherit\") }}</td>")
         expected_tag = '<td style="vertical-align: top;">'
-        self.assert_specname_td(specname_td, expected_tag)
+        expected_text = (
+            "{{ SpecName('CSS2.1', \"cascade.html#value-def-inherit\","
+            " \"inherit\") }}")
+        self.assert_specname_td(specname_td, expected_tag, expected_text)
+
+    def test_specname_td_ES1_legacy(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/this
+        specname_td = "<td>ECMAScript 1st Edition.</td>"
+        expected_tag = '<td>'
+        expected_text = "ECMAScript 1st Edition."
+        self.assert_specname_td(specname_td, expected_tag, expected_text)
 
     def assert_spec2_td(self, spec2_td, expected_tag):
         parsed = page_grammar['spec2_td'].parse(spec2_td)
@@ -549,6 +566,33 @@ class TestPageVisitor(ScrapeTestCase):
         specname_td = "<td>{{SpecName('', '#midiconnection')}}</td>"
         expected = ('', None, '#midiconnection', '')
         issues = [('specname_blank_key', 0, 44, {})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def test_specname_td_ES1_legacy(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/this
+        specname_td = "<td>ECMAScript 1st Edition.</td>"
+        expected = ('ES1', None, '', '')
+        issues = [
+            ('specname_converted', 4, 27,
+             {'original': 'ECMAScript 1st Edition.', 'key': 'ES1'}),
+            ('unknown_spec', 0, 32, {'key': 'ES1'})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def test_specname_td_ES3_legacy(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/function
+        specname_td = "<td> ECMAScript 3rd Edition. </td>"
+        expected = ('ES3', None, '', '')
+        issues = [
+            ('specname_converted', 5, 29,
+             {'original': 'ECMAScript 3rd Edition.', 'key': 'ES3'}),
+            ('unknown_spec', 0, 34, {'key': 'ES3'})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def test_specname_td_other(self):
+        specname_td = "<td> Another Spec.</td>"
+        expected = ('', None, '', '')
+        issues = [
+            ('specname_not_kumascript', 5, 18, {'original': 'Another Spec.'})]
         self.assert_specname_td(specname_td, expected, issues)
 
     def assert_spec2_td(self, spec2_td, expected, issues):
