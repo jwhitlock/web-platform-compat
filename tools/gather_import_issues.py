@@ -46,7 +46,7 @@ class GatherImportIssues(Tool):
             "MDN Slug", "Import URL", "Issue Slug", "Source Start",
             "Source End", "Params"])
         for row in issue_rows:
-            err = row[4]
+            err = row[2]
             issue_counts[err] += 1
             by_url_writer.writerow(row)
 
