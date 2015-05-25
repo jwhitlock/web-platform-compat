@@ -314,12 +314,23 @@ class ScrapeTestCase(TestCase):
 </ul>""" % sample_spec_section
     _instance_specs = {
         (Maturity, 'CR'): {'name': '{"en": "Candidate Recommendation"}'},
+        (Maturity, 'WD'): {'name': '{"en": "Working Draft"}'},
         (Specification, 'css3_backgrounds'): {
             '_req': {'maturity': (Maturity, 'CR')},
             'mdn_key': 'CSS3 Backgrounds',
             'name': (
                 '{"en": "CSS Backgrounds and Borders Module Level&nbsp;3"}'),
             'uri': '{"en": "http://dev.w3.org/csswg/css3-background/"}'},
+        (Specification, 'css3_ui'): {
+            '_req': {'maturity': (Maturity, 'WD')},
+            'mdn_key': 'CSS3 UI',
+            'name': '{"en": "CSS Basic User Interface Module Level&nbsp;3"}',
+            'uri': '{"en": "http://dev.w3.org/csswg/css3-ui/"}'},
+        (Specification, 'web_audio_api'): {
+            '_req': {'maturity': (Maturity, 'WD')},
+            'mdn_key': 'Web Audio API',
+            'name': '{"en": "Web Audio API"}',
+            'uri': '{"en": "http://webaudio.github.io/web-audio-api/"}'},
         (Section, 'background-size'): {
             '_req': {'specification': (Specification, 'css3_backgrounds')},
             'subpath': '{"en": "#the-background-size"}'},
@@ -449,6 +460,7 @@ class TestPageVisitor(ScrapeTestCase):
         self.assertEqual(issues, self.visitor.issues)
 
     def test_spec_row_mismatch(self):
+        spec = self.get_instance(Specification, 'css3_ui')
         spec_row = '''\
 <tr>
   <td>{{ SpecName('CSS3 UI', '#cursor', 'cursor') }}</td>
@@ -464,9 +476,8 @@ class TestPageVisitor(ScrapeTestCase):
             'section.name': 'cursor',
             'specification.mdn_key': 'CSS3 UI',
             'section.id': None,
-            'specification.id': None}]
+            'specification.id': spec.id}]
         issues = [
-            ('unknown_spec', 7, 62, {'key': 'CSS3 UI'}),
             ('spec_mismatch', 0, 199,
              {'spec2_key': 'CSS3 Basic UI', 'specname_key': 'CSS3 UI'})]
         self.assert_spec_row(spec_row, expected_specs, issues)
@@ -498,6 +509,7 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_spec_row_no_thead(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/AudioContext
+        spec = self.get_instance(Specification, 'web_audio_api')
         spec_row = '''\
 <tr>
   <td>{{SpecName('Web Audio API', '#the-audiocontext-interface',\
@@ -511,9 +523,8 @@ class TestPageVisitor(ScrapeTestCase):
             'section.name': 'AudioContext',
             'specification.mdn_key': 'Web Audio API',
             'section.id': None,
-            'specification.id': None}]
-        issues = [('unknown_spec', 7, 92, {'key': 'Web Audio API'})]
-        self.assert_spec_row(spec_row, expected_specs, issues)
+            'specification.id': spec.id}]
+        self.assert_spec_row(spec_row, expected_specs, [])
 
     def test_spec_row_known_spec(self):
         spec = self.get_instance(Specification, 'css3_backgrounds')
@@ -1640,17 +1651,17 @@ class TestScrape(ScrapeTestCase):
 
     def test_spec_only(self):
         """Test with a only a Specification section."""
+        spec = self.get_instance(Specification, 'css3_backgrounds')
         page = self.sample_spec_section
         specs = [{
             'specification.mdn_key': 'CSS3 Backgrounds',
-            'specification.id': None,
+            'specification.id': spec.id,
             'section.subpath': '#the-background-size',
             'section.name': 'background-size',
             'section.note': '',
             'section.id': None,
         }]
-        issues = [('unknown_spec', 251, 335, {'key': 'CSS3 Backgrounds'})]
-        self.assertScrape(page, specs, issues)
+        self.assertScrape(page, specs, [])
 
 
 class FeaturePageTestCase(ScrapeTestCase):
