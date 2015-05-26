@@ -41,15 +41,14 @@ gunicorn==19.3.0
 psycopg2==2.6
 
 # Serve static files
-# static3 0.6.0 has utf-8 issue
-git+git://github.com/ryanhiebert/static3@tox-fix#egg=static3
+static3==0.6.1
 dj-static==0.0.6
 
 # Timezone info
 pytz==2015.4
 
 # Fast Memcache connections, and tell Heroku to install C dependencies
-pylibmc==1.4.2
+pylibmc==1.4.3
 django-pylibmc==0.6.0
 django-pylibmc-sasl==0.2.4
 
@@ -64,13 +63,14 @@ celery==3.1.18
 django-mptt==0.7.3
 
 # Sorted ManyToManyField
-django-sortedm2m==0.9.5
+django-sortedm2m==0.10.0
 
 # Cached instances for Django REST Framework
 drf-cached-instances==0.3.0
 
 # CORS headers in middleware
-# Head includes PR #51, waiting for release
+# django-cors-headers==1.1.0
+# Bug #50 (fixed by PR #51) prevents Firefox CORS
 git+git://github.com/ottoyiu/django-cors-headers@b419817a2f#egg=django-cors-headers
 
 # Parsing Expression Grammar, for MDN scraping
@@ -84,4 +84,4 @@ git+git://github.com/jwhitlock/parsimonious@68_fix_open#egg=parsimonious
 requests==2.7.0
 oauthlib==0.7.2
 requests-oauthlib==0.5.0
-django-allauth==0.19.1
+django-allauth==0.20.0

@@ -12,14 +12,14 @@ docutils==0.12
 # Multi-environment testing
 py==1.4.27
 pluggy==0.3.0
-virtualenv==12.1.1
+virtualenv==13.0.1
 tox==2.0.1
 
 # PEP8, PEP257 and static analysis
 mccabe==0.3
 pep8==1.5.7  # rq.filter: <1.6,>=1.5.7
 pyflakes==0.8.1
-flake8==2.4.0
+flake8==2.4.1
 pep257==0.5.0
 flake8-docstrings==0.2.1.post1
 
