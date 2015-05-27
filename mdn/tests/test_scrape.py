@@ -685,6 +685,48 @@ class TestPageVisitor(ScrapeTestCase):
         item = {'type': 'text', 'content': 'Standard', 'start': 4, 'end': 12}
         self.assert_spec2_td(spec2_td, item, [])
 
+    def assert_specdec_td(self, specdesc_td, expected, issues):
+        parsed = page_grammar['specdesc_td'].parse(specdesc_td)
+        specdesc = self.visitor.visit(parsed)
+        self.assertEqual(expected, specdesc)
+        self.assertEqual(self.visitor.issues, issues)
+
+    def test_specdesc_td_text(self):
+        specdesc_td = "<td>This is text.</td>"
+        expected = "This is text."
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_code(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/display
+        specdesc_td = (
+            "<td>Added the table model values and"
+            " <code>inline-block</code>.</td>")
+        expected = (
+            "Added the table model values and <code>inline-block</code>.")
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_kumascript(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
+        specdesc_td = (
+            '<td>Add the {{ xref_csslength() }} value and allows it to be'
+            ' applied to element with a {{ cssxref("display") }} type of'
+            ' <code>table-cell</code>.</td>')
+        expected = (
+            'Add the <code>&lt;length&gt;</code> value and allows it to be'
+            ' applied to element with a <code>display</code> type of'
+            ' <code>table-cell</code>.')
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_unknown_kumascript(self):
+        specdesc_td = '<td>Baseline of {{HTMLElement("textarea")}}</td>'
+        expected = 'Baseline of'
+        issues = [
+            ('unknown_kumascript', 16, 43,
+             {'name': 'HTMLElement', 'args': ['textarea'],
+              'scope': 'specdesc',
+              'kumascript': '{{HTMLElement(textarea)}}'})]
+        self.assert_specdec_td(specdesc_td, expected, issues)
+
     def assert_compat_section(self, compat_section, compat, footnotes, issues):
         parsed = page_grammar['compat_section'].parse(compat_section)
         self.visitor.visit(parsed)
