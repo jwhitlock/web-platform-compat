@@ -153,7 +153,6 @@ class FeaturePageReParse(UpdateView):
         redirect = super(FeaturePageReParse, self).form_valid(form)
         assert self.object and self.object.id
         self.object.status = FeaturePage.STATUS_PARSING
-        self.object.issues.all().delete()
         self.object.reset_data()
         self.object.save()
         messages.add_message(

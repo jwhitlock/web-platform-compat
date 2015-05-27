@@ -1821,6 +1821,8 @@ def scrape_feature_page(feature_page):
     # Add issues
     for issue in scraped_data['issues']:
         feature_page.add_issue(issue, 'en-US')
+    merged_data['meta']['scrape']['issues'] = (
+        feature_page.data['meta']['scrape']['issues'])
 
     # Update status, issues
     has_data = (scraped_data['specs'] or scraped_data['compat'] or

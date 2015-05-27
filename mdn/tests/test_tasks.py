@@ -128,7 +128,7 @@ class TestFetchMetaTask(TestCase):
         meta = fp.meta()
         issues = [[
             'failed_download', 0, 0,
-            {'url': meta.url(), 'status': 404, 'content': 'Not Found'}]]
+            {'url': meta.url(), 'status': 404, 'content': 'Not Found'}, None]]
         self.assertEqual(issues, fp.data['meta']['scrape']['issues'])
         self.assertEqual(meta.STATUS_ERROR, meta.status)
         self.assertEqual('Status 404, Content:\nNot Found', meta.raw)
@@ -142,7 +142,8 @@ class TestFetchMetaTask(TestCase):
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_ERROR, fp.status)
         issues = [[
-            'bad_json', 0, 0, {'url': fp.url + '$json', 'content': text}]]
+            'bad_json', 0, 0,
+            {'url': fp.url + '$json', 'content': text}, None]]
         self.assertEqual(issues, fp.data['meta']['scrape']['issues'])
         meta = fp.meta()
         self.assertEqual(meta.STATUS_ERROR, meta.status)
@@ -315,7 +316,7 @@ class TestFetchTranslationTask(TestCase):
         url = trans.url() + '?raw'
         issue = [[
             'failed_download', 0, 0,
-            {'url': url, 'status': 404, 'content': content}]]
+            {'url': url, 'status': 404, 'content': content}, None]]
         self.assertEqual(issue, fp.data['meta']['scrape']['issues'])
 
 

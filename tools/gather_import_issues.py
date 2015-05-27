@@ -101,7 +101,7 @@ class GatherImportIssues(Tool):
             issues = resp_json['meta']['scrape']['issues']
             for issue in issues:
                 assert isinstance(issue, list)
-                issue_slug, start_pos, end_pos, raw_params = issue
+                issue_slug, start_pos, end_pos, raw_params = issue[:4]
                 params = dumps(raw_params)
                 issue_rows.append(
                     (mdn_slug, human_import_url, issue_slug, start_pos,

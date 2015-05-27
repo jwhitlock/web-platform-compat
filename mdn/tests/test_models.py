@@ -119,10 +119,20 @@ class TestFeaturePageModel(TestCase):
         data = self.fp.data
         self.assertEqual('canonical', data['features']['name'])
 
-    def test_get_data_existing(self):
-        self.fp.raw_data = '{"meta": {"scrape": {"issues": "x"}}}'
-        expected = {"meta": {"scrape": {"issues": []}}}
-        self.assertEqual(expected, self.fp.data)
+    def test_get_data_with_content_issue(self):
+        self.setup_content()
+        self.fp.issues.create(
+            slug='footnote_no_id', start=3293, end=3301,
+            content=self.fp.translatedcontent_set.get(locale='en'))
+        data = self.fp.data
+        expected = [['footnote_no_id', 3293, 3301, {}, 'en']]
+        self.assertEqual(expected, data['meta']['scrape']['issues'])
+
+    def test_get_data_with_noncontent_issue(self):
+        self.fp.issues.create(slug='failed_download', start=0, end=0)
+        data = self.fp.data
+        expected = [['failed_download', 0, 0, {}, None]]
+        self.assertEqual(expected, data['meta']['scrape']['issues'])
 
     def test_get_data_none(self):
         self.fp.raw_data = None
@@ -136,10 +146,12 @@ class TestFeaturePageModel(TestCase):
             ['features', 'linked', 'meta'],
             list(self.fp.data.keys()))
 
-    def test_add_issue(self):
+    def test_add_issue_no_locale(self):
         issue = ['exception', 0, 0, {'traceback': 'TRACEBACK'}]
         self.fp.add_issue(issue)
-        self.assertEqual([issue], self.fp.data['meta']['scrape']['issues'])
+        issue_plus = issue + [None]
+        self.assertEqual(
+            [issue_plus], self.fp.data['meta']['scrape']['issues'])
 
     def test_add_duplicate_issue(self):
         issue = ['exception', 0, 0, {'traceback': 'TRACEBACK'}]

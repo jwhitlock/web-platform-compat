@@ -116,7 +116,6 @@ class FeaturePage(models.Model):
         drop_cache - Delete cached MDN content
         """
         self.status = FeaturePage.STATUS_STARTING
-        self.issues.all().delete()
         self.reset_data()
         self.save()
         meta = self.meta()
@@ -128,8 +127,12 @@ class FeaturePage(models.Model):
                 t.raw = ""
                 t.save()
 
-    def reset_data(self):
-        """Reset JSON data to initial state"""
+    def reset_data(self, keep_issues=False):
+        """Reset JSON data to initial state.
+
+        If keep_issues is False (default), issues are dropped. If true, then
+        issues are added to meta.scrape.issues.
+        """
         feature = OrderedDict((
             ('id', str(self.feature.id)),
             ('slug', self.feature.slug),
@@ -154,6 +157,18 @@ class FeaturePage(models.Model):
                 if not canonical:
                     feature['name'][t.locale] = t.title
 
+        issues = []
+        if keep_issues:
+            for issue in self.issues.order_by('id'):
+                issue_plus = [issue.slug, issue.start, issue.end, issue.params]
+                if issue.content:
+                    issue_plus.append(issue.content.locale)
+                else:
+                    issue_plus.append(None)
+                issues.append(issue_plus)
+        else:
+            self.issues.all().delete()
+
         view_feature = OrderedDict((
             ('features', feature),
             ('linked', OrderedDict((
@@ -175,7 +190,7 @@ class FeaturePage(models.Model):
                 ))),
                 ("scrape", OrderedDict((
                     ("phase", "Starting Import"),
-                    ("issues", []),
+                    ("issues", issues),
                     ("raw", None)))))))))
 
         self.data = view_feature
@@ -189,14 +204,7 @@ class FeaturePage(models.Model):
         except (ValueError, TypeError):
             data = {}
         if not data:
-            data = self.reset_data()
-
-        # Add issues
-        issues = []
-        for issue in self.issues.order_by('id'):
-            issues.append([
-                issue.slug, issue.start, issue.end, issue.params])
-        data['meta']['scrape']['issues'] = issues
+            data = self.reset_data(keep_issues=True)
 
         return data
 
@@ -207,14 +215,21 @@ class FeaturePage(models.Model):
 
     @property
     def has_issues(self):
-        return self.issues.exists()
+        return bool(sum(self.issue_counts.values()))
 
     @property
     def issue_counts(self):
         if not getattr(self, '_issue_counts', None):
             self._issue_counts = {WARNING: 0, ERROR: 0, CRITICAL: 0}
-            for issue in self.issues.all():
-                self._issue_counts[issue.severity] += 1
+            issues = self.data['meta']['scrape']['issues']
+            if not issues:
+                # Legacy - get from raw data
+                raw = self.data['meta']['scrape']['raw'] or {}
+                issues = raw.get('issues', [])
+            for issue in issues:
+                slug = issue[0]
+                severity = ISSUES[slug][0]
+                self._issue_counts[severity] += 1
         return self._issue_counts
 
     @property
@@ -240,8 +255,15 @@ class FeaturePage(models.Model):
         # Did we already add this issue?
         if self.issues.filter(slug=slug, start=start, end=end).exists():
             raise ValueError("Duplicate issue")
+
+        # Add issue to database, data
+        data = self.data
         self.issues.create(
             slug=slug, start=start, end=end, params=params, content=content)
+        issue_plus = list(issue)
+        issue_plus.append(locale)
+        data['meta']['scrape']['issues'].append(issue_plus)
+        self.data = data
         self._issue_counts = None
 
     @models.permalink

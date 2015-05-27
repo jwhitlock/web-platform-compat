@@ -4,6 +4,7 @@
 from __future__ import unicode_literals
 import mock
 
+from django.contrib.auth.models import Group
 from django.core.urlresolvers import reverse
 
 from mdn.models import FeaturePage
@@ -96,6 +97,7 @@ class TestFeaturePageSearch(TestCase):
     def setUp(self):
         self.url = reverse('feature_page_search')
         self.mdn_url = "https://developer.mozilla.org/en-US/docs/Web/CSS/float"
+        self.feature = self.create(Feature, slug='web_css_float')
 
     def test_get(self):
         response = self.client.get(self.url)
@@ -104,21 +106,21 @@ class TestFeaturePageSearch(TestCase):
 
     def test_post_found(self):
         fp = FeaturePage.objects.create(
-            url=self.mdn_url, feature_id=741, data='{"foo": "bar"}')
+            url=self.mdn_url, feature_id=self.feature.id)
         response = self.client.get(self.url, {'url': self.mdn_url})
         next_url = reverse('feature_page_detail', kwargs={'pk': fp.id})
         self.assertRedirects(response, next_url)
 
     def test_post_found_with_anchor(self):
         fp = FeaturePage.objects.create(
-            url=self.mdn_url, feature_id=741, data='{"foo": "bar"}')
+            url=self.mdn_url, feature_id=self.feature.id)
         url = self.mdn_url + "#Browser_Compat"
         response = self.client.get(self.url, {'url': url})
         next_url = reverse('feature_page_detail', kwargs={'pk': fp.id})
         self.assertRedirects(response, next_url)
 
     def test_not_found_with_perms(self):
-        self.login_user(groups=['import-mdn'])
+        self.user.groups.add(Group.objects.get(name='import-mdn'))
         response = self.client.get(self.url, {'url': self.mdn_url})
         next_url = reverse('feature_page_create') + '?url=' + self.mdn_url
         self.assertRedirects(response, next_url)
