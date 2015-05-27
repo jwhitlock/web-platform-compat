@@ -423,29 +423,15 @@ class PageVisitor(NodeVisitor):
             assert isinstance(specdesc, list), type(specdesc)
             for item in specdesc:
                 if item['type'] == 'kumascript':
-                    if item['name'] == 'xref_csslength':
-                        assert not item['args']
-                        bits.append("<code>&lt;length&gt;</code>")
-                    elif item['name'] == 'cssxref':
-                        assert len(item['args']) == 1
-                        bits.append("<code>{}</code>".format(item['args'][0]))
-                    else:
-                        self.issues.append(self.kumascript_issue(
-                            'unknown_kumascript', item, 'specdesc'))
+                    text = self.kumascript_to_text(item, 'specdesc')
+                    if text:
+                        bits.append(text)
                 elif item['type'] == 'code_block':
                     bits.append("<code>{}</code>".format(item['content']))
                 else:
                     assert item['type'] == 'text'
                     bits.append(item['content'])
-
-        # Re-join the content
-        out = ""
-        nospace = '!,.;? '
-        for bit in bits:
-            if out and out[-1] not in nospace and bit[0] not in nospace:
-                out += " "
-            out += bit
-        return out
+        return self.join_content(bits)
 
     visit_specdesc_token = _visit_token
 
@@ -1003,6 +989,56 @@ class PageVisitor(NodeVisitor):
             issue, item['start'], item['end'],
             {'name': item['name'], 'args': item['args'], 'scope': scope,
              'kumascript': "{{%s%s}}" % (item['name'], args)})
+
+    def kumascript_to_text(self, item, scope):
+        """Convert kumascript to plain text."""
+        assert item['type'] == 'kumascript'
+        name = item['name']
+        args = item['args']
+        if name in (
+                'xref_csslength', 'xref_csspercentage',
+                'xref_cssstring', 'xref_cssimage'):
+            assert not args
+            content = name[len('xref_css'):]
+            return "<code>&lt;{}&gt;</code>".format(content)
+        elif name == 'xref_csscolorvalue':
+            assert not args
+            return "<code>&lt;color&gt;</code>"
+        elif name == 'xref_cssvisual':
+            assert not args
+            return "<code>visual</code>"
+        elif name.lower() in ('cssxref', 'domxref', 'htmlelement', 'jsxref'):
+            if len(args) > 1:
+                content = args[1]
+            else:
+                content = args[0]
+            return "<code>{}</code>".format(content)
+        elif name.lower() == 'specname':
+            assert len(args) >= 1
+            return 'specification ' + args[0]
+        elif name.lower() == 'spec2' and scope == 'specdesc':
+            assert len(args) >= 1
+            self.issues.append(self.kumascript_issue(
+                'specdesc_spec2_invalid', item, scope))
+            return 'specification ' + args[0]
+        elif name == 'experimental_inline':
+            # Don't include beaker in output
+            assert not args
+        else:
+            self.issues.append(
+                self.kumascript_issue('unknown_kumascript', item, scope))
+
+    def join_content(self, content_bits):
+        """Construct a string with just the right whitespace."""
+        out = ""
+        nospace_before = '!,.;? '
+        nospace_after = ' '
+        for bit in content_bits:
+            if (out and out[-1] not in nospace_after and
+                    bit[0] not in nospace_before):
+                out += " "
+            out += bit
+        return out
 
     #
     # API lookup methods

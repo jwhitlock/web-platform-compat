@@ -717,14 +717,35 @@ class TestPageVisitor(ScrapeTestCase):
             ' <code>table-cell</code>.')
         self.assert_specdec_td(specdesc_td, expected, [])
 
-    def test_specdesc_td_unknown_kumascript(self):
-        specdesc_td = '<td>Baseline of {{HTMLElement("textarea")}}</td>'
-        expected = 'Baseline of'
+    def test_specdesc_td_kumascript_spec2(self):
+        # https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data
+        specdesc_td = "<td>No change from {{Spec2('HTML5 W3C')}}</td>"
+        expected = "No change from specification HTML5 W3C"
         issues = [
-            ('unknown_kumascript', 16, 43,
-             {'name': 'HTMLElement', 'args': ['textarea'],
-              'scope': 'specdesc',
-              'kumascript': '{{HTMLElement(textarea)}}'})]
+            ('specdesc_spec2_invalid', 19, 41,
+             {'name': 'Spec2', 'args': ['HTML5 W3C'], 'scope': 'specdesc',
+              'kumascript': '{{Spec2(HTML5 W3C)}}'})]
+        self.assert_specdec_td(specdesc_td, expected, issues)
+
+    def test_specdesc_td_kumascript_experimental_inline(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/position_value
+        specdesc_td = (
+            '<td>Defines <code>&lt;position&gt;</code> explicitly and extends'
+            ' it to support offsets from any edge. {{ experimental_inline() }}'
+            '</td>')
+        expected = (
+            'Defines <code>&lt;position&gt;</code> explicitly and extends'
+            ' it to support offsets from any edge.')
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_spec2(self):
+        # https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data
+        specdesc_td = "<td>No change from {{Spec2('HTML5 W3C')}}</td>"
+        expected = "No change from specification HTML5 W3C"
+        issues = [
+            ('specdesc_spec2_invalid', 19, 41,
+             {'name': 'Spec2', 'args': ['HTML5 W3C'], 'scope': 'specdesc',
+              'kumascript': '{{Spec2(HTML5 W3C)}}'})]
         self.assert_specdec_td(specdesc_td, expected, issues)
 
     def assert_compat_section(self, compat_section, compat, footnotes, issues):
@@ -1656,6 +1677,97 @@ class TestPageVisitor(ScrapeTestCase):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/@viewport/max-zoom
         text = '"max-zoom" descriptor'
         self.assertEqual(text, self.visitor.unquote(text))
+
+    def assert_kumascript_to_text(
+            self, kumascript, expected_text, scope='specdesc', issues=None):
+        parsed = page_grammar['kumascript'].parse('{{' + kumascript + '}}')
+        item = self.visitor.visit(parsed)
+        text = self.visitor.kumascript_to_text(item, scope)
+        self.assertEqual(expected_text, text)
+        self.assertEqual(self.visitor.issues, issues or [])
+
+    def test_kumascript_to_text_xref_csslength(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
+        self.assert_kumascript_to_text(
+            'xref_csslength()', '<code>&lt;length&gt;</code>')
+
+    def test_kumascript_to_text_xref_csspercentage(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/position_value
+        self.assert_kumascript_to_text(
+            'xref_csspercentage()', '<code>&lt;percentage&gt;</code>')
+
+    def test_kumascript_to_text_xref_cssstring(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/attr
+        self.assert_kumascript_to_text(
+            'xref_cssstring()', '<code>&lt;string&gt;</code>')
+
+    def test_kumascript_to_text_xref_cssimage(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-image
+        self.assert_kumascript_to_text(
+            'xref_cssimage()', '<code>&lt;image&gt;</code>')
+
+    def test_kumascript_to_text_xref_csscolorvalue(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/background-color
+        self.assert_kumascript_to_text(
+            'xref_csscolorvalue()', '<code>&lt;color&gt;</code>')
+
+    def test_kumascript_to_text_xref_cssvisual(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/break-after
+        self.assert_kumascript_to_text('xref_cssvisual', '<code>visual</code>')
+
+    def test_kumascript_to_text_cssxref(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
+        self.assert_kumascript_to_text(
+            'cssxref("display")', '<code>display</code>')
+
+    def test_kumascript_to_text_domxref_1arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/CharacterData
+        self.assert_kumascript_to_text(
+            'domxref("ChildNode")', '<code>ChildNode</code>')
+
+    def test_kumascript_to_text_domxref_2arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/initCustomEvent
+        self.assert_kumascript_to_text(
+            'domxref("CustomEvent.CustomEvent", "CustomEvent()")',
+            '<code>CustomEvent()</code>')
+
+    def test_kumascript_to_text_htmlelement(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/HTMLIsIndexElement
+        self.assert_kumascript_to_text(
+            'HTMLElement("isindex")', '<code>isindex</code>')
+
+    def test_kumascript_to_text_jsxref_1arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array
+        self.assert_kumascript_to_text(
+            'jsxref("Array.isArray")', '<code>Array.isArray</code>')
+
+    def test_kumascript_to_text_jsxref_2arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/toString
+        self.assert_kumascript_to_text(
+            'jsxref("Global_Objects/null", "null")', '<code>null</code>')
+
+    def test_kumascript_to_text_specname(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/AbstractWorker
+        self.assert_kumascript_to_text(
+            'SpecName("Web Workers")', 'specification Web Workers')
+
+    def test_kumascript_to_text_unknown_kumascript(self):
+        issues = [
+            ('unknown_kumascript', 0, 23,
+             {'name': 'Unknown', 'args': ['textarea'],
+              'scope': 'specdesc',
+              'kumascript': '{{Unknown(textarea)}}'})]
+        self.assert_kumascript_to_text(
+            'Unknown("textarea")', None, issues=issues)
+
+    def assert_join_content(self, content_bits, expected_text):
+        text = self.visitor.join_content(content_bits)
+        self.assertEqual(expected_text, text)
+
+    def test_join_content_simple(self):
+        content_bits = ['Works', 'like', 'join.']
+        expected_text = 'Works like join.'
+        self.assert_join_content(content_bits, expected_text)
 
     def assert_browser_lookup(self, name, browser_id, fixed_name, slug):
         lookup = self.visitor.browser_id_name_and_slug(name)

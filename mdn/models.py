@@ -429,6 +429,10 @@ ISSUES = {
         'Specification status should be converted to KumaScript',
         'Expected KumaScript {{{{Spec2("{key}")}}}}, but got text'
         ' "{original}".'),
+    'specdesc_spec2_invalid': (
+        ERROR,
+        '{kumascript} is invalid in the spec description',
+        'Handled as if {{{{SpecName(...)}}}} was used. Update the MDN page.'),
     'unexpected_attribute': (
         WARNING,
         'Unexpected attribute <{node_type} {ident}="{value}">',
