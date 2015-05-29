@@ -510,6 +510,8 @@ class Issue(models.Model):
             return ''
 
         raw = self.content.raw
+        if not raw.endswith('\n'):
+            raw += '\n'
         start_line = raw.count('\n', 0, self.start)
         end_line = raw.count('\n', 0, self.end)
         ctx_start_line = max(0, start_line - 2)
@@ -535,7 +537,7 @@ class Issue(models.Model):
 
         out = []
         for num, (line, err_line) in enumerate(zip(context_lines, err_lines)):
-            lnum = ctx_start_line + num
+            lnum = ctx_start_line + num + 1
             out.append(
                 text_type(lnum).rjust(digits) + ' ' + line)
             if '^' in err_line:

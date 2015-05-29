@@ -233,15 +233,26 @@ Enjoy.
         self.issue.start = content.find('ERROR')
         self.issue.end = self.issue.start + len('ERROR')
         expected = """\
-0 Here's the error:
-1 ---> ERROR <-----
+1 Here's the error:
+2 ---> ERROR <-----
 *      ^^^^^       \n\
-2 Enjoy."""
+3 Enjoy."""
         self.assertEqual(expected, self.issue.context)
 
     def test_context_without_content(self):
         self.issue.content = None
         self.assertEqual("", self.issue.context)
+
+    def test_context_end_of_page(self):
+        content = "Line1\nLine2"
+        self.en_content.raw = content
+        self.issue.start = content.find('Line2')
+        self.issue.end = self.issue.start + len('Line')
+        expected = """\
+1 Line1
+2 Line2
+* ^^^^ """
+        self.assertEqual(expected, self.issue.context)
 
 
 class TestPageMetaModel(TestCase):
