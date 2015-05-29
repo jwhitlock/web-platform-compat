@@ -1626,6 +1626,16 @@ class TestPageVisitor(ScrapeTestCase):
                 9, 73)}
         self.assert_compat_footnotes(footnote, expected, [])
 
+    def test_compat_footnotes_code(self):
+        footnote = (
+            '<p>[1] From Firefox 31 to 35, <code>will-change</code>'
+            ' was available...</p>')
+        expected = {
+            '1': (
+                'From Firefox 31 to 35, <code>will-change</code>'
+                ' was available...', 0, 75)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
     def assert_kumascript(self, text, name, args, issues=None):
         parsed = page_grammar['kumascript'].parse(text)
         expected = {

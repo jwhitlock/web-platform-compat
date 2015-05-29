@@ -124,8 +124,8 @@ cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 # Optional footnotes after the Browser Compatibility Tables
 #
 compat_footnotes = footnote_token* _
-footnote_token = (kumascript / p_open / p_close / pre_block / footnote_id /
-    cell_other)
+footnote_token = (kumascript / p_open / p_close / pre_block / code_block /
+    footnote_id / cell_other)
 footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
 
 #
@@ -423,7 +423,7 @@ class PageVisitor(NodeVisitor):
                     text = self.kumascript_to_text(item, 'specdesc')
                     if text:
                         bits.append(text)
-                elif item['type'] == 'code_block':
+                elif item['type'] == 'code':
                     bits.append("<code>{}</code>".format(item['content']))
                 else:
                     assert item['type'] == 'text'
@@ -672,7 +672,7 @@ class PageVisitor(NodeVisitor):
         text = children[2].text
         assert isinstance(text, text_type), type(text)
         return {
-            'type': 'code_block',
+            'type': 'code',
             'content': self.cleanup_whitespace(text),
             'start': node.start, 'end': node.end}
 
@@ -773,10 +773,12 @@ class PageVisitor(NodeVisitor):
                         text = self.kumascript_to_text(item, 'footnote')
                         if text:
                             bits.append(text)
-                    else:
-                        assert item_type == 'pre'
+                    elif item_type in ('pre', 'code'):
                         out = self._consume_attributes(item, [])
-                        bits.append('<pre>{}</pre>'.format(out['content']))
+                        bits.append(
+                            '<{0}>{1}</{0}>'.format(item_type, out['content']))
+                    else:
+                        raise ValueError(item)
                 line = self.join_content(bits)
                 if line:
                     if include_p and wrap_p:
@@ -1203,7 +1205,7 @@ class PageVisitor(NodeVisitor):
                 v = item['version']
                 name_replacements.append(('%s ' % v, '%s' % v))
                 name_bits.append(v)
-            elif item['type'] == 'code_block':
+            elif item['type'] == 'code':
                 name_bits.append('<code>%s</code>' % item['content'])
             elif item['type'] == 'kumascript':
                 kname = item['name'].lower()
@@ -1414,7 +1416,7 @@ class PageVisitor(NodeVisitor):
                     self.issues.append((
                         'inline_text', item['start'], item['end'],
                         {'text': item['content']}))
-            elif item['type'] == 'code_block':
+            elif item['type'] == 'code':
                 self.issues.append((
                     'inline_text', item['start'], item['end'],
                     {'text': '<code>{}</code>'.format(item['content'])}))
