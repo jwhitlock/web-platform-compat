@@ -81,7 +81,7 @@ inner_td = ~r"(?P<content>.*?(?=</td>))"s
 #
 # Browser Compatibility section
 #
-compat_section = _ compat_h2 _ compat_kumascript _ compat_divs p_empty*
+compat_section = _ compat_h2 _ compat_kumascript _ compat_divs
     compat_footnotes?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
@@ -123,11 +123,10 @@ cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 #
 # Optional footnotes after the Browser Compatibility Tables
 #
-compat_footnotes = footnote_item* _
-footnote_item = (footnote_p / pre_block)
-footnote_p = "<p>" a_both? _ footnote_id? _ footnote_p_text "</p>" _
+compat_footnotes = footnote_token* _
+footnote_token = (kumascript / p_open / p_close / pre_block / footnote_id /
+    cell_other)
 footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
-footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
 
 #
 # Common tokens
@@ -156,9 +155,6 @@ p_close = "</p>" _
 break = "<" _ "br" _ ("/>" / ">") _
 pre_block = "<pre" attrs? ">" pre_text "</pre>" _
 pre_text = ~r"(?P<content>.*?(?=</pre>))"s
-
-
-p_empty = _ "<p>" _ "&nbsp;"* _ "</p>" _
 
 attrs = attr+
 opt_attrs = attr*
@@ -450,7 +446,7 @@ class PageVisitor(NodeVisitor):
     #
     def visit_compat_section(self, node, children):
         compat_divs = children[5]
-        footnotes = children[7][0]
+        footnotes = children[6][0]
 
         assert isinstance(compat_divs, list), type(compat_divs)
         for div in compat_divs:
@@ -712,6 +708,7 @@ class PageVisitor(NodeVisitor):
     #
     # Optional footnotes after the Browser Compatibility Tables
     #
+
     def visit_compat_footnotes(self, node, children):
         items = children[0]
         if isinstance(items, Node):
@@ -721,53 +718,86 @@ class PageVisitor(NodeVisitor):
         for item in items:
             assert isinstance(item, dict), type(item)
 
-        footnotes = OrderedDict()
-        footnote = []
-
-        def add_footnote(footnote):
-            f_id = footnote[0]['footnote_id']
-            start = footnote[0]['start']
-            end = footnote[-1]['end']
-            assert f_id not in footnotes
-            text = self.format_footnote(footnote)
-            footnotes[f_id] = (text, start, end)
-
+        # Split tokens into footnote sections
+        sections = OrderedDict()
+        section = []
+        footnote_id = None
         for item in items:
-            if not footnote:
-                # First should be a footnote
-                if 'footnote_id' in item:
-                    footnote.append(item)
-                else:
-                    self.issues.append((
-                        'footnote_no_id', item['start'], item['end'], {}))
-            elif item.get('footnote_id'):
-                # New footnote
-                add_footnote(footnote)
-                footnote = [item]
-            else:
-                # Continue footnote
-                footnote.append(item)
+            close_section = False
+            item_type = item['type']
+            if item_type == 'p_close':
+                close_section = True
+            elif item_type == 'pre':
+                assert not section  # <pre> should be only item
+                close_section = True
+            elif item_type == 'footnote_id':
+                footnote_id = item['footnote_id']
+                assert footnote_id not in sections
+            elif item_type == 'text':
+                if not item['content']:
+                    continue
+            section.append(item)
 
-        if footnote:
-            add_footnote(footnote)
+            if close_section:
+                if footnote_id:
+                    sections.setdefault(footnote_id, []).append(section)
+                else:
+                    self.issues.append(
+                        ('footnote_no_id', section[0]['start'],
+                         section[-1]['end'], {}))
+                section = []
+        assert not section
+
+        # Convert sections
+        footnotes = OrderedDict()
+        for footnote_id, paragraphs in sections.items():
+            start = None
+            lines = []
+            include_p = (len(paragraphs) > 1)
+            for section in paragraphs:
+                bits = []
+                wrap_p = False
+                for item in section:
+                    if start is None:
+                        start = item['start']
+                    item_type = item['type']
+                    if item_type == 'p_open':
+                        wrap_p = True
+                    elif item_type == 'p_close':
+                        assert wrap_p
+                    elif item_type == 'footnote_id':
+                        assert footnote_id == item['footnote_id']
+                    elif item_type == 'text':
+                        bits.append(item['content'])
+                    elif item_type == 'kumascript':
+                        text = self.kumascript_to_text(item, 'footnote')
+                        if text:
+                            bits.append(text)
+                    else:
+                        assert item_type == 'pre'
+                        allowed = {
+                            'class': ['brush:css'],
+                        }
+                        attrs = []
+                        for name, vitem in item['attributes'].items():
+                            assert name in allowed
+                            value = vitem['value']
+                            assert value in allowed[name]
+                            attrs.append((name, value))
+                        attrs.sort()
+                        attr_out = " ".join('%s="%s"' % a for a in attrs)
+                        attr_space = ' ' if attr_out else ''
+                        bits.append('<pre{}{}>{}</pre>'.format(
+                            attr_space, attr_out, item['content']))
+                line = self.join_content(bits)
+                if include_p and wrap_p:
+                    lines.append('<p>' + line + '</p>')
+                else:
+                    lines.append(line)
+            footnotes[footnote_id] = ('\n'.join(lines), start, item['end'])
         return footnotes
 
-    def visit_footnote_item(self, node, children):
-        item = children[0]
-        assert isinstance(item, dict), type(item)
-        return item
-
-    def visit_footnote_p(self, node, children):
-        footnote_id = children[3]
-        text = children[5]
-        assert isinstance(text, text_type), type(text)
-        fixed = self.render_footnote_kumascript(text, node.children[4].start)
-        data = {
-            'type': 'p', 'content': fixed,
-            'start': node.start, 'end': node.end}
-        if isinstance(footnote_id, list):
-            data['footnote_id'] = footnote_id[0]
-        return data
+    visit_footnote_token = _visit_token
 
     def visit_footnote_id(self, node, children):
         raw_id = children[1].match.group('content')
@@ -775,9 +805,10 @@ class PageVisitor(NodeVisitor):
             footnote_id = raw_id
         else:
             footnote_id = text_type(len(raw_id))
-        return footnote_id
-
-    visit_footnote_p_text = _visit_content
+        return {
+            'type': 'footnote_id',
+            'footnote_id': footnote_id,
+            'start': node.start, 'end': node.end}
 
     #
     # Other visitors
@@ -1425,64 +1456,6 @@ class PageVisitor(NodeVisitor):
                 versions[-1].update(version)
                 supports[-1].update(support)
         return versions, supports
-
-    #
-    # Footnote parsing
-    #
-    def format_footnote(self, footnote):
-        if len(footnote) == 1 and footnote[0]['type'] in ('p',):
-            return footnote[0]['content']
-        else:
-            bits = []
-            fmt = "%(tag)s%(content)s</%(type)s>"
-            for item in footnote:
-                i = item.copy()
-                if i.get('attributes'):
-                    attrs = [
-                        (k, v['value']) for k, v in i['attributes'].items()]
-                    attrs.sort()
-                    attr_out = " ".join('%s="%s"' % a for a in attrs)
-                    i['tag'] = '<%s %s>' % (i['type'], attr_out)
-                else:
-                    i['tag'] = '<%s>' % i['type']
-                bits.append(fmt % i)
-            return "\n".join(bits)
-
-    re_kumascript = re.compile(r'''(?x)(?s)  # Be verbose, . include newlines
-    {{\s*               # Kuma start, with optional whitespace
-    (?P<name>\w+)       # Function name, optionally followed by...
-      (\((?P<args>\s*   # Open parens and whitespace,
-       [^)]+            # Stuff in front of the parens,
-       )\))?            # Closing parens
-    \s*}}               # Whitespace and Kuma close
-    ''')
-
-    def render_footnote_kumascript(self, text, start):
-        rendered = text
-        for match in self.re_kumascript.finditer(text):
-            name = match.group('name')
-            kname = name.lower()
-            if match.group('args'):
-                arglist = match.group('args').split(',')
-            else:
-                arglist = []
-
-            if kname == 'cssxref':
-                # https://developer.mozilla.org/en-US/docs/Template:cssxref
-                # The MDN version does a lookup and creates a link
-                # This version just turns it into a code block
-                kumascript = "<code>%s</code>" % self.unquote(arglist[0])
-            else:
-                kumascript = ""
-                item = {
-                    'name': name, 'args': arglist,
-                    'start': start + match.start(),
-                    'end': start + match.end()}
-                self.issues.append(self.kumascript_issue(
-                    'unknown_kumascript', item, 'footnote'))
-            rendered = (
-                rendered[:match.start()] + kumascript + rendered[match.end():])
-        return rendered
 
 
 def scrape_page(mdn_page, feature, locale='en'):

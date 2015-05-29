@@ -1538,20 +1538,20 @@ class TestPageVisitor(ScrapeTestCase):
     def test_compat_footnotes_unknown_kumascriptscript(self):
         footnotes = (
             "<p>[1] Footnote {{UnknownKuma}} but the beat continues.</p>")
-        expected = {'1': ('Footnote  but the beat continues.', 0, 59)}
+        expected = {'1': ('Footnote but the beat continues.', 0, 59)}
         issues = [(
-            'unknown_kumascript', 15, 30,
+            'unknown_kumascript', 16, 32,
             {'name': 'UnknownKuma', 'args': [], 'scope': 'footnote',
              'kumascript': '{{UnknownKuma}}'})]
         self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_unknown_kumascriptscript_with_args(self):
         footnotes = '<p>[1] Footnote {{UnknownKuma("arg")}}</p>'
-        expected = {'1': ('Footnote ', 0, 42)}
+        expected = {'1': ('Footnote', 0, 42)}
         issues = [(
-            'unknown_kumascript', 15, 37,
-            {'name': 'UnknownKuma', 'args': ['"arg"'], 'scope': 'footnote',
-             'kumascript': '{{UnknownKuma("arg")}}'})]
+            'unknown_kumascript', 16, 38,
+            {'name': 'UnknownKuma', 'args': ['arg'], 'scope': 'footnote',
+             'kumascript': '{{UnknownKuma(arg)}}'})]
         self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_pre_section(self):
