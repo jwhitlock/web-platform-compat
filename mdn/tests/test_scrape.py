@@ -906,6 +906,20 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [('unknown_browser', 36, 51, {'name': 'Safari (WebKit)'})]
         self.assert_compat_headers(compat_headers, expected, issues)
 
+    def test_compat_headers_with_line_height(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/Navigator/serviceWorker
+        chrome = self.get_instance(Browser, 'chrome')
+        compat_headers = (
+            '<tr><th style="line-height: 16px;">Feature</th>'
+            '<th style="line-height: 16px;">Chrome</th></tr>')
+        expected = [{'slug': 'chrome', 'name': 'Chrome', 'id': chrome.id}]
+        issues = [
+            ('unexpected_attribute', 51, 77,
+             {'node_type': 'th', 'ident': 'style',
+              'value': 'line-height: 16px;',
+              'expected': 'the attribute colspan'})]
+        self.assert_compat_headers(compat_headers, expected, issues)
+
     def assert_compat_row_cell(self, row_cell, expected_cell, issues):
         parsed = page_grammar['compat_row_cell'].parse(row_cell)
         cell = self.visitor.visit(parsed)
@@ -929,7 +943,7 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [(
             'unexpected_attribute', 4, 18,
             {'node_type': 'td', 'ident': 'class', 'value': 'freaky',
-             'expected': 'rowspan or colspan'})]
+             'expected': 'the attributes rowspan or colspan'})]
         self.assert_compat_row_cell(row_cell, expected_cell, issues)
 
     def test_compat_row_break(self):
@@ -1568,10 +1582,14 @@ class TestPageVisitor(ScrapeTestCase):
             '</pre>')
         expected = {
             '1': (
-                "<p>Here's some code:</p>\n<pre class=\"brush:css\">\n"
+                "<p>Here's some code:</p>\n<pre>\n"
                 ".foo {background-image: url(bg-image.png);}\n</pre>",
                 0, 103)}
-        self.assert_compat_footnotes(footnotes, expected, [])
+        issues = [
+            ('unexpected_attribute', 33, 51,
+             {'ident': 'class', 'node_type': 'pre', 'value': 'brush:css',
+              'expected': 'no attributes'})]
+        self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_asterisk(self):
         footnotes = "<p>[*] A footnote</p>"

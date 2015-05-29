@@ -775,20 +775,8 @@ class PageVisitor(NodeVisitor):
                             bits.append(text)
                     else:
                         assert item_type == 'pre'
-                        allowed = {
-                            'class': ['brush:css'],
-                        }
-                        attrs = []
-                        for name, vitem in item['attributes'].items():
-                            assert name in allowed
-                            value = vitem['value']
-                            assert value in allowed[name]
-                            attrs.append((name, value))
-                        attrs.sort()
-                        attr_out = " ".join('%s="%s"' % a for a in attrs)
-                        attr_space = ' ' if attr_out else ''
-                        bits.append('<pre{}{}>{}</pre>'.format(
-                            attr_space, attr_out, item['content']))
+                        out = self._consume_attributes(item, [])
+                        bits.append('<pre>{}</pre>'.format(out['content']))
                 line = self.join_content(bits)
                 if line:
                     if include_p and wrap_p:
@@ -918,8 +906,14 @@ class PageVisitor(NodeVisitor):
                 assert ident not in node_out
                 node_out[ident] = attr['value']
             else:
-                expected_text = (
-                    ', '.join(expected[:-1]) + ' or ' + expected[-1])
+                if len(expected) > 1:
+                    expected_text = (
+                        'the attributes ' + ', '.join(expected[:-1]) + ' or ' +
+                        expected[-1])
+                elif len(expected) == 1:
+                    expected_text = 'the attribute ' + expected[0]
+                else:
+                    expected_text = 'no attributes'
                 self.issues.append((
                     'unexpected_attribute', attr['start'], attr['end'],
                     {'node_type': node_dict['type'], 'ident': ident,

@@ -436,8 +436,8 @@ ISSUES = {
     'unexpected_attribute': (
         WARNING,
         'Unexpected attribute <{node_type} {ident}="{value}">',
-        'For <{node_type}>, the importer is ready for the attributes'
-        ' {expected}. This unexpected attribute will be discarded.'),
+        'For <{node_type}>, the importer expects {expected}. This unexpected'
+        ' attribute will be discarded.'),
     'unknown_browser': (
         ERROR,
         'Unknown Browser "{name}".',
