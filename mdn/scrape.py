@@ -109,13 +109,10 @@ compat_row_cell = td_open _ compat_cell _ "</td>" _
 #   or a support until we visit the table.
 #
 compat_cell = compat_cell_token*
-compat_cell_token = (kumascript / cell_break / code_block / cell_p_open /
-    cell_p_close / cell_version / cell_footnote_id / cell_removed / cell_other)
-cell_break = "<" _ "br" _ ("/>" / ">") _
+compat_cell_token = (kumascript / break / code_block / p_open / p_close /
+    cell_version / cell_footnote_id / cell_removed / cell_other)
 code_block = "<code>" _ code_text _ "</code>" _
 code_text = ~r"(?P<content>.*?(?=</code>))"s
-cell_p_open = "<p>" _
-cell_p_close = "</p>" _
 cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
     r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
 cell_removed = ~r"[Rr]emoved\s+[Ii]n\s*"s
@@ -127,12 +124,10 @@ cell_other = ~r"(?P<content>[^{<[]+)\s*"s
 # Optional footnotes after the Browser Compatibility Tables
 #
 compat_footnotes = footnote_item* _
-footnote_item = (footnote_p / footnote_pre)
+footnote_item = (footnote_p / pre_block)
 footnote_p = "<p>" a_both? _ footnote_id? _ footnote_p_text "</p>" _
 footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
 footnote_p_text = ~r"(?P<content>.*?(?=</p>))"s
-footnote_pre = "<pre" attrs? ">" footnote_pre_text "</pre>" _
-footnote_pre_text = ~r"(?P<content>.*?(?=</pre>))"s
 
 #
 # Common tokens
@@ -156,6 +151,12 @@ th_open = "<th" _ opt_attrs ">"
 td_open = "<td" _ opt_attrs ">"
 a_open = "<a" _  opt_attrs ">"
 a_both = _ a_open _ "</a>" _
+p_open = "<p>" _
+p_close = "</p>" _
+break = "<" _ "br" _ ("/>" / ">") _
+pre_block = "<pre" attrs? ">" pre_text "</pre>" _
+pre_text = ~r"(?P<content>.*?(?=</pre>))"s
+
 
 p_empty = _ "<p>" _ "&nbsp;"* _ "</p>" _
 
@@ -671,9 +672,6 @@ class PageVisitor(NodeVisitor):
     #  or a support until visit_compat_body
     visit_compat_cell_token = _visit_token
 
-    def visit_cell_break(self, node, children):
-        return {'type': 'break', 'start': node.start, 'end': node.end}
-
     def visit_code_block(self, node, children):
         text = children[2].text
         assert isinstance(text, text_type), type(text)
@@ -681,12 +679,6 @@ class PageVisitor(NodeVisitor):
             'type': 'code_block',
             'content': self.cleanup_whitespace(text),
             'start': node.start, 'end': node.end}
-
-    def visit_cell_p_open(self, node, children):
-        return {'type': 'p_open', 'start': node.start, 'end': node.end}
-
-    def visit_cell_p_close(self, node, children):
-        return {'type': 'p_close', 'start': node.start, 'end': node.end}
 
     def visit_cell_version(self, node, children):
         return {
@@ -786,29 +778,6 @@ class PageVisitor(NodeVisitor):
         return footnote_id
 
     visit_footnote_p_text = _visit_content
-
-    def visit_footnote_pre(self, node, children):
-        attrs_node = children[1]
-        if isinstance(attrs_node, Node):
-            attrs = []
-        else:
-            assert isinstance(attrs_node, list), type(attrs_node)
-            attrs = attrs_node[0]
-        assert isinstance(attrs, list), type(attrs)
-
-        attr_dict = {}
-        for attr in attrs:
-            ident = attr.pop('ident')
-            assert ident not in attr_dict
-            attr_dict[ident] = attr
-
-        text = children[3]
-        assert isinstance(text, text_type), type(text)
-        return {
-            'type': 'pre', 'attributes': attr_dict, 'content': text,
-            'start': node.start, 'end': node.end}
-
-    visit_footnote_pre_text = _visit_content
 
     #
     # Other visitors
@@ -936,6 +905,38 @@ class PageVisitor(NodeVisitor):
 
     def visit_td_open(self, node, children):
         return self._visit_open(node, children, 'td')
+
+    def visit_p_open(self, node, children):
+        return {'type': 'p_open', 'start': node.start, 'end': node.end}
+
+    def visit_p_close(self, node, children):
+        return {'type': 'p_close', 'start': node.start, 'end': node.end}
+
+    def visit_break(self, node, children):
+        return {'type': 'break', 'start': node.start, 'end': node.end}
+
+    def visit_pre_block(self, node, children):
+        attrs_node = children[1]
+        if isinstance(attrs_node, Node):
+            attrs = []
+        else:
+            assert isinstance(attrs_node, list), type(attrs_node)
+            attrs = attrs_node[0]
+        assert isinstance(attrs, list), type(attrs)
+
+        attr_dict = {}
+        for attr in attrs:
+            ident = attr.pop('ident')
+            assert ident not in attr_dict
+            attr_dict[ident] = attr
+
+        text = children[3]
+        assert isinstance(text, text_type), type(text)
+        return {
+            'type': 'pre', 'attributes': attr_dict, 'content': text,
+            'start': node.start, 'end': node.end}
+
+    visit_pre_text = _visit_content
 
     def visit_th_open(self, node, children):
         return self._visit_open(node, children, 'th')

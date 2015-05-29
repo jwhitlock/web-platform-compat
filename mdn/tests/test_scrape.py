@@ -932,7 +932,7 @@ class TestPageVisitor(ScrapeTestCase):
              'expected': 'rowspan or colspan'})]
         self.assert_compat_row_cell(row_cell, expected_cell, issues)
 
-    def test_compat_row_cell_break(self):
+    def test_compat_row_break(self):
         row_cell = '<td>Multi-line<br/>feature</td>'
         expected_cell = [
             {'type': 'td', 'start': 0, 'end': 4},
@@ -953,7 +953,7 @@ class TestPageVisitor(ScrapeTestCase):
         ]
         self.assert_compat_row_cell(row_cell, expected_cell, [])
 
-    def test_compat_row_cell_code_block(self):
+    def test_compat_row_code_block(self):
         row_cell = '<td><code>canonical</code></td>'
         expected_cell = [
             {'type': 'td', 'start': 0, 'end': 4},
