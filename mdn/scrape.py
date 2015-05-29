@@ -718,10 +718,13 @@ class PageVisitor(NodeVisitor):
         for item in items:
             assert isinstance(item, dict), type(item)
 
+        class NoFootnote(object):
+            """Placeholder for section without a footnote"""
+
         # Split tokens into footnote sections
         sections = OrderedDict()
         section = []
-        footnote_id = None
+        footnote_id = NoFootnote()
         for item in items:
             close_section = False
             item_type = item['type']
@@ -739,12 +742,9 @@ class PageVisitor(NodeVisitor):
             section.append(item)
 
             if close_section:
-                if footnote_id:
-                    sections.setdefault(footnote_id, []).append(section)
-                else:
-                    self.issues.append(
-                        ('footnote_no_id', section[0]['start'],
-                         section[-1]['end'], {}))
+                sections.setdefault(footnote_id, []).append(section)
+                if isinstance(footnote_id, NoFootnote):
+                    footnote_id = NoFootnote()
                 section = []
         assert not section
 
@@ -790,11 +790,18 @@ class PageVisitor(NodeVisitor):
                         bits.append('<pre{}{}>{}</pre>'.format(
                             attr_space, attr_out, item['content']))
                 line = self.join_content(bits)
-                if include_p and wrap_p:
-                    lines.append('<p>' + line + '</p>')
+                if line:
+                    if include_p and wrap_p:
+                        lines.append('<p>' + line + '</p>')
+                    else:
+                        lines.append(line)
+            if lines:
+                if isinstance(footnote_id, NoFootnote):
+                    self.issues.append(
+                        ('footnote_no_id', start, item['end'], {}))
                 else:
-                    lines.append(line)
-            footnotes[footnote_id] = ('\n'.join(lines), start, item['end'])
+                    footnotes[footnote_id] = (
+                        '\n'.join(lines), start, item['end'])
         return footnotes
 
     visit_footnote_token = _visit_token

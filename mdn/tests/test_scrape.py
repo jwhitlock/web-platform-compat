@@ -1583,6 +1583,31 @@ class TestPageVisitor(ScrapeTestCase):
         issues = [('footnote_no_id', 0, 18, {})]
         self.assert_compat_footnotes(footnotes, {}, issues)
 
+    def test_compat_footnotes_empty_paragraph_no_footnotes(self):
+        footnotes = ('<p>  </p>\n')
+        self.assert_compat_footnotes(footnotes, {}, [])
+
+    def test_compat_footnotes_empty_paragraph_invalid_footnote(self):
+        footnotes = (
+            '<p> </p>\n'
+            '<p>Invalid footnote.</p>\n'
+            '<p>  </p>')
+        issues = [('footnote_no_id', 9, 34, {})]
+        self.assert_compat_footnotes(footnotes, {}, issues)
+        self.assertEqual(footnotes[9:34], '<p>Invalid footnote.</p>\n')
+
+    def test_compat_footnotes_empty_paragraphs_trimmed(self):
+        footnote = (
+            '<p> </p>\n'
+            '<p>[1] Valid footnote.</p>'
+            '<p>   </p>'
+            '<p>Continues footnote 1.</p>')
+        expected = {
+            '1': (
+                '<p>Valid footnote.</p>\n<p>Continues footnote 1.</p>',
+                9, 73)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
     def assert_kumascript(self, text, name, args, issues=None):
         parsed = page_grammar['kumascript'].parse(text)
         expected = {
