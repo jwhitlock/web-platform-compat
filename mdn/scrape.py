@@ -23,6 +23,7 @@ The workflow is:
 """
 from __future__ import unicode_literals
 from collections import OrderedDict
+from copy import deepcopy
 from itertools import chain
 import re
 import string
@@ -111,8 +112,6 @@ compat_row_cell = td_open _ compat_cell _ "</td>" _
 compat_cell = compat_cell_token*
 compat_cell_token = (kumascript / break / code_block / p_open / p_close /
     cell_version / cell_footnote_id / cell_removed / cell_other)
-code_block = "<code>" _ code_text _ "</code>" _
-code_text = ~r"(?P<content>.*?(?=</code>))"s
 cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
     r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
 cell_removed = ~r"[Rr]emoved\s+[Ii]n\s*"s
@@ -148,13 +147,16 @@ th_elem = th_open _ (strong_text / bare_text) "</th>" _
 tr_open = "<tr" _ opt_attrs ">"
 th_open = "<th" _ opt_attrs ">"
 td_open = "<td" _ opt_attrs ">"
-a_open = "<a" _  opt_attrs ">"
-a_both = _ a_open _ "</a>" _
-p_open = "<p>" _
+a_open = "<a" _ opt_attrs ">"
+p_open = "<p" _ opt_attrs ">"
+pre_open = "<pre" _ opt_attrs ">"
+code_open = "<code" _ opt_attrs ">"
 p_close = "</p>" _
 break = "<" _ "br" _ ("/>" / ">") _
-pre_block = "<pre" attrs? ">" pre_text "</pre>" _
+pre_block = pre_open pre_text "</pre>" _
 pre_text = ~r"(?P<content>.*?(?=</pre>))"s
+code_block = code_open code_text "</code>" _
+code_text = ~r"(?P<content>.*?(?=</code>))"s
 
 attrs = attr+
 opt_attrs = attr*
@@ -668,14 +670,6 @@ class PageVisitor(NodeVisitor):
     #  or a support until visit_compat_body
     visit_compat_cell_token = _visit_token
 
-    def visit_code_block(self, node, children):
-        text = children[2].text
-        assert isinstance(text, text_type), type(text)
-        return {
-            'type': 'code',
-            'content': self.cleanup_whitespace(text),
-            'start': node.start, 'end': node.end}
-
     def visit_cell_version(self, node, children):
         return {
             'type': 'version',
@@ -761,7 +755,7 @@ class PageVisitor(NodeVisitor):
                     if start is None:
                         start = item['start']
                     item_type = item['type']
-                    if item_type == 'p_open':
+                    if item_type == 'p':
                         wrap_p = True
                     elif item_type == 'p_close':
                         assert wrap_p
@@ -773,12 +767,11 @@ class PageVisitor(NodeVisitor):
                         text = self.kumascript_to_text(item, 'footnote')
                         if text:
                             bits.append(text)
-                    elif item_type in ('pre', 'code'):
+                    else:
+                        assert item_type in ('pre', 'code'), item_type
                         out = self._consume_attributes(item, [])
                         bits.append(
                             '<{0}>{1}</{0}>'.format(item_type, out['content']))
-                    else:
-                        raise ValueError(item)
                 line = self.join_content(bits)
                 if line:
                     if include_p and wrap_p:
@@ -878,8 +871,14 @@ class PageVisitor(NodeVisitor):
     visit_single_quoted_text = _visit_content
     visit_double_quoted_text = _visit_content
 
-    def _visit_open(self, node, children, tag):
-        """Parse an opening tag with an expected attributes list"""
+    def _visit_open(self, node, children):
+        """Parse an opening tag with an optional attributes list"""
+        open_tag_node = children[0]
+        assert isinstance(open_tag_node, Node), type(open_tag_node)
+        open_tag = open_tag_node.text
+        assert open_tag.startswith('<')
+        tag = open_tag[1:]
+
         attrs = children[2]
         assert isinstance(attrs, list), type(attrs)
         for attr in attrs:
@@ -898,6 +897,13 @@ class PageVisitor(NodeVisitor):
             'start': node.start,
             'end': node.end,
         }
+
+    visit_td_open = _visit_open
+    visit_th_open = _visit_open
+    visit_tr_open = _visit_open
+    visit_p_open = _visit_open
+    visit_pre_open = _visit_open
+    visit_code_open = _visit_open
 
     def _consume_attributes(self, node_dict, expected):
         """Move attributes to node dict, or add issue."""
@@ -937,46 +943,29 @@ class PageVisitor(NodeVisitor):
             }
         return th_open
 
-    def visit_td_open(self, node, children):
-        return self._visit_open(node, children, 'td')
-
-    def visit_p_open(self, node, children):
-        return {'type': 'p_open', 'start': node.start, 'end': node.end}
-
     def visit_p_close(self, node, children):
         return {'type': 'p_close', 'start': node.start, 'end': node.end}
 
     def visit_break(self, node, children):
         return {'type': 'break', 'start': node.start, 'end': node.end}
 
-    def visit_pre_block(self, node, children):
-        attrs_node = children[1]
-        if isinstance(attrs_node, Node):
-            attrs = []
-        else:
-            assert isinstance(attrs_node, list), type(attrs_node)
-            attrs = attrs_node[0]
-        assert isinstance(attrs, list), type(attrs)
+    def _visit_block(self, node, children):
+        """Parse a block of content."""
+        block_open = children[0]
+        inner = children[1]
+        block_close = children[2]
+        assert isinstance(block_close, Node)
+        assert isinstance(inner, text_type), type(inner)
 
-        attr_dict = {}
-        for attr in attrs:
-            ident = attr.pop('ident')
-            assert ident not in attr_dict
-            attr_dict[ident] = attr
+        block = deepcopy(block_open)
+        block['end'] = block_close.end
+        block['content'] = inner
+        return block
 
-        text = children[3]
-        assert isinstance(text, text_type), type(text)
-        return {
-            'type': 'pre', 'attributes': attr_dict, 'content': text,
-            'start': node.start, 'end': node.end}
-
+    visit_pre_block = _visit_block
     visit_pre_text = _visit_content
-
-    def visit_th_open(self, node, children):
-        return self._visit_open(node, children, 'th')
-
-    def visit_tr_open(self, node, children):
-        return self._visit_open(node, children, 'tr')
+    visit_code_block = _visit_block
+    visit_code_text = _visit_content
 
     def visit_strong_text(self, node, children):
         text = children[2]
@@ -1384,7 +1373,7 @@ class PageVisitor(NodeVisitor):
                 else:
                     self.issues.append(self.kumascript_issue(
                         'unknown_kumascript', item, 'compatibility cell'))
-            elif item['type'] == 'p_open':
+            elif item['type'] == 'p':
                 p_depth += 1
                 if p_depth > 1:
                     self.issues.append((

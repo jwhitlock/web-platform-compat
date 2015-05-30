@@ -971,8 +971,8 @@ class TestPageVisitor(ScrapeTestCase):
         row_cell = '<td><code>canonical</code></td>'
         expected_cell = [
             {'type': 'td', 'start': 0, 'end': 4},
-            {'type': 'code_block', 'content': 'canonical', 'start': 4,
-             'end': 26},
+            {'type': 'code', 'content': 'canonical', 'attributes': {},
+             'start': 4, 'end': 26},
         ]
         self.assert_compat_row_cell(row_cell, expected_cell, [])
 
@@ -1586,7 +1586,7 @@ class TestPageVisitor(ScrapeTestCase):
                 ".foo {background-image: url(bg-image.png);}\n</pre>",
                 0, 103)}
         issues = [
-            ('unexpected_attribute', 33, 51,
+            ('unexpected_attribute', 34, 51,
              {'ident': 'class', 'node_type': 'pre', 'value': 'brush:css',
               'expected': 'no attributes'})]
         self.assert_compat_footnotes(footnotes, expected, issues)
