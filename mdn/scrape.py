@@ -422,7 +422,7 @@ class PageVisitor(NodeVisitor):
             assert isinstance(specdesc, list), type(specdesc)
             for item in specdesc:
                 if item['type'] == 'kumascript':
-                    text = self.kumascript_to_text(item, 'specdesc')
+                    text = self.kumascript_to_html(item, 'specdesc')
                     if text:
                         bits.append(text)
                 elif item['type'] == 'code':
@@ -764,7 +764,7 @@ class PageVisitor(NodeVisitor):
                     elif item_type == 'text':
                         bits.append(item['content'])
                     elif item_type == 'kumascript':
-                        text = self.kumascript_to_text(item, 'footnote')
+                        text = self.kumascript_to_html(item, 'footnote')
                         if text:
                             bits.append(text)
                     else:
@@ -1014,8 +1014,8 @@ class PageVisitor(NodeVisitor):
             {'name': item['name'], 'args': item['args'], 'scope': scope,
              'kumascript': "{{%s%s}}" % (item['name'], args)})
 
-    def kumascript_to_text(self, item, scope):
-        """Convert kumascript to plain text."""
+    def kumascript_to_html(self, item, scope):
+        """Convert kumascript to plain HTML."""
         assert item['type'] == 'kumascript'
         name = item['name']
         args = item['args']

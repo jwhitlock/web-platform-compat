@@ -1731,86 +1731,86 @@ class TestPageVisitor(ScrapeTestCase):
         text = '"max-zoom" descriptor'
         self.assertEqual(text, self.visitor.unquote(text))
 
-    def assert_kumascript_to_text(
+    def assert_kumascript_to_html(
             self, kumascript, expected_text, scope='specdesc', issues=None):
         parsed = page_grammar['kumascript'].parse('{{' + kumascript + '}}')
         item = self.visitor.visit(parsed)
-        text = self.visitor.kumascript_to_text(item, scope)
+        text = self.visitor.kumascript_to_html(item, scope)
         self.assertEqual(expected_text, text)
         self.assertEqual(self.visitor.issues, issues or [])
 
-    def test_kumascript_to_text_xref_csslength(self):
+    def test_kumascript_to_html_xref_csslength(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'xref_csslength()', '<code>&lt;length&gt;</code>')
 
-    def test_kumascript_to_text_xref_csspercentage(self):
+    def test_kumascript_to_html_xref_csspercentage(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/position_value
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'xref_csspercentage()', '<code>&lt;percentage&gt;</code>')
 
-    def test_kumascript_to_text_xref_cssstring(self):
+    def test_kumascript_to_html_xref_cssstring(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/attr
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'xref_cssstring()', '<code>&lt;string&gt;</code>')
 
-    def test_kumascript_to_text_xref_cssimage(self):
+    def test_kumascript_to_html_xref_cssimage(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-image
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'xref_cssimage()', '<code>&lt;image&gt;</code>')
 
-    def test_kumascript_to_text_xref_csscolorvalue(self):
+    def test_kumascript_to_html_xref_csscolorvalue(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/background-color
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'xref_csscolorvalue()', '<code>&lt;color&gt;</code>')
 
-    def test_kumascript_to_text_xref_cssvisual(self):
+    def test_kumascript_to_html_xref_cssvisual(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/break-after
-        self.assert_kumascript_to_text('xref_cssvisual', '<code>visual</code>')
+        self.assert_kumascript_to_html('xref_cssvisual', '<code>visual</code>')
 
-    def test_kumascript_to_text_cssxref(self):
+    def test_kumascript_to_html_cssxref(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'cssxref("display")', '<code>display</code>')
 
-    def test_kumascript_to_text_domxref_1arg(self):
+    def test_kumascript_to_html_domxref_1arg(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/CharacterData
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'domxref("ChildNode")', '<code>ChildNode</code>')
 
-    def test_kumascript_to_text_domxref_2arg(self):
+    def test_kumascript_to_html_domxref_2arg(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/initCustomEvent
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'domxref("CustomEvent.CustomEvent", "CustomEvent()")',
             '<code>CustomEvent()</code>')
 
-    def test_kumascript_to_text_htmlelement(self):
+    def test_kumascript_to_html_htmlelement(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/HTMLIsIndexElement
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'HTMLElement("isindex")', '<code>isindex</code>')
 
-    def test_kumascript_to_text_jsxref_1arg(self):
+    def test_kumascript_to_html_jsxref_1arg(self):
         # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'jsxref("Array.isArray")', '<code>Array.isArray</code>')
 
-    def test_kumascript_to_text_jsxref_2arg(self):
+    def test_kumascript_to_html_jsxref_2arg(self):
         # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/toString
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'jsxref("Global_Objects/null", "null")', '<code>null</code>')
 
-    def test_kumascript_to_text_specname(self):
+    def test_kumascript_to_html_specname(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/AbstractWorker
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'SpecName("Web Workers")', 'specification Web Workers')
 
-    def test_kumascript_to_text_unknown_kumascript(self):
+    def test_kumascript_to_html_unknown_kumascript(self):
         issues = [
             ('unknown_kumascript', 0, 23,
              {'name': 'Unknown', 'args': ['textarea'],
               'scope': 'specdesc',
               'kumascript': '{{Unknown(textarea)}}'})]
-        self.assert_kumascript_to_text(
+        self.assert_kumascript_to_html(
             'Unknown("textarea")', None, issues=issues)
 
     def assert_join_content(self, content_bits, expected_text):
