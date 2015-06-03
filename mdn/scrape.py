@@ -38,7 +38,7 @@ from webplatformcompat.models import (
     Browser, Feature, Section, Specification, Support, Version)
 
 
-# Parsimonious grammar for an MDN page
+# Parsimonious grammar for a raw MDN page
 page_grammar = Grammar(
     r"""
 # A whole raw MDN page
@@ -49,7 +49,8 @@ doc = other_text other_section* spec_section? compat_section?
 other_text = ~r".*?(?=<h2)"s
 other_section = _ !(spec_h2 / compat_h2) other_h2 _ other_text
 other_h2 = "<h2 " _ attrs? _ ">" _ ~r"(?P<content>.*?(?=</h2>))"s _ "</h2>"
-last_section = _ other_h2 _ ~r".*(?!=<h2)"s
+last_section = _ other_h2 _ last_text
+last_text =  ~r".*(?!=<h2)"s
 
 #
 # Specifications section
@@ -75,7 +76,7 @@ spec2_td = td_open _ spec2_text "</td>"
 spec2_text = kumascript / inner_td
 specdesc_td = td_open _ specdesc_text _ "</td>"
 specdesc_text = specdesc_token*
-specdesc_token = kumascript / code_block / spec_other
+specdesc_token = kumascript / code_tag / spec_other
 spec_other = ~r"(?P<content>[^{<]+)\s*"s
 inner_td = ~r"(?P<content>.*?(?=</td>))"s
 
@@ -83,7 +84,7 @@ inner_td = ~r"(?P<content>.*?(?=</td>))"s
 # Browser Compatibility section
 #
 compat_section = _ compat_h2 _ compat_kumascript _ compat_divs
-    compat_footnotes?
+    compat_footnotes? compat_h3?
 compat_h2 = "<h2 " _ attrs? _ ">" _ compat_title _ "</h2>"
 compat_title = ~r"(?P<content>Browser [cC]ompat[ai]bility)"
 compat_kumascript = (compat_kumascript_div / compat_kumascript_p)
@@ -102,7 +103,15 @@ compat_client_cells = th_elems
 compat_rows = compat_row* _
 compat_row = tr_open _ compat_row_cells _ "</tr>" _
 compat_row_cells = compat_row_cell+
-compat_row_cell = td_open _ compat_cell _ "</td>" _
+compat_row_cell = td_tag _
+
+# TODO
+th_elems = th_tag+
+
+# UNTIL THEN
+th_elems = th_elem+
+th_elem = th_open _ (strong_text / bare_text) "</th>" _
+
 
 #
 # A cell in the Compat table
@@ -110,25 +119,16 @@ compat_row_cell = td_open _ compat_cell _ "</td>" _
 #   or a support until we visit the table.
 #
 compat_cell = compat_cell_token*
-compat_cell_token = (kumascript / break / code_block / p_open / p_close /
-    cell_version / cell_footnote_id / cell_removed / cell_other)
-cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
-    r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
-cell_removed = ~r"[Rr]emoved\s+[Ii]n\s*"s
-cell_footnote_id = "<sup>"? _ a_open? _ ~r"\[(?P<footnote_id>\d+|\*+)\]\s*"s _
-    "</a>"? _ "</sup>"?
-cell_other = ~r"(?P<content>[^{<[]+)\s*"s
+compat_cell_token = html_content
 
 #
 # Optional footnotes after the Browser Compatibility Tables
 #
-compat_footnotes = footnote_token* _
-footnote_token = (kumascript / p_open / p_close / pre_block / code_block /
-    footnote_id / cell_other)
-footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
-
+compat_footnotes = html_content _
+compat_h3 = "<h3 " _ attrs? _ ">" _ ~r"(?P<content>.*?(?=</h3>))"s _ "</h3>"
+    (other_text / last_text)
 #
-# Common tokens
+# KumaScript tokens
 #
 kumascript = ks_esc_start ks_name ks_arglist? ks_esc_end
 ks_esc_start = "{{" _
@@ -142,27 +142,89 @@ ks_arg = (double_quoted_text / single_quoted_text / ks_bare_arg)
 ks_bare_arg = ~r"(?P<content>.*?(?=[,)]))"
 ks_arg_rest = ks_func_arg ks_arg
 
-th_elems = th_elem+
-th_elem = th_open _ (strong_text / bare_text) "</th>" _
-tr_open = "<tr" _ opt_attrs ">"
-th_open = "<th" _ opt_attrs ">"
-td_open = "<td" _ opt_attrs ">"
-a_open = "<a" _ opt_attrs ">"
-p_open = "<p" _ opt_attrs ">"
-pre_open = "<pre" _ opt_attrs ">"
-code_open = "<code" _ opt_attrs ">"
-p_close = "</p>" _
-break = "<" _ "br" _ ("/>" / ">") _
-pre_block = pre_open pre_text "</pre>" _
-pre_text = ~r"(?P<content>.*?(?=</pre>))"s
-code_block = code_open code_text "</code>" _
-code_text = ~r"(?P<content>.*?(?=</code>))"s
-
+#
+# HTML tag attritbutes
+#
 attrs = attr+
 opt_attrs = attr*
 attr = _ ident _ equals _ qtext _
 equals = "="
 ident = ~r"(?P<content>[a-z][a-z0-9-:]*)"
+
+#
+# HTML tokens (only those used in compat tables)
+#
+html_content = html_block
+html_block = html_tag+
+html_tag = a_tag / break / code_tag / p_tag / pre_tag / span_tag / strong_tag /
+    sup_tag / text_block
+
+a_tag = a_open a_content "</a>"
+a_open = "<a" _ opt_attrs ">"
+a_content = html_content
+
+break = "<" _ "br" _ ("/>" / ">") _
+
+code_tag = code_open code_content "</code>" _
+code_open = "<code" _ opt_attrs ">"
+code_content = ~r"(?P<content>.*?(?=</code>))"s
+
+p_tag = p_open p_content "</p>"
+p_open = "<p" _ opt_attrs ">"
+p_content = html_content
+
+pre_tag = pre_open pre_content "</pre>"
+pre_open = "<pre" _ opt_attrs ">"
+pre_content = ~r"(?P<content>.*?(?=</pre>))"s
+
+span_tag = span_open span_content "</span>"
+span_open = "<span" _ opt_attrs ">"
+span_content = html_content
+
+strong_tag = strong_open strong_content "</strong>"
+strong_open = "<strong" _ opt_attrs ">"
+strong_content = html_content
+
+sup_tag = sup_open sup_content "</sup>"
+sup_open = "<sup" _ opt_attrs ">"
+sup_content = html_content
+
+table_tag = table_open table_content "</table>"
+table_open = "<table" _ opt_attrs ">"
+table_content = thead_tag / tbody_tag
+
+tbody_tag = tbody_open tbody_content "</tbody>"
+tbody_open = "<tbody" _ opt_attrs ">"
+tbody_content = tr_tags
+
+td_tag = td_open td_content "</td>"
+td_open = "<td" _ opt_attrs ">"
+td_content = html_content
+
+th_tag = th_open th_content "</th>"
+th_open = "<th" _ opt_attrs ">"
+th_content = html_content
+
+thead_tag = thead_open thead_content "</thead>"
+thead_open = "<thead" _ opt_attrs ">"
+thead_content = tr_tags
+
+tr_tag = tr_open tr_contents "</tr>"
+tr_open = "<tr" _ opt_attrs ">"
+tr_contents = tr_content*
+tr_content = td_tag / th_tag
+tr_tags = tr_tag*
+
+#
+# Text segments
+#
+text_block = text_token+
+text_token = kumascript / cell_version / footnote_id / cell_removed / text_item
+cell_version = ~r"(?P<version>\d+(\.\d+)*)"""
+    r"""(\s+\((?P<eng_version>\d+(\.\d+)*)\))?\s*"s
+footnote_id = "[" ~r"(?P<content>\d+|\*+)" "]"
+cell_removed = ~r"[Rr]emoved\s+[Ii]n\s*"s
+text_item = ~r"(?P<content>[^{<[]+)\s*"s
 
 text = (double_quoted_text / single_quoted_text / bare_text)
 qtext = (double_quoted_text / single_quoted_text)
@@ -218,8 +280,14 @@ class PageVisitor(NodeVisitor):
         return visited_children or node
 
     def _visit_content(self, node, children):
-        """Vistor for re nodes with a named (?P<content>) section."""
+        """Visitor for re nodes with a named (?P<content>) section."""
         return node.match.group('content')
+
+    def _visit_content_item(self, node, children):
+        """Visitor for converting re content into items."""
+        return {
+            "type": "text", "start": node.start, "end": node.end,
+            "content": self._visit_content(node, children)}
 
     def _visit_token(self, node, children):
         """Visitor for one of many tokenized items"""
@@ -421,15 +489,7 @@ class PageVisitor(NodeVisitor):
         else:
             assert isinstance(specdesc, list), type(specdesc)
             for item in specdesc:
-                if item['type'] == 'kumascript':
-                    text = self.kumascript_to_html(item, 'specdesc')
-                    if text:
-                        bits.append(text)
-                elif item['type'] == 'code':
-                    bits.append("<code>{}</code>".format(item['content']))
-                else:
-                    assert item['type'] == 'text'
-                    bits.append(item['content'])
+                bits.append(self.item_to_html(item, 'specdesc'))
         return self.join_content(bits)
 
     visit_specdesc_token = _visit_token
@@ -448,7 +508,12 @@ class PageVisitor(NodeVisitor):
     #
     def visit_compat_section(self, node, children):
         compat_divs = children[5]
-        footnotes = children[6][0]
+        footnote_node = children[6]
+        if isinstance(footnote_node, Node):
+            assert footnote_node.start == footnote_node.end  # Empty
+            footnotes = OrderedDict()
+        else:
+            footnotes = footnote_node[0]
 
         assert isinstance(compat_divs, list), type(compat_divs)
         for div in compat_divs:
@@ -541,12 +606,12 @@ class PageVisitor(NodeVisitor):
         # Parse the rows for features and supports
         for row, compat_row in enumerate(compat_rows):
             for cell in compat_row['cells']:
-                td = cell[0]
+                td = cell
                 try:
                     col = table[row].index(None)
                 except ValueError:
                     self.issues.append((
-                        'extra_cell', td['start'], cell[-1]['end'], {}))
+                        'extra_cell', td['start'], cell['end'], {}))
                     continue
                 rowspan = int(td.get('rowspan', 1))
                 colspan = int(td.get('colspan', 1))
@@ -635,33 +700,18 @@ class PageVisitor(NodeVisitor):
 
         assert isinstance(tr_open, dict), type(tr_open)
         assert isinstance(compat_row_cells, list), type(compat_row_cells)
-        for cell_list in compat_row_cells:
-            assert isinstance(cell_list, list), type(cell_list)
-            for cell in cell_list:
-                assert isinstance(cell, dict), type(cell)
-        row_dict = {
-            'cells': compat_row_cells,
-        }
+        for cell in compat_row_cells:
+            assert isinstance(cell, dict), type(cell)
+        row_dict = {'cells': compat_row_cells}
         row_dict.update(tr_open)
         return row_dict
 
     def visit_compat_row_cell(self, node, children):
-        td_open = children[0]
-        assert isinstance(td_open, dict), type(td_open)
-        assert td_open['type'] == 'td'
-        compat_row = [
-            self._consume_attributes(td_open, ('rowspan', 'colspan'))]
-
-        compat_cell = children[2]
-        if isinstance(compat_cell, Node):
-            assert compat_cell.start == compat_cell.end
-            compat_cell = []
-        else:
-            assert isinstance(compat_cell, list), type(compat_cell)
-            for item in compat_cell:
-                assert isinstance(item, dict)
-                compat_row.append(item)
-
+        td_tag = children[0]
+        assert isinstance(td_tag, dict), type(td_tag)
+        assert td_tag['type'] == 'td'
+        compat_row = (
+            self._consume_attributes(td_tag, ('rowspan', 'colspan')))
         return compat_row
 
     #
@@ -673,121 +723,152 @@ class PageVisitor(NodeVisitor):
     def visit_cell_version(self, node, children):
         return {
             'type': 'version',
+            'content': node.text,
             'version': node.match.group('version'),
             'eng_version': node.match.group('eng_version'),
             'start': node.start, 'end': node.end}
 
-    def visit_cell_footnote_id(self, node, children):
-        item = children[4]
-        raw_id = item.match.group('footnote_id')
-        if raw_id.isnumeric():
-            footnote_id = raw_id
-        else:
-            footnote_id = text_type(len(raw_id))
-        return {
-            'type': 'footnote_id',
-            'footnote_id': footnote_id,
-            'start': node.start, 'end': node.end}
-
     def visit_cell_removed(self, node, children):
-        return {'type': 'removed', 'start': node.start, 'end': node.end}
-
-    def visit_cell_other(self, node, children):
-        text = self.cleanup_whitespace(node.text)
-        assert 'td>' not in text
-        return {
-            'type': 'text', 'content': text,
-            'start': node.start, 'end': node.end}
+        return {'type': 'removed', 'content': node.text, 'start': node.start,
+                'end': node.end}
 
     #
     # Optional footnotes after the Browser Compatibility Tables
     #
 
     def visit_compat_footnotes(self, node, children):
-        items = children[0]
-        if isinstance(items, Node):
-            assert items.start == items.end  # Empty
-            return OrderedDict()
-        assert isinstance(items, list), type(items)
+        """Parse footnote tokens into a tree, then resolve into HTML"""
+        raw_items = children[0]
+        assert isinstance(raw_items, dict)
+        if raw_items['type'] == 'html_block':
+            items = raw_items['content']
+        else:
+            items = [raw_items]
         for item in items:
             assert isinstance(item, dict), type(item)
 
-        class NoFootnote(object):
-            """Placeholder for section without a footnote"""
-
-        # Split tokens into footnote sections
-        sections = OrderedDict()
-        section = []
-        footnote_id = NoFootnote()
+        # Parse sections for footnote IDs
+        raw_sections = []
         for item in items:
-            close_section = False
-            item_type = item['type']
-            if item_type == 'p_close':
-                close_section = True
-            elif item_type == 'pre':
-                assert not section  # <pre> should be only item
-                close_section = True
-            elif item_type == 'footnote_id':
-                footnote_id = item['footnote_id']
-                assert footnote_id not in sections
-            elif item_type == 'text':
-                if not item['content']:
-                    continue
-            section.append(item)
+            footnote_id, keep = self.footnote_first_pass(item)
+            if keep:
+                raw_sections.append((footnote_id, item))
 
-            if close_section:
-                sections.setdefault(footnote_id, []).append(section)
-                if isinstance(footnote_id, NoFootnote):
-                    footnote_id = NoFootnote()
-                section = []
-        assert not section
+        # Combine raw sections into multi-line footnotes
+        last_footnote_id = None
+        last_group = []
+        sections = []
+        for footnote_id, section in raw_sections:
+            if (footnote_id is None and last_footnote_id is not None):
+                last_group.append(section)
+            else:
+                if last_group:
+                    sections.append((last_footnote_id, last_group))
+                last_group = [section]
+                last_footnote_id = footnote_id
+        if last_group:
+            sections.append((last_footnote_id, last_group))
 
-        # Convert sections
+        # Convert section trees into HTML
         footnotes = OrderedDict()
-        for footnote_id, paragraphs in sections.items():
-            start = None
+        for footnote_id, group in sections:
+            include_p = (len(group) > 1)
             lines = []
-            include_p = (len(paragraphs) > 1)
-            for section in paragraphs:
-                bits = []
-                wrap_p = False
-                for item in section:
-                    if start is None:
-                        start = item['start']
-                    item_type = item['type']
-                    if item_type == 'p':
-                        wrap_p = True
-                    elif item_type == 'p_close':
-                        assert wrap_p
-                    elif item_type == 'footnote_id':
-                        assert footnote_id == item['footnote_id']
-                    elif item_type == 'text':
-                        bits.append(item['content'])
-                    elif item_type == 'kumascript':
-                        text = self.kumascript_to_html(item, 'footnote')
-                        if text:
-                            bits.append(text)
-                    else:
-                        assert item_type in ('pre', 'code'), item_type
-                        out = self._consume_attributes(item, [])
-                        bits.append(
-                            '<{0}>{1}</{0}>'.format(item_type, out['content']))
-                line = self.join_content(bits)
+            for section in group:
+                line = self.footnote_to_html(section, footnote_id, include_p)
+                br = '<br/>'
+                while line.startswith(br + ' '):
+                    line = line[len(br) + 1:]
+                while line.endswith(' ' + br):
+                    line = line[:-(len(br) + 1)]
                 if line:
-                    if include_p and wrap_p:
-                        lines.append('<p>' + line + '</p>')
-                    else:
-                        lines.append(line)
+                    lines.append(line)
             if lines:
-                if isinstance(footnote_id, NoFootnote):
-                    self.issues.append(
-                        ('footnote_no_id', start, item['end'], {}))
+                start = group[0]['start']
+                end = group[-1]['end']
+                if footnote_id is None:
+                    self.issues.append(('footnote_no_id', start, end, {}))
                 else:
-                    footnotes[footnote_id] = (
-                        '\n'.join(lines), start, item['end'])
+                    footnotes[footnote_id] = ('\n'.join(lines), start, end)
         return footnotes
 
-    visit_footnote_token = _visit_token
+    def footnote_first_pass(self, item):
+        """Look for a footnote ID and content in this section."""
+        item_type = item['type']
+        if item_type == 'footnote_id':
+            return item['footnote_id'], True
+        elif item_type == 'break':
+            return None, False
+        elif item_type in ('kumascript', 'version'):
+            return None, True
+        else:
+            content = item['content']
+            if isinstance(content, dict):
+                return self.footnote_first_pass(content)
+            elif isinstance(content, list):
+                footnote_id = None
+                keep = False
+                for subitem in content:  # pragma: no branch
+                    footnote_id, subkeep = self.footnote_first_pass(subitem)
+                    keep = subkeep or keep
+                    if footnote_id:  # pragma: no branch
+                        break
+                return footnote_id, keep
+            else:
+                keep = bool(self.cleanup_whitespace(content))
+                return None, keep
+
+    def footnote_to_html(self, item, footnote_id, wrap=True):
+        """TODO: move to class, too similar to item_to_html"""
+        # Handle content lists
+        if isinstance(item, list):
+            bits = []
+            for subitem in item:
+                bits.append(self.footnote_to_html(subitem, footnote_id))
+            return self.join_content(bits)
+
+        # Handle items
+        assert isinstance(item, dict), type(item)
+        html = None
+        context = 'footnote'
+        item_type = item['type']
+        no_wrap_types = ('html_block', 'text_block', 'span')
+        if item_type == 'footnote_id':
+            if footnote_id != item['footnote_id']:
+                self.issues.append(
+                    ('second_footnote', item['start'], item['end'],
+                     {'original': footnote_id, 'new': item['footnote_id']}))
+        elif item_type == 'kumascript':
+            html = self.kumascript_to_html(item, context)
+        elif item_type == 'span':
+            self.issues.append(
+                ('span_dropped', item['start'], item['end'], {}))
+            html = self.footnote_to_html(item['content'], footnote_id)
+        elif item_type == 'break':
+            return "<br/>"
+        else:
+            attrs = self.format_attributes(item, context)
+            if item_type in ('code', 'pre'):
+                """
+                assert len(item['content']) == 1
+                subcontent = item['content'][0]
+                """
+                subcontent = item['content']
+                assert isinstance(item, dict)
+                assert subcontent['type'] == 'text'
+                subtext = subcontent['content']
+                html = "<{0}{1}>{2}</{0}>".format(item_type, attrs, subtext)
+            elif item_type in ('text', 'version', 'removed'):
+                return self.cleanup_whitespace(item['content'])
+            else:
+                shtml = self.footnote_to_html(item['content'], footnote_id)
+                wrap_this = (wrap and item_type not in no_wrap_types and
+                             (shtml or attrs))
+                if wrap_this:
+                    html = "<{0}{1}>{2}</{0}>".format(item_type, attrs, shtml)
+                else:
+                    html = shtml
+        return html or ""
 
     def visit_footnote_id(self, node, children):
         raw_id = children[1].match.group('content')
@@ -800,8 +881,14 @@ class PageVisitor(NodeVisitor):
             'footnote_id': footnote_id,
             'start': node.start, 'end': node.end}
 
+    def visit_compat_h3(self, node, children):
+        title = children[6].text.strip()
+        h3_end = children[8]
+        self.issues.append(
+            ('skipped_h3', node.start, h3_end.end, {'h3': title}))
+
     #
-    # Other visitors
+    # KumaScript Tokens
     #
     def visit_kumascript(self, node, children):
         name = children[1]
@@ -847,6 +934,10 @@ class PageVisitor(NodeVisitor):
 
     visit_ks_bare_arg = _visit_content
 
+    #
+    # Attribute processing
+    #
+
     def visit_attrs(self, node, children):
         return children  # Even if empty list
 
@@ -868,8 +959,28 @@ class PageVisitor(NodeVisitor):
 
     visit_ident = _visit_content
     visit_bare_text = _visit_content
+    visit_text_item = _visit_content_item
     visit_single_quoted_text = _visit_content
     visit_double_quoted_text = _visit_content
+
+    #
+    # HTML tokens
+    #
+    visit_html_tag = _visit_token
+
+    def visit_html_block(self, node, children):
+        assert children
+        for child in children:
+            assert isinstance(child, dict), type(child)
+        if len(children) == 1:
+            return children[0]
+        else:
+            return {
+                'type': 'html_block',
+                'start': node.start,
+                'end': node.end,
+                'content': children
+            }
 
     def _visit_open(self, node, children):
         """Parse an opening tag with an optional attributes list"""
@@ -898,12 +1009,53 @@ class PageVisitor(NodeVisitor):
             'end': node.end,
         }
 
+    visit_a_open = _visit_open
     visit_td_open = _visit_open
     visit_th_open = _visit_open
     visit_tr_open = _visit_open
     visit_p_open = _visit_open
     visit_pre_open = _visit_open
+    visit_span_open = _visit_open
+    visit_strong_open = _visit_open
+    visit_sup_open = _visit_open
     visit_code_open = _visit_open
+
+    def visit_break(self, node, children):
+        return {'type': 'break', 'start': node.start, 'end': node.end}
+
+    def _visit_tag(self, node, children):
+        """Parse a <tag>content</tag> block."""
+        tag_open = children[0]
+        content = children[1]
+        tag_close = children[2]
+        assert isinstance(tag_close, Node)
+        assert isinstance(content, dict), type(content)
+
+        tag = deepcopy(tag_open)
+        tag['end'] = tag_close.end
+        tag['content'] = content
+        return tag
+
+    visit_a_tag = _visit_tag
+    visit_code_tag = _visit_tag
+    visit_p_tag = _visit_tag
+    visit_pre_tag = _visit_tag
+    visit_span_tag = _visit_tag
+    visit_strong_tag = _visit_tag
+    visit_sup_tag = _visit_tag
+    visit_table_tag = _visit_tag
+    visit_tbody_tag = _visit_tag
+    visit_td_tag = _visit_tag
+    visit_th_tag = _visit_tag
+    visit_thead_tag = _visit_tag
+    visit_tr_tag = _visit_tag
+
+    visit_pre_content = _visit_content_item
+    visit_code_content = _visit_content_item
+
+    #
+    # HTML tag attributes
+    #
 
     def _consume_attributes(self, node_dict, expected):
         """Move attributes to node dict, or add issue."""
@@ -918,15 +1070,22 @@ class PageVisitor(NodeVisitor):
                     expected_text = (
                         'the attributes ' + ', '.join(expected[:-1]) + ' or ' +
                         expected[-1])
-                elif len(expected) == 1:
+                else:
+                    assert len(expected) == 1
                     expected_text = 'the attribute ' + expected[0]
+                """
                 else:
                     expected_text = 'no attributes'
+                """
                 self.issues.append((
                     'unexpected_attribute', attr['start'], attr['end'],
                     {'node_type': node_dict['type'], 'ident': ident,
                         'value': attr['value'], 'expected': expected_text}))
         return node_out
+
+    #
+    # Text segments
+    #
 
     def visit_th_elem(self, node, children):
         th_open = children[0]
@@ -943,30 +1102,6 @@ class PageVisitor(NodeVisitor):
             }
         return th_open
 
-    def visit_p_close(self, node, children):
-        return {'type': 'p_close', 'start': node.start, 'end': node.end}
-
-    def visit_break(self, node, children):
-        return {'type': 'break', 'start': node.start, 'end': node.end}
-
-    def _visit_block(self, node, children):
-        """Parse a block of content."""
-        block_open = children[0]
-        inner = children[1]
-        block_close = children[2]
-        assert isinstance(block_close, Node)
-        assert isinstance(inner, text_type), type(inner)
-
-        block = deepcopy(block_open)
-        block['end'] = block_close.end
-        block['content'] = inner
-        return block
-
-    visit_pre_block = _visit_block
-    visit_pre_text = _visit_content
-    visit_code_block = _visit_block
-    visit_code_text = _visit_content
-
     def visit_strong_text(self, node, children):
         text = children[2]
         assert isinstance(text, text_type), type(text)
@@ -976,6 +1111,22 @@ class PageVisitor(NodeVisitor):
             'text': self.cleanup_whitespace(text),
             'strong': True
         }
+
+    def visit_text_block(self, node, children):
+        assert children
+        for child in children:
+            assert isinstance(child, dict), type(child)
+        if len(children) == 1:
+            return children[0]
+        else:
+            return {
+                'type': 'text_block',
+                'start': node.start,
+                'end': node.end,
+                'content': children
+            }
+
+    visit_text_token = _visit_token
 
     #
     # Utility methods
@@ -1031,12 +1182,19 @@ class PageVisitor(NodeVisitor):
         elif name == 'xref_cssvisual':
             assert not args
             return "<code>visual</code>"
-        elif name.lower() in ('cssxref', 'domxref', 'htmlelement', 'jsxref'):
-            if len(args) > 1:
+        elif name.lower() in ('cssxref', 'domxref', 'jsxref'):
+            assert len(args) < 3  # domxref does funky stuff w/ args 3 and 4
+            if len(args) == 2:
                 content = args[1]
             else:
                 content = args[0]
             return "<code>{}</code>".format(content)
+        elif name.lower() == 'htmlelement':
+            content = args[0]
+            if ' ' in content:
+                return "<code>{}</code>".format(content)
+            else:
+                return "<code>&lt;{}&gt;</code>".format(content)
         elif name.lower() == 'specname':
             assert len(args) >= 1
             return 'specification ' + args[0]
@@ -1052,16 +1210,126 @@ class PageVisitor(NodeVisitor):
             self.issues.append(
                 self.kumascript_issue('unknown_kumascript', item, scope))
 
+    drop_tags = {
+        ('a', 'feature'),
+        ('p', 'feature'),
+        ('span', '*'),
+        ('strong', '*'),
+        ('em', '*')}
+
+    def item_to_html(self, item, context):
+        """Convert a item and subitems into HTML."""
+        # Handle content lists - doesn't happend in current MDN code
+        """
+        if isinstance(item, list):
+            bits = []
+            for subitem in item:
+                bits.append(self.item_to_html(subitem, context))
+            return self.join_content(bits)
+        """
+
+        # Handle items
+        assert isinstance(item, dict), type(item)
+        item_type = item['type']
+        if item_type == 'kumascript':
+            html = self.kumascript_to_html(item, context)
+        elif ((item_type, context) in self.drop_tags or
+                (item_type, '*') in self.drop_tags):
+            self.issues.append((
+                'tag_dropped', item['start'], item['end'],
+                {'tag': item_type, 'scope': context}))
+            return self.item_to_html(item['content'], context)
+        else:
+            attrs = self.format_attributes(item, context)
+            if item_type in ('code', 'pre'):
+                """
+                assert len(item['content']) == 1
+                subcontent = item['content'][0]
+                """
+                subcontent = item['content']
+                assert isinstance(item, dict)
+                assert subcontent['type'] == 'text'
+                subtext = subcontent['content']
+                html = "<{0}{1}>{2}</{0}>".format(item_type, attrs, subtext)
+            else:
+                assert item_type == 'text'
+                html = self.cleanup_whitespace(item['content'])
+            # No other cases in current MDN pages
+            """
+            else:
+                raise Exception('Testcase')
+                shtml = self.item_to_html(item['content'], context)
+                html = "<{0}{1}>{2}</{0}>".format(item_type, attrs, shtml)
+            """
+        return html or ""
+
+    expected_attrs = {}
+    must_attrs = {
+        ('a', 'footnote'): {'href': '*'},
+        ('a', 'feature'): {'href': '*'},
+    }
+
+    def format_attributes(self, item, context):
+        name = item['type']
+        attrs = item.pop('attributes', {})
+        must = self.must_attrs.get((name, context), {})
+        expected = self.expected_attrs.get((name, context), {})
+        expected.update(must)
+        attr_out = {}
+        for must_attr in must:
+            if must_attr not in attrs:
+                self.issues.append((
+                    'missing_attribute', item['start'], item['end'],
+                    {'node_type': name, 'ident': must_attr}))
+        for ident, attr in attrs.items():
+            if ident in expected:
+                assert ident not in attr_out
+                attr_out[ident] = attr['value']
+            else:
+                names = list(expected.keys())
+                # Doesn't happen in current MDN content
+                """
+                if len(names) > 1:
+                    raise Exception('Testcase')
+                    expected_text = (
+                        'the attributes ' + ', '.join(names[:-1]) + ' or ' +
+                        names[-1])
+                elif len(names) == 1:
+                """
+                assert len(names) < 2
+                if names:
+                    expected_text = 'the attribute ' + names[0]
+                else:
+                    expected_text = 'no attributes'
+                self.issues.append((
+                    'unexpected_attribute', attr['start'], attr['end'],
+                    {'node_type': name, 'ident': ident, 'value': attr['value'],
+                        'expected': expected_text}))
+        if attr_out:
+            sorted_attr = []
+            for ident in sorted(attr_out):
+                value = attr_out[ident]
+                sorted_attr.append((ident, value))
+            return " " + " ".join(
+                '{}="{}"'.format(i, v) for (i, v) in sorted_attr)
+        else:
+            return ""
+
     def join_content(self, content_bits):
         """Construct a string with just the right whitespace."""
         out = ""
         nospace_before = '!,.;? '
         nospace_after = ' '
+        strip_next = False
         for bit in content_bits:
-            if (out and out[-1] not in nospace_after and
-                    bit[0] not in nospace_before):
-                out += " "
-            out += bit
+            if isinstance(bit, self.StripNextSpace):
+                strip_next = True
+            elif bit:
+                if (out and out[-1] not in nospace_after and
+                        bit[0] not in nospace_before and not strip_next):
+                    out += " "
+                strip_next = False
+                out += bit
         return out
 
     #
@@ -1098,8 +1366,13 @@ class PageVisitor(NodeVisitor):
 
     def feature_id_and_slug(self, name):
         """Get or create the feature ID and slug given a name."""
-        def normalized(n):
-            return n.lower().replace('<code>', '').replace('</code>', '')
+        def normalized(name):
+            """Normalize a name for IDs, slugs."""
+            to_remove = ('<code>', '</code>', '&lt;', '&gt;')
+            normalized_name = name.lower()
+            for removal in to_remove:
+                normalized_name = normalized_name.replace(removal, '')
+            return normalized_name
         nname = normalized(name)
 
         # Initialize Feature IDs
@@ -1178,66 +1451,74 @@ class PageVisitor(NodeVisitor):
     #
     # Cell parsing
     #
+
     def cell_to_feature(self, cell):
         """Parse cell items as a feature (first column)"""
         name_bits = []
-        name_replacements = [('</code> ,', '</code>,')]
-        feature = {}
-        assert cell[0]['type'] == 'td'
-        for item in cell[1:]:
-            if item['type'] == 'break':
-                pass  # Discard breaks in feature names
-            elif item['type'] == 'text':
-                name_bits.append(item['content'])
-            elif item['type'] == 'version':
-                # Not really a version - need to strip the trailing space
-                v = item['version']
-                name_replacements.append(('%s ' % v, '%s' % v))
-                name_bits.append(v)
-            elif item['type'] == 'code':
-                name_bits.append('<code>%s</code>' % item['content'])
-            elif item['type'] == 'kumascript':
-                kname = item['name'].lower()
-                if kname == 'experimental_inline':
-                    assert 'experimental' not in feature
-                    feature['experimental'] = True
-                elif kname == 'non-standard_inline':
-                    assert 'standardized' not in feature
-                    feature['standardized'] = False
-                elif kname == 'not_standard_inline':
-                    assert 'standardized' not in feature
-                    feature['standardized'] = False
-                elif kname == 'deprecated_inline':
-                    assert 'obsolete' not in feature
-                    feature['obsolete'] = True
-                elif kname == 'htmlelement':
-                    name_bits.append(
-                        '<code>&lt;%s&gt;</code>' %
-                        self.unquote(item['args'][0]))
-                elif kname == 'domxref':
-                    name_bits.append(self.unquote(item['args'][0]))
-                else:
-                    self.issues.append(self.kumascript_issue(
-                        'unknown_kumascript', item, 'compatibility feature'))
-            elif item['type'] == 'footnote_id':
-                self.issues.append((
-                    'footnote_feature', item['start'], item['end'], {}))
-            else:
-                raise ValueError("Unknown item!", item)
-        assert name_bits
-        if (len(name_bits) == 1 and isinstance(name_bits[0], text_type) and
-                name_bits[0].startswith('<code>')):
-            feature['canonical'] = True
-            name = name_bits[0][6:-7]  # Trim out surrounding <code>xx</code>
+        feature = {'name_bits': []}
+        assert cell['type'] == 'td'
+        assert isinstance(cell['content'], dict)
+        # if isinstance(cell['content'], dict):
+        self.cell_to_feature_inner(cell['content'], feature, [])
+        """
         else:
-            name = ' '.join(name_bits)
-            for old, new in name_replacements:
-                name = name.replace(old, new)
+            for item in cell['content']:
+                self.cell_to_feature_inner(item, feature, [])
+        """
+        name_bits = feature.pop('name_bits')
+        assert name_bits
+        name = self.join_content(name_bits)
+        if (name.startswith('<code>') and name.endswith('</code>') and
+                name.count('<code>') == 1):
+            feature['canonical'] = True
+            name = name[len('<code>'):-len('</code>')]
         f_id, slug = self.feature_id_and_slug(name)
         feature['name'] = name
         feature['id'] = f_id
         feature['slug'] = slug
         return feature
+
+    class StripNextSpace(object):
+        """Don't insert a space when joining."""
+
+    def cell_to_feature_inner(self, item, feature, depth):
+        item_type = item['type']
+        scope = 'feature'
+        if item_type == 'footnote_id':
+            self.issues.append((
+                'footnote_feature', item['start'], item['end'], {}))
+        elif item_type == 'break':
+            pass  # Discard breaks in feature names
+        elif item_type == 'version':
+            feature['name_bits'].extend((
+                item['version'], self.StripNextSpace()))
+        elif item_type == 'code':
+            feature['name_bits'].append(self.item_to_html(item, scope))
+        elif item_type == 'kumascript':
+            kname = item['name'].lower()
+            if kname == 'experimental_inline':
+                assert 'experimental' not in feature
+                feature['experimental'] = True
+            elif kname == 'non-standard_inline':
+                assert 'standardized' not in feature
+                feature['standardized'] = False
+            elif kname == 'not_standard_inline':
+                assert 'standardized' not in feature
+                feature['standardized'] = False
+            elif kname == 'deprecated_inline':
+                assert 'obsolete' not in feature
+                feature['obsolete'] = True
+            else:
+                feature['name_bits'].append(self.item_to_html(item, scope))
+        elif 'content' in item:
+            if isinstance(item['content'], list):
+                idepth = depth + [item_type]
+                for inner_item in item['content']:
+                    self.cell_to_feature_inner(inner_item, feature, idepth)
+            else:
+                feature['name_bits'].append(self.item_to_html(item, scope))
+        else:
+            raise ValueError("Unknown item!", item)
 
     # From https://developer.mozilla.org/en-US/docs/Template:CompatGeckoDesktop
     geckodesktop_to_firefox = {
@@ -1263,191 +1544,197 @@ class PageVisitor(NodeVisitor):
         assert feature
         assert browser
 
-        versions = []
-        supports = []
-        version = {'browser': browser['id']}
-        support = {}
-        p_depth = 0
+        data = {
+            'versions': [],
+            'supports': [],
+            'version': {'browser': browser['id']},
+            'support': {},
+            'p_depth': 0,
+            'feature': feature,
+            'browser': browser
+        }
 
+        assert cell['type'] == 'td'
+        assert isinstance(cell['content'], dict)
+        self.cell_to_support_inner(cell['content'], data, [])
+
+        if data['version'].get('id') and data['support'].get('id'):
+            data['versions'].append(data['version'])
+            data['supports'].append(data['support'])
+        else:
+            assert not data['version'].get('id')
+            assert not data['support'].get('id')
+            if data['versions'] and data['supports']:
+                data['versions'][-1].update(data['version'])
+                data['supports'][-1].update(data['support'])
+        return data['versions'], data['supports']
+
+    def cell_to_support_inner(self, item, data, depth):
         kumascript_compat_versions = [
             'compat' + b for b in ('android', 'chrome', 'ie', 'opera',
                                    'operamobile', 'safari')]
-
-        assert cell[0]['type'] == 'td'
-        for item in cell[1:]:
-            version_found = None
-            version_name = version.get('name')
-            if item['type'] == 'version':
-                version_found = item['version']
-            elif item['type'] == 'footnote_id':
-                if 'footnote_id' in support:
-                    self.issues.append((
-                        'footnote_multiple', item['start'], item['end'],
-                        {'prev_footnote_id': support['footnote_id'][0],
-                         'footnote_id': item['footnote_id']}))
-                else:
-                    support['footnote_id'] = (
-                        item['footnote_id'], item['start'], item['end'])
-            elif item['type'] == 'kumascript':
-                kname = item['name'].lower()
-                # See https://developer.mozilla.org/en-US/docs/Template:<name>
-                if kname == 'compatversionunknown':
-                    version_found = ''
-                elif kname == 'compatunknown':
-                    # Could use support = unknown, but don't bother
-                    pass
-                elif kname == 'compatno':
-                    version_found = ''
-                    support['support'] = 'no'
-                elif kname == 'property_prefix':
-                    support['prefix'] = self.unquote(item['args'][0])
-                elif kname == 'compatgeckodesktop':
-                    gversion = self.unquote(item['args'][0])
-                    version_found = self.geckodesktop_to_firefox.get(gversion)
-                    if not version_found:
-                        try:
-                            nversion = float(gversion)
-                        except ValueError:
-                            nversion = 0
-                        if nversion >= 5:
-                            version_found = text_type(nversion)
-                        else:
-                            version_found = None
-                            self.issues.append((
-                                'compatgeckodesktop_unknown',
-                                item['start'], item['end'],
-                                {'version': gversion}))
-                elif kname == 'compatgeckofxos':
-                    gversion = self.unquote(item['args'][0])
-                    try:
-                        oversion = self.unquote(item['args'][1])
-                    except IndexError:
-                        oversion = ''
+        version_found = None
+        version_name = data['version'].get('name')
+        if item['type'] == 'version':
+            version_found = item['version']
+        elif item['type'] == 'footnote_id':
+            if 'footnote_id' in data['support']:
+                self.issues.append((
+                    'footnote_multiple', item['start'], item['end'],
+                    {'prev_footnote_id': data['support']['footnote_id'][0],
+                        'footnote_id': item['footnote_id']}))
+            else:
+                data['support']['footnote_id'] = (
+                    item['footnote_id'], item['start'], item['end'])
+        elif item['type'] == 'kumascript':
+            kname = item['name'].lower()
+            # See https://developer.mozilla.org/en-US/docs/Template:<name>
+            if kname == 'compatversionunknown':
+                version_found = ''
+            elif kname == 'compatunknown':
+                # Could use support = unknown, but don't bother
+                pass
+            elif kname == 'compatno':
+                version_found = ''
+                data['support']['support'] = 'no'
+            elif kname == 'property_prefix':
+                data['support']['prefix'] = self.unquote(item['args'][0])
+            elif kname == 'compatgeckodesktop':
+                gversion = self.unquote(item['args'][0])
+                version_found = self.geckodesktop_to_firefox.get(gversion)
+                if not version_found:
                     try:
                         nversion = float(gversion)
                     except ValueError:
-                        nversion = -1
-                    if (nversion >= 0 and nversion < 19 and
-                       oversion in ('', '1.0')):
-                        version_found = '1.0'
-                    elif (nversion >= 0 and nversion < 21 and
-                          oversion == '1.0.1'):
-                        version_found = '1.0.1'
-                    elif (nversion >= 0 and nversion < 24 and
-                          oversion in ('1.1', '1.1.0', '1.1.1')):
-                        version_found = '1.1'
-                    elif (nversion >= 19 and nversion < 27 and
-                          oversion in ('', '1.2')):
-                        version_found = '1.2'
-                    elif (nversion >= 27 and nversion < 29 and
-                          oversion in ('', '1.3')):
-                        version_found = '1.3'
-                    elif (nversion >= 29 and nversion < 31 and
-                          oversion in ('', '1.4')):
-                        version_found = '1.4'
-                    elif (nversion >= 31 and nversion < 33 and
-                          oversion in ('', '2.0')):
-                        version_found = '2.0'
-                    elif (nversion >= 33 and nversion < 35 and
-                          oversion in ('', '2.1')):
-                        version_found = '2.1'
-                    elif (nversion >= 35 and nversion < 38 and
-                          oversion in ('', '2.2')):
-                        version_found = '2.2'
-                    elif nversion < 0 or nversion >= 38:
-                        self.issues.append((
-                            'compatgeckofxos_unknown',
-                            item['start'], item['end'], {'version': gversion}))
+                        nversion = 0
+                    if nversion >= 5:
+                        version_found = text_type(nversion)
                     else:
+                        version_found = None
                         self.issues.append((
-                            'compatgeckofxos_override',
+                            'compatgeckodesktop_unknown',
                             item['start'], item['end'],
-                            {'override': oversion, 'version': gversion}))
-                elif kname == 'compatgeckomobile':
-                    gversion = self.unquote(item['args'][0])
-                    version_found = gversion.split('.', 1)[0]
-                    if version_found == '2':
-                        version_found = '4'
-                elif kname in kumascript_compat_versions:
-                    version_found = self.unquote(item['args'][0])
-                else:
-                    self.issues.append(self.kumascript_issue(
-                        'unknown_kumascript', item, 'compatibility cell'))
-            elif item['type'] == 'p':
-                p_depth += 1
-                if p_depth > 1:
+                            {'version': gversion}))
+            elif kname == 'compatgeckofxos':
+                gversion = self.unquote(item['args'][0])
+                try:
+                    oversion = self.unquote(item['args'][1])
+                except IndexError:
+                    oversion = ''
+                try:
+                    nversion = float(gversion)
+                except ValueError:
+                    nversion = -1
+                if (nversion >= 0 and nversion < 19 and
+                        oversion in ('', '1.0')):
+                    version_found = '1.0'
+                elif (nversion >= 0 and nversion < 21 and
+                        oversion == '1.0.1'):
+                    version_found = '1.0.1'
+                elif (nversion >= 0 and nversion < 24 and
+                        oversion in ('1.1', '1.1.0', '1.1.1')):
+                    version_found = '1.1'
+                elif (nversion >= 19 and nversion < 27 and
+                        oversion in ('', '1.2')):
+                    version_found = '1.2'
+                elif (nversion >= 27 and nversion < 29 and
+                        oversion in ('', '1.3')):
+                    version_found = '1.3'
+                elif (nversion >= 29 and nversion < 31 and
+                        oversion in ('', '1.4')):
+                    version_found = '1.4'
+                elif (nversion >= 31 and nversion < 33 and
+                        oversion in ('', '2.0')):
+                    version_found = '2.0'
+                elif (nversion >= 33 and nversion < 35 and
+                        oversion in ('', '2.1')):
+                    version_found = '2.1'
+                elif (nversion >= 35 and nversion < 38 and
+                        oversion in ('', '2.2')):
+                    version_found = '2.2'
+                elif nversion < 0 or nversion >= 38:
                     self.issues.append((
-                        'nested_p', item['start'], item['end'], {}))
-            elif item['type'] == 'p_close' and p_depth > 1:
-                # No support for nested <p> tags
-                p_depth -= 1
-                version = {}
-                support = {}
-            elif item['type'] == 'break' or (
-                    item['type'] == 'p_close' and p_depth == 1):
-                # Multi-support cell?
-                if version.get('id') and support.get('id'):
-                    # We have a complete version and support
-                    versions.append(version)
-                    supports.append(support)
-                    version = {'browser': browser['id']}
-                    support = {}
+                        'compatgeckofxos_unknown',
+                        item['start'], item['end'], {'version': gversion}))
                 else:
-                    # We don't have a complete version and support
-                    assert not version.get('id')
-                    assert not support.get('id')
-                if item['type'] == 'p_close':
-                    p_depth = 0
-            elif item['type'] == 'removed':
-                support['support'] = 'no'
-            elif item['type'] == 'text':
-                if item['content']:
                     self.issues.append((
-                        'inline_text', item['start'], item['end'],
-                        {'text': item['content']}))
-            elif item['type'] == 'code':
-                self.issues.append((
-                    'inline_text', item['start'], item['end'],
-                    {'text': '<code>{}</code>'.format(item['content'])}))
+                        'compatgeckofxos_override',
+                        item['start'], item['end'],
+                        {'override': oversion, 'version': gversion}))
+            elif kname == 'compatgeckomobile':
+                gversion = self.unquote(item['args'][0])
+                version_found = gversion.split('.', 1)[0]
+                if version_found == '2':
+                    version_found = '4'
+            elif kname in kumascript_compat_versions:
+                version_found = self.unquote(item['args'][0])
             else:
-                raise ValueError("Unknown item", item)
-
-            # Attempt to find the version in the existing verisons
-            if version_found is not None:
-                version_id, version_name = self.version_id_and_name(
-                    version_found, browser)
-                new_version = is_fake_id(version_id)
-                new_browser = is_fake_id(browser['id'])
-                if new_version and not new_browser:
-                    self.issues.append((
-                        'unknown_version', item['start'], item['end'],
-                        {'browser_id': browser['id'],
-                         'browser_name': browser['name'],
-                         'version': version_found,
-                         'browser_slug': browser.get('slug', '<not loaded>')}))
-                version['id'] = version_id
-                version['version'] = version_name
-                support_id = self.support_id(version_id, feature['id'])
-                support['id'] = support_id
-                support.setdefault('support', 'yes')
-                support['version'] = version_id
-                support['feature'] = feature['id']
-
-            # Footnote + prefix => support=partial
-            if (support.get('support') == 'yes' and
-                    support.get('prefix') and support.get('footnote_id')):
-                support['support'] = 'partial'
-
-        if version.get('id') and support.get('id'):
-            versions.append(version)
-            supports.append(support)
+                self.issues.append(self.kumascript_issue(
+                    'unknown_kumascript', item, 'compatibility cell'))
+        elif item['type'] == 'p' and 'p' in depth:
+            self.issues.append(
+                ('nested_p', item['start'], item['end'], {}))
+        elif item['type'] in ('break', 'p'):
+            if item['type'] == 'p':
+                new_depth = depth + ['p']
+                self.cell_to_support_inner(item['content'], data, new_depth)
+            # Multi-support cell?
+            if data['version'].get('id') and data['support'].get('id'):
+                # We have a complete version and support
+                data['versions'].append(data['version'])
+                data['supports'].append(data['support'])
+                data['version'] = {'browser': data['browser']['id']}
+                data['support'] = {}
+            else:
+                # We don't have a complete version and support
+                assert not data['version'].get('id')
+                assert not data['support'].get('id')
+        elif item['type'] == 'removed':
+            data['support']['support'] = 'no'
+        elif item['type'] in ('text', 'code'):
+            out = self.item_to_html(item, 'support')
+            if out:
+                self.issues.append((
+                    'inline_text', item['start'], item['end'], {'text': out}))
+        elif 'content' in item:
+            if isinstance(item['content'], dict):
+                subdepth = depth + [item['type']]
+                self.cell_to_support_inner(item['content'], data, subdepth)
+            else:
+                assert isinstance(item['content'], list), item
+                subdepth = depth + [item['type']]
+                for subitem in item['content']:
+                    self.cell_to_support_inner(subitem, data, subdepth)
         else:
-            assert not version.get('id')
-            assert not support.get('id')
-            if versions and supports:
-                versions[-1].update(version)
-                supports[-1].update(support)
-        return versions, supports
+            raise ValueError("Unknown item", item)
+
+        # Attempt to find the version in the existing verisons
+        if version_found is not None:
+            version_id, version_name = self.version_id_and_name(
+                version_found, data['browser'])
+            new_version = is_fake_id(version_id)
+            new_browser = is_fake_id(data['browser']['id'])
+            if new_version and not new_browser:
+                self.issues.append((
+                    'unknown_version', item['start'], item['end'],
+                    {'browser_id': data['browser']['id'],
+                        'browser_name': data['browser']['name'],
+                        'version': version_found,
+                        'browser_slug': data['browser'].get(
+                            'slug', '<not loaded>')}))
+            data['version']['id'] = version_id
+            data['version']['version'] = version_name
+            support_id = self.support_id(version_id, data['feature']['id'])
+            data['support']['id'] = support_id
+            data['support'].setdefault('support', 'yes')
+            data['support']['version'] = version_id
+            data['support']['feature'] = data['feature']['id']
+
+        # Footnote + prefix => support=partial
+        if (data['support'].get('support') == 'yes' and
+                data['support'].get('prefix') and
+                data['support'].get('footnote_id')):
+            data['support']['support'] = 'partial'
 
 
 def scrape_page(mdn_page, feature, locale='en'):
