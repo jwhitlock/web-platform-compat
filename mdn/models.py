@@ -228,7 +228,7 @@ class FeaturePage(models.Model):
                 issues = raw.get('issues', [])
             for issue in issues:
                 slug = issue[0]
-                severity = ISSUES[slug][0]
+                severity = ISSUES.get(slug, UNKNOWN_ISSUE)[0]
                 self._issue_counts[severity] += 1
         return self._issue_counts
 
@@ -466,6 +466,9 @@ ISSUES = {
         ' be added to the API.'),
 }
 
+UNKNOWN_ISSUE = (
+    CRITICAL, 'Unknown Issue', "This issue slug doesn't have a description.")
+
 
 @python_2_unicode_compatible
 class Issue(models.Model):
@@ -494,15 +497,15 @@ class Issue(models.Model):
 
     @property
     def severity(self):
-        return ISSUES[self.slug][0]
+        return ISSUES.get(self.slug, UNKNOWN_ISSUE)[0]
 
     @property
     def brief_description(self):
-        return ISSUES[self.slug][1].format(**self.params)
+        return ISSUES.get(self.slug, UNKNOWN_ISSUE)[1].format(**self.params)
 
     @property
     def long_description(self):
-        return ISSUES[self.slug][2].format(**self.params)
+        return ISSUES.get(self.slug, UNKNOWN_ISSUE)[2].format(**self.params)
 
     @property
     def context(self):
