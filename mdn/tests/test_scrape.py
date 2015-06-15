@@ -303,31 +303,19 @@ class ScrapeTestCase(TestCase):
 </table>
 """ % sample_spec_row
 
-    sample_page = """\
-<div>{{CSSREF}}</div>
-<h2 id="Summary">Summary</h2>
-<p>This represents all the other page content</p>
-<p>{{cssbox("background-size")}}</p>
-%s
+    sample_compat_section = """\
 <h2 id="Browser_compatibility">Browser compatibility</h2>
 <div>{{CompatibilityTable}}</div>
 <div id="compat-desktop">
  <table class="compat-table">
   <tbody>
-   <tr>
-     <th>Feature</th><th>Chrome</th>
-     <th>Firefox (Gecko)</th></tr>
-   <tr>
-     <td>Basic support</td><td>1.0</td>
-     <td>{{CompatGeckoDesktop("1")}}</td>
-   </tr>
+   <tr><th>Feature</th><th>Firefox (Gecko)</th></tr>
+   <tr><td>Basic support</td><td>{{CompatGeckoDesktop("1")}}</td></tr>
   </tbody>
  </table>
 </div>
-<h2 id="See_also">See also</h2>
-<ul>
- <li>{{CSS_Reference:Position}}</li>
-</ul>""" % sample_spec_section
+"""
+
     _instance_specs = {
         (Maturity, 'CR'): {'name': '{"en": "Candidate Recommendation"}'},
         (Maturity, 'WD'): {'name': '{"en": "Working Draft"}'},
@@ -761,18 +749,7 @@ class TestPageVisitor(ScrapeTestCase):
         self.assertEqual(issues, self.visitor.issues)
 
     def test_compat_section_minimal(self):
-        compat_section = """\
-<h2 id="Browser_compatibility">Browser compatibility</h2>
-<div>{{CompatibilityTable}}</div>
-<div id="compat-desktop">
- <table class="compat-table">
-  <tbody>
-   <tr><th>Feature</th><th>Firefox (Gecko)</th></tr>
-   <tr><td>Basic support</td><td>{{CompatGeckoDesktop("1")}}</td></tr>
-  </tbody>
- </table>
-</div>
-"""
+        compat_section = self.sample_compat_section
         expected_compat = [{
             'name': u'desktop',
             'browsers': [{
@@ -2024,13 +2001,13 @@ class TestScrape(ScrapeTestCase):
         page = ""
         self.assertScrape(page, [], [])
 
-    def test_incomplete_parse_error(self):
-        page = "<h2>Incomplete</h2><p>Incomplete</p>"
-        self.assertScrape(page, [], [('halt_import', 0, 36, {})])
-
     def test_not_compat_page(self):
         page = "<h3>I'm not a compat page</h3>"
-        self.assertScrape(page, [], [('doc_parse_error', 0, 30, {})])
+        self.assertScrape(page, [], [])
+
+    def test_incomplete_parse_error(self):
+        page = "<h2>Specifications</h2><p>Incomplete</p>"
+        self.assertScrape(page, [], [('halt_import', 0, 40, {})])
 
     def test_spec_only(self):
         """Test with a only a Specification section."""
@@ -2045,6 +2022,11 @@ class TestScrape(ScrapeTestCase):
             'section.id': None,
         }]
         self.assertScrape(page, specs, [])
+
+    def test_doc_parse_error(self):
+        # https://developer.mozilla.org/en-US/docs/Navigation_timing
+        page = self.sample_compat_section.replace('h2', 'h3')
+        self.assertScrape(page, [], [('doc_parse_error', 0, 57, {})])
 
 
 class FeaturePageTestCase(ScrapeTestCase):

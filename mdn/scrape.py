@@ -1745,7 +1745,12 @@ def scrape_page(mdn_page, feature, locale='en'):
         ('footnotes', None),
         ('issues', []),
     ))
-    if not mdn_page.strip():
+
+    # Quick check for data in page
+    if not (
+            ('Browser compatibility</h' in mdn_page) or
+            ('Specifications</h' in mdn_page) or
+            ('CompatibilityTable' in mdn_page)):
         return data
 
     try:
