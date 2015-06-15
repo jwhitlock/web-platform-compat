@@ -13,6 +13,8 @@ from django.views.generic.edit import CreateView, FormMixin, UpdateView
 from .models import FeaturePage, Issue, ISSUES, SEVERITIES, validate_mdn_url
 from .tasks import start_crawl, parse_page
 
+DEV_PREFIX = 'https://developer.mozilla.org/en-US/docs/'
+
 
 def can_create(user):
     return user.has_perm('mdn.add_featurepage')
@@ -28,11 +30,29 @@ class FeaturePageListView(ListView):
     paginate_by = 50
 
     def get_queryset(self):
-        return FeaturePage.objects.order_by('feature_id')
+        qs = FeaturePage.objects.order_by('url')
+        topic = self.request.GET.get('topic')
+        if topic:
+            qs = qs.filter(url__startswith=DEV_PREFIX + topic)
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super(FeaturePageListView, self).get_context_data(**kwargs)
         ctx['request'] = self.request
+        ctx['topic'] = self.request.GET.get('topic')
+        ctx['topics'] = sorted((
+            'Web/API',
+            'Web/Accessibility',
+            'Web/CSS',
+            'Web/Events',
+            'Web/Guide',
+            'Web/HTML',
+            'Web/JavaScript',
+            'Web/MathML',
+            'Web/SVG',
+            'Web/XPath',
+            'Web/XSLT',
+        ))
         return ctx
 
 
@@ -78,8 +98,7 @@ class FeaturePageJSONView(BaseDetailView):
 class SearchForm(forms.Form):
     url = forms.URLField(
         label='MDN URL',
-        widget=forms.URLInput(attrs={
-            'placeholder': "https://developer.mozilla.org/en-US/docs/..."}))
+        widget=forms.URLInput(attrs={'placeholder': DEV_PREFIX + '...'}))
 
     def clean_url(self):
         data = self.cleaned_data['url']
@@ -116,9 +135,29 @@ class FeaturePageSearch(TemplateResponseMixin, View, FormMixin):
 
     def form_valid(self, form):
         url = form.cleaned_data['url']
+        next_url = None
+
+        # Try loading a specific page
         try:
             fp = FeaturePage.objects.get(url=url)
         except FeaturePage.DoesNotExist:
+            pass
+        else:
+            next_url = reverse('feature_page_detail', kwargs={'pk': fp.pk})
+
+        # Try filtering by a subset of pages
+        if (not next_url) and (url.startswith(DEV_PREFIX)):
+            suburl = url
+            while suburl.endswith('/'):
+                suburl = suburl[:-1]
+            fp_start = FeaturePage.objects.filter(url__startswith=suburl)
+            if fp_start.exists():
+                topic = suburl.replace(DEV_PREFIX, '', 1)
+                next_url = reverse('feature_page_list')
+                next_url += '?topic={}'.format(topic)
+
+        # Page does not exist
+        if not next_url:
             msg = 'URL "%s" has not been scraped.' % url
             if can_create(self.request.user):
                 msg += ' Scrape it?'
@@ -127,8 +166,7 @@ class FeaturePageSearch(TemplateResponseMixin, View, FormMixin):
             else:
                 messages.add_message(self.request, messages.INFO, msg)
                 next_url = reverse('feature_page_list')
-        else:
-            next_url = reverse('feature_page_detail', kwargs={'pk': fp.pk})
+
         return HttpResponseRedirect(next_url)
 
 

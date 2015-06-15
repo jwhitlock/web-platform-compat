@@ -16,25 +16,54 @@
     <input type="url" class="form-control" id="id-url" name="url"
      placeholder="https://developer.mozilla.org/en-US/docs/...">
   </div>
-  <input id="fp-search" class="btn btn-primary" type="submit" value="Search by URL">
+  <input id="fp-search" class="btn btn-primary" type="submit"
+   value="Search or Filter by URL">
 </form>
+
+<h3>Filter by Topic </h3>
+<div>
+{% for topic_name in topics %}
+{% if topic == topic_name %}
+<a class="btn btn-primary"
+   href="{{url('feature_page_list')}}">
+  {{topic_name}} (clear)
+</a>
+{% else %}
+<a class="btn btn-default"
+   href="{{url('feature_page_list') + '?topic=' + topic_name}}">
+  {{topic_name}}
+</a>
+{% endif %}
+{% endfor %}
+{% if topic and topic not in topics %}
+<a class="btn btn-primary">{{topic}} (clear)</a>
+{% endif %}
+</div>
+
 {% if page_obj %}
+<h3>
+    Import Results
+    ({{page_obj.paginator.count}}
+    import{% if page_obj.paginator.count > 1 %}s{% endif %})
+</h3>
 {{ pagination_control(page_obj, url('feature_page_list')) }}
 <table class="table table-condensed">
   <thead>
     <tr>
-      <th>#</th>
-      <th>Feature ID</th>
       <th>MDN Slug</th>
       <th>Status</th>
-      <th>Warnings /<br/>Errors /<br/>Critical Errors</th>
+      <th>
+        <span id="issue-header"
+              data-toggle="tooltip" data-placement="top"
+              title="Warnings / Errors / Critical Errors">
+          Issues
+        </span>
+      </th>
     </tr>
   </thead>
   <tbody>
     {% for page in page_obj.object_list %}
     <tr>
-      <td><a href="{{ url('feature_page_detail', pk=page.id) }}">{{page.id}}</a></td>
-      <td>{{page.feature_id}}</td>
       <td>{{page.slug()}}</td>
       <td><a href="{{ url('feature_page_detail', pk=page.id) }}">{{page.get_status_display()}}</a></td>
       <td>
@@ -68,3 +97,11 @@
 {% endif %}
 
 {% endblock content %}
+
+{% block block_js_extra %}
+<script>
+$(function () {
+  $('#issue-header').tooltip()
+})
+</script>
+{% endblock %}

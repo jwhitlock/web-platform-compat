@@ -16,6 +16,11 @@ class TestFeaturePageListView(TestCase):
     def setUp(self):
         self.url = reverse('feature_page_list')
 
+    def add_page(self):
+        return FeaturePage.objects.create(
+            url="https://developer.mozilla.org/en-US/docs/Web/CSS/display",
+            feature_id=1)
+
     def test_empty_list(self):
         response = self.client.get(self.url)
         self.assertEqual(200, response.status_code)
@@ -23,10 +28,21 @@ class TestFeaturePageListView(TestCase):
         self.assertEqual(0, len(pages.object_list))
 
     def test_populated_list(self):
-        feature_page = FeaturePage.objects.create(
-            url="https://developer.mozilla.org/en-US/docs/Web/CSS/display",
-            feature_id=1)
+        feature_page = self.add_page()
         response = self.client.get(self.url)
+        self.assertEqual(200, response.status_code)
+        pages = response.context_data['page_obj']
+        self.assertEqual(1, len(pages.object_list))
+        obj = pages.object_list[0]
+        self.assertEqual(obj.id, feature_page.id)
+
+    def test_topic_filter(self):
+        feature_page = self.add_page()
+        FeaturePage.objects.create(
+            url="https://developer.mozilla.org/en-US/docs/Other",
+            feature_id=2)
+        url = self.url + "?topic=Web"
+        response = self.client.get(url)
         self.assertEqual(200, response.status_code)
         pages = response.context_data['page_obj']
         self.assertEqual(1, len(pages.object_list))
@@ -117,6 +133,22 @@ class TestFeaturePageSearch(TestCase):
         url = self.mdn_url + "#Browser_Compat"
         response = self.client.get(self.url, {'url': url})
         next_url = reverse('feature_page_detail', kwargs={'pk': fp.id})
+        self.assertRedirects(response, next_url)
+
+    def test_post_found_topic(self):
+        FeaturePage.objects.create(
+            url=self.mdn_url, feature_id=self.feature.id)
+        url = "https://developer.mozilla.org/en-US/docs/Web"
+        response = self.client.get(self.url, {'url': url})
+        next_url = reverse('feature_page_list') + '?topic=Web'
+        self.assertRedirects(response, next_url)
+
+    def test_post_found_topic_trailing_slash(self):
+        FeaturePage.objects.create(
+            url=self.mdn_url, feature_id=self.feature.id)
+        url = "https://developer.mozilla.org/en-US/docs/Web/"
+        response = self.client.get(self.url, {'url': url})
+        next_url = reverse('feature_page_list') + '?topic=Web'
         self.assertRedirects(response, next_url)
 
     def test_not_found_with_perms(self):
