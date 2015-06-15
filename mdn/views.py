@@ -1,4 +1,6 @@
 """Views for MDN migration app."""
+from collections import Counter
+
 from django import forms
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
@@ -237,11 +239,36 @@ class IssuesSummary(TemplateView):
             severity = SEVERITIES[severity_num]
             target = Issue.objects.filter(slug=slug)
             count = target.count()
-            examples = set(target.values_list('page_id', 'page__url')[:10])
-            issues.append((count, slug, severity, brief, examples))
+            raw = target.values_list('page__url', 'page_id')
+            examples = sorted(set(
+                (url.replace(DEV_PREFIX, '', 1), pid) for url, pid in raw))
+            issues.append((count, slug, severity, brief, examples[:5]))
         issues.sort(reverse=True)
         ctx['total_issues'] = Issue.objects.count()
         ctx['issues'] = issues
+        return ctx
+
+
+class IssuesDetail(TemplateView):
+    template_name = "mdn/issues_detail.jinja2"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(IssuesDetail, self).get_context_data(**kwargs)
+        slug = self.kwargs['slug']
+        issues = Issue.objects.filter(slug=slug)
+        if issues.exists():
+            ctx['sample_issue'] = issues.first()
+            ctx['count'] = issues.count()
+            pages = Counter()
+            for url, pid in issues.values_list('page__url', 'page_id'):
+                key = (url.replace(DEV_PREFIX, '', 1), pid)
+                pages[key] += 1
+            ctx['pages'] = pages
+        else:
+            ctx['sample_issue'] = None
+            ctx['count'] = 0
+            ctx['pages'] = {}
+        ctx['slug'] = slug
         return ctx
 
 
@@ -256,3 +283,4 @@ feature_page_reset = user_passes_test(can_refresh)(
 feature_page_reparse = user_passes_test(can_refresh)(
     FeaturePageReParse.as_view())
 issues_summary = IssuesSummary.as_view()
+issues_detail = IssuesDetail.as_view()

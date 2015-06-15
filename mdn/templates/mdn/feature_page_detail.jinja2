@@ -1,4 +1,5 @@
 {% extends "webplatformcompat/base.jinja2" %}
+{% import "mdn/macros.jinja2" as macros %}
 
 {% block head_title %}Parse results for {{object.slug()}}{% endblock %}
 {% block body_title %}Parse results for {{object.slug()}}{% endblock %}
@@ -27,22 +28,9 @@
   <dt>Issues</dt>
     <dd>{% if object.has_issues %}
       <ol>
-        {% for issue in object.issues.order_by("start") %}
-        <li><div>
-            <p>
-                <strong>{{issue.get_severity_display()}}: {{issue.brief_description}}</strong><br/>
-                {{issue.long_description}}<br>
-                <a href="https://wiki.mozilla.org/MDN/Development/CompatibilityTables/Importer#{{issue.slug}}">More information about issue "{{issue.slug}}"</a>
-            </p>
-            {% if issue.params.get('rule') %}
-            <p><em>Parser rule:</em></p>
-            <p><code>{{ issue.params['rule'] }}</code></p>
-            {% endif %}
-            {% if issue.content %}
-            <p><em>Context:</em><pre>{{ issue.context }}</pre></p>
-            {% endif %}
-        </div></li>
-        {% endfor %}
+        {% for issue in object.issues.order_by("start") -%}
+        <li>{{ macros.issue_div(issue) }}</li>
+        {% endfor -%}
       </ol>{% else %}
       <em>None detected</em>
       {% endif %}

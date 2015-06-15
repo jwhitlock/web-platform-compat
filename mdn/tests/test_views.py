@@ -7,7 +7,7 @@ import mock
 from django.contrib.auth.models import Group
 from django.core.urlresolvers import reverse
 
-from mdn.models import FeaturePage
+from mdn.models import FeaturePage, Issue
 from webplatformcompat.models import Feature
 from webplatformcompat.tests.base import TestCase
 
@@ -211,6 +211,29 @@ class TestFeaturePageResetView(TestCase):
         mocked_crawl.assertCalledOnce(self.fp.pk)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_STARTING, fp.status)
+
+
+class TestIssuesDetail(TestCase):
+    def setUp(self):
+        self.feature = self.create(Feature, slug='web-css-float')
+        self.fp = FeaturePage.objects.create(
+            url="https://developer.mozilla.org/en-US/docs/Web/CSS/float",
+            feature_id=self.feature.id, data='{"foo": "bar"}',
+            status=FeaturePage.STATUS_PARSED)
+        self.issue = Issue.objects.create(
+            page=self.fp, slug="inline-text", start=10, end=20)
+
+    def test_get_with_issues(self):
+        url = reverse('issues_detail', kwargs={'slug': 'inline-text'})
+        response = self.client.get(url)
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(1, response.context_data['count'])
+
+    def test_get_without_issues(self):
+        url = reverse('issues_detail', kwargs={'slug': 'other'})
+        response = self.client.get(url)
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(0, response.context_data['count'])
 
 
 class TestIssuesSummary(TestCase):
