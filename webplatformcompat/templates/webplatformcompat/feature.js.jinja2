@@ -114,12 +114,17 @@ function load_tables(resources, lang) {
 
 function load_json(uri) {
     $.getJSON(uri).done(function( data ) {
-        var resources, json_dump, title;
+        var resources, json_dump, title, name;
         json_dump = $("<pre>").text(JSON.stringify(data, null, "  "));
         $("#wpc_data").html(json_dump);
         window.resources = resources = WPC.parse_resources(data);
 
-        title = "Sample View for Feature '" + resources.data.name.en + "'";
+        name = WPC.trans_str(resources.data.name, 'en');
+        if (name.indexOf("<code>") === 0) {
+            title = "Sample View for Feature " + name;
+        } else {
+            title = "Sample View for Feature '" + name + "'";
+        }
         document.title = title;
         $("#body_title").html(title);
 
