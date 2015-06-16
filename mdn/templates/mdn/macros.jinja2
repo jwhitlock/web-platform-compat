@@ -1,0 +1,20 @@
+{% macro issue_div(issue) -%}
+<div>
+  <p>
+    <strong>{{issue.get_severity_display()}}: {{issue.brief_description}}</strong>
+    <br>
+    {{issue.long_description}}
+    <br>
+    <a href="https://wiki.mozilla.org/MDN/Development/CompatibilityTables/Importer#{{issue.slug}}">
+      More information about issue "{{issue.slug}}"
+    </a>
+  </p>
+{% if issue.params.get('rule') %}
+  <p><em>Parser rule:</em></p>
+  <p><code>{{ issue.params['rule'] }}</code></p>
+{% endif %}
+{% if issue.content %}
+  <p><em>Context:</em><pre>{{ issue.context }}</pre></p>
+{% endif %}
+</div>
+{%- endmacro %}

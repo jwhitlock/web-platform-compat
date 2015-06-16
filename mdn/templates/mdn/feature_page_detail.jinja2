@@ -1,4 +1,5 @@
 {% extends "webplatformcompat/base.jinja2" %}
+{% import "mdn/macros.jinja2" as macros %}
 
 {% block head_title %}Parse results for {{object.slug()}}{% endblock %}
 {% block body_title %}Parse results for {{object.slug()}}{% endblock %}
@@ -26,13 +27,11 @@
     <dd>{{ object.same_since() }}</dd>
   <dt>Issues</dt>
     <dd>{% if object.has_issues %}
-      <ul>
-        {% for error in object.data['meta']['scrape']['errors'] %}
-        <li>{{ error | safe }}</li>
-        {% else %}
-        <li><em><code>.has_errors</code> is set, but no errors recorded</em></li>
-        {% endfor %}
-      </ul>{% else %}
+      <ol>
+        {% for issue in object.issues.order_by("start") -%}
+        <li>{{ macros.issue_div(issue) }}</li>
+        {% endfor -%}
+      </ol>{% else %}
       <em>None detected</em>
       {% endif %}
     </dd>
@@ -43,7 +42,7 @@
 <form action="{{url('feature_page_reset', pk=object.pk)}}" method="post">
 {{ csrf() }}
 <input id="submit-reset" class="btn btn-primary" type="submit" value="Reset">
-<label for="submit-reset">Download MDN pages and reparse</label>
+<label for="submit-reset">Download MDN page and reparse</label>
 </form>
 <br/>
 {% endif %}
@@ -51,13 +50,13 @@
 <form id="form-reparse" action="{{url('feature_page_reparse', pk=object.pk)}}" method="post">
 {{ csrf() }}
 <input id="submit-reparse" class="btn btn-primary" type="submit" value="Reparse">
-<label for="submit-reparse">Re-parse the cached MDN pages</label>
+<label for="submit-reparse">Re-parse the cached MDN page</label>
 </form>
 <br/>
 {% endif %}
-{% if can_commit_mdn_import(request.user) %}
-<form id="form-commit" class="hide"
- action="{{url('viewfeatures-detail', pk=object.feature_id)}}" method="put">
+{% if can_commit_mdn_import(request.user) and object.errors == 0 and object.critical == 0 %}
+<form id="form-commit" method="put"
+ action="{{url('viewfeatures-detail', pk=object.feature_id)}}">
 {{ csrf() }}
 <input id="submit-commit" class="btn btn-primary" type="submit" value="Commit">
 <label for="submit-commit">Commit data to the API</label>
@@ -70,7 +69,7 @@
 {% endif %}
 </div>
 
-{% if object.status == object.STATUS_PARSED %}
+{% if object.status in (object.STATUS_PARSED, object.STATUS_NO_DATA) %}
 <h1>Sample Presentation of {{object.slug()}}</h1>
 <h2>Specifications</h2>
 <div id="wpc_specifications">
@@ -98,7 +97,7 @@
   <a href="{{url('feature_page_json', pk=object.pk)}}">raw JSON-API data</a>
   resembles that returned from
   <code>
-    <a id="wpc_uri" href="/api/v1/view_features/{{feature_id}}">
+    <a id="wpc_uri" href="/api/v1/view_features/{{object.feature.id}}">
       /api/v1/view_features/{{object.feature.id}}
     </a>
   </code>
@@ -151,7 +150,7 @@ function load_tables(resources, lang) {
         mdn_uri = "https://developer.mozilla.org/";
     }
     $("#mdn_link").attr("href", mdn_uri);
-    $("#mdn_link").text(mdn_uri);
+    $("#mdn_link").text(decodeURIComponent(mdn_uri));
     $("#mdn_link_spec").attr("href", mdn_uri + "#Specifications")
     $("#mdn_link_compat").attr("href", mdn_uri + "#Browser_compatibility")
 
@@ -208,9 +207,7 @@ function load_json(data) {
     $("#wpc_data").html(json_dump);
     window.resources = resources = WPC.parse_resources(data);
     load_tables(window.resources, "en");
-    if (data.meta.scrape.errors.length === 0) {
-        $("#form-commit").removeClass('hide').on('submit', commit_json);
-    }
+    $("#form-commit").on('submit', commit_json);
 };
 
 data = {{ object.raw_data | default('null', True) | safe }};

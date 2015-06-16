@@ -1,0 +1,46 @@
+{% extends "webplatformcompat/base.jinja2" %}
+{% import "mdn/macros.jinja2" as macros %}
+
+{% macro title() -%}
+    MDN Importer issue <code>{{slug}}</code>
+    {% if count %}
+    {% endif %}
+{%- endmacro %}
+
+{% block head_title %}{{title()}}{% endblock %}
+{% block body_title %}{{title()}}{% endblock %}
+
+{% block quick_nav %}
+<p><em>back to
+    <a href="{{ url('issues_summary') }}">issues summary</a>, or the
+    <a href="{{ url('feature_page_list') }}">list of imported pages</a></em></p>
+{% endblock %}
+
+{% block content %}
+{% if count %}
+<p>
+    There are
+    {{count}} count{% if count != 1%}s{% endif %} of this issue
+    on {{pages | length}} page{% if pages | length > 1 %}s{% endif %}.
+<p>
+<h3>Sample</h3>
+<p>
+    Here's a sample from the import of
+    <a href="{{url('feature_page_detail', pk=sample_issue.page_id)}}">
+      {{sample_issue.page.slug()}}</a>:
+</p>
+<p>{{ macros.issue_div(sample_issue) }}</p>
+<h3>Imports with this issue</h3>
+<p>Here's the full list of imports where this issue was found:<p>
+<ul>
+{% for key, page_count in pages | dictsort -%}
+<li>
+    {{page_count}} in
+    <a href="{{url('feature_page_detail', pk=key[1])}}">{{key[0]}}</a>
+</li>
+{%- endfor %}
+</ul>
+{% else %}
+<p>There are no pages with this issue.</p>
+{% endif %}
+{% endblock content %}

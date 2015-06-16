@@ -391,6 +391,13 @@ Browse.Properties = {
                 i,
                 keyLen;
             if (!property) { return []; }
+            if (typeof property === 'string') {
+                outArray.push({
+                    'lang': 'canonical',
+                    'value': '<code>' + property + '</code>'
+                });
+                return outArray;
+            }
             for (key in property) {
                 if (property.hasOwnProperty(key)) {
                     if (key === 'en') {
@@ -419,6 +426,10 @@ Browse.Properties = {
                 i,
                 val;
             if (arrayLen === 0) { return '<em>none</em>'; }
+            if (arrayLen === 1 && array[0].lang === 'canonical') {
+                ul = array[0].value;
+                return ul;
+            }
             for (i = 0; i < arrayLen; i += 1) {
                 item = array[i];
                 val = item.value;

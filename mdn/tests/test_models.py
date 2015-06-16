@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.utils.six import text_type
 
 from mdn.models import (
-    validate_mdn_url, FeaturePage, PageMeta, TranslatedContent)
+    validate_mdn_url, FeaturePage, Issue, PageMeta, TranslatedContent)
 from webplatformcompat.models import Feature
 from webplatformcompat.tests.base import TestCase
 
@@ -46,9 +46,11 @@ class TestFeaturePageModel(TestCase):
         self.metadata = {
             "locale": "en-US",
             "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/float",
+            "title": "<float>",
             "translations": [{
                 "locale": "de",
                 "url": "https://developer.mozilla.org/de/docs/Web/CSS/float",
+                "title": "<float>",
             }],
         }
 
@@ -86,10 +88,10 @@ class TestFeaturePageModel(TestCase):
             page=self.fp, path='/foo/path', status=PageMeta.STATUS_FETCHED,
             raw=dumps(self.metadata))
         TranslatedContent.objects.create(
-            page=self.fp, locale='en', path='/foo/en/path',
+            page=self.fp, locale='en', path='/foo/en/path', title='title',
             status=PageMeta.STATUS_FETCHED, raw="Black, White, Yellow, Red")
         TranslatedContent.objects.create(
-            page=self.fp, locale='de', path='/foo/de/path',
+            page=self.fp, locale='de', path='/foo/de/path', title='title',
             status=PageMeta.STATUS_ERROR, raw="Schwarz, Weiß, Gelb, Rot")
 
     def test_reset(self):
@@ -112,9 +114,25 @@ class TestFeaturePageModel(TestCase):
         t_de = TranslatedContent.objects.get(page=self.fp, locale='de')
         self.assertEqual(t_de.status, PageMeta.STATUS_STARTING)
 
-    def test_get_data_existing(self):
-        self.fp.raw_data = '{"foo": "bar"}'
-        self.assertEqual({"foo": "bar"}, self.fp.data)
+    def test_get_data_canonical(self):
+        self.fp.feature.name = {'zxx': 'canonical'}
+        data = self.fp.data
+        self.assertEqual('canonical', data['features']['name'])
+
+    def test_get_data_with_content_issue(self):
+        self.setup_content()
+        self.fp.issues.create(
+            slug='footnote_no_id', start=3293, end=3301,
+            content=self.fp.translatedcontent_set.get(locale='en'))
+        data = self.fp.data
+        expected = [['footnote_no_id', 3293, 3301, {}, 'en']]
+        self.assertEqual(expected, data['meta']['scrape']['issues'])
+
+    def test_get_data_with_noncontent_issue(self):
+        self.fp.issues.create(slug='failed_download', start=0, end=0)
+        data = self.fp.data
+        expected = [['failed_download', 0, 0, {}, None]]
+        self.assertEqual(expected, data['meta']['scrape']['issues'])
 
     def test_get_data_none(self):
         self.fp.raw_data = None
@@ -128,27 +146,113 @@ class TestFeaturePageModel(TestCase):
             ['features', 'linked', 'meta'],
             list(self.fp.data.keys()))
 
-    def test_add_error(self):
-        error = "This is an error"
-        self.fp.add_error(error)
+    def test_add_issue_no_locale(self):
+        issue = ['exception', 0, 0, {'traceback': 'TRACEBACK'}]
+        self.fp.add_issue(issue)
+        issue_plus = issue + [None]
         self.assertEqual(
-            ['<pre>This is an error</pre>'],
-            self.fp.data['meta']['scrape']['errors'])
+            [issue_plus], self.fp.data['meta']['scrape']['issues'])
 
-    def test_add_error_safe(self):
-        error = "This is an error"
-        self.fp.add_error(error, True)
-        self.assertEqual(
-            ['This is an error'],
-            self.fp.data['meta']['scrape']['errors'])
+    def test_add_duplicate_issue(self):
+        issue = ['exception', 0, 0, {'traceback': 'TRACEBACK'}]
+        self.fp.add_issue(issue)
+        self.assertRaises(ValueError, self.fp.add_issue, issue)
 
-    def test_add_duplicate_error(self):
-        error = "Duplicate error"
-        self.fp.add_error(error)
-        self.fp.add_error(error)
-        self.assertEqual(
-            ['<pre>Duplicate error</pre>'],
-            self.fp.data['meta']['scrape']['errors'])
+    def test_warnings_none(self):
+        self.assertEqual(0, self.fp.warnings)
+
+    def test_warnings_one(self):
+        self.fp.add_issue(('spec_h2_id', 1, 15, {'h2_id': 'other'}))
+        self.assertEqual(1, self.fp.warnings)
+
+    def test_errors_none(self):
+        self.assertEqual(0, self.fp.errors)
+        self.assertEqual(0, self.fp.errors)  # Coverage for issue_counts
+
+    def test_errors_one(self):
+        self.fp.add_issue(('footnote_feature', 100, 115, {}))
+        self.assertEqual(1, self.fp.errors)
+
+    def test_critical_none(self):
+        self.assertEqual(0, self.fp.critical)
+
+    def test_critical_one(self):
+        self.fp.add_issue(('false_start', 0, 0, {}))
+        self.assertEqual(1, self.fp.critical)
+
+
+class TestIssue(TestCase):
+    def setUp(self):
+        self.fp = FeaturePage(
+            url="https://developer.mozilla.org/en-US/docs/Web/CSS/float",
+            feature_id=666, status=FeaturePage.STATUS_PARSED)
+        self.en_content = TranslatedContent(
+            page=self.fp, locale="en-US", path="/en-US/docs/Web/CSS/float")
+        self.de_content = TranslatedContent(
+            page=self.fp, locale="de", path="/de/docs/Web/CSS/float")
+        self.issue = Issue(
+            page=self.fp, slug='bad_json', start=0, end=0,
+            params={'url': 'THE URL', 'content': 'NOT JSON'},
+            content=self.en_content)
+
+    def test_str_no_content(self):
+        self.issue.content = None
+        expected = (
+            'bad_json [0:0] on'
+            ' https://developer.mozilla.org/en-US/docs/Web/CSS/float')
+        self.assertEqual(expected, text_type(self.issue))
+
+    def test_str_content(self):
+        self.issue.content = self.de_content
+        expected = (
+            'bad_json [0:0] on'
+            ' https://developer.mozilla.org/de/docs/Web/CSS/float')
+        self.assertEqual(expected, text_type(self.issue))
+
+    def test_brief_description(self):
+        expected = "Response from THE URL is not JSON"
+        self.assertEqual(expected, self.issue.brief_description)
+
+    def test_long_description(self):
+        expected = "Actual content:\nNOT JSON"
+        self.assertEqual(expected, self.issue.long_description)
+
+    def test_severity(self):
+        self.assertEqual(3, self.issue.severity)
+
+    def test_get_severity_display(self):
+        self.assertEqual('Critical', self.issue.get_severity_display())
+
+    def test_context(self):
+        content = """\
+Here's the error:
+---> ERROR <-----
+Enjoy.
+"""
+        self.en_content.raw = content
+        self.issue.start = content.find('ERROR')
+        self.issue.end = self.issue.start + len('ERROR')
+        expected = """\
+1 Here's the error:
+2 ---> ERROR <-----
+*      ^^^^^       \n\
+3 Enjoy."""
+        self.assertEqual(expected, self.issue.context)
+
+    def test_context_without_content(self):
+        self.issue.content = None
+        self.assertEqual("", self.issue.context)
+
+    def test_context_end_of_page(self):
+        content = "Line1\nLine2"
+        self.en_content.raw = content
+        self.issue.start = content.find('Line2')
+        self.issue.end = self.issue.start + len('Line')
+        expected = """\
+1 Line1
+2 Line2
+* ^^^^ """
+        self.assertEqual(expected, self.issue.context)
 
 
 class TestPageMetaModel(TestCase):
@@ -180,17 +284,22 @@ class TestPageMetaModel(TestCase):
         data = {
             'locale': 'en-US',
             'url': 'https://developer.mozilla.org/en-US/docs/Web/CSS/display',
+            'title': 'display',
             'translations': [{
                 'locale': 'es',
                 'url': 'https://developer.mozilla.org/es/docs/Web/CSS/display',
+                'title': 'display',
             }],
         }
         self.meta.status = self.meta.STATUS_FETCHED
         self.meta.raw = dumps(data)
         expected = [
             ('en-US',
-             'https://developer.mozilla.org/en-US/docs/Web/CSS/display'),
-            ('es', 'https://developer.mozilla.org/es/docs/Web/CSS/display'),
+             'https://developer.mozilla.org/en-US/docs/Web/CSS/display',
+             'display'),
+            ('es',
+             'https://developer.mozilla.org/es/docs/Web/CSS/display',
+             'display'),
         ]
         self.assertEqual(expected, self.meta.locale_paths())
 
@@ -202,8 +311,7 @@ class TestTranslatedContentModel(TestCase):
             feature_id=666,
             status=FeaturePage.STATUS_PARSED)
         self.c = TranslatedContent(
-            page=fp,
-            locale="de",
+            page=fp, locale="de", title='<float>',
             path="/de/docs/Web/CSS/float")
 
     def test_str(self):

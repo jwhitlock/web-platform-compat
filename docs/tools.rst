@@ -100,6 +100,24 @@ tools/run_integration_tests.sh. Usage::
 * ``-q``: Be quieter
 * ``case name``: Run the listed cases, not the full suite of cases
 
+mirror_mdn_features.py
+----------------------
+Create and update API features for MDN pages.  This will create the branch
+features, and then import_mdn.py can be used to generate the leaf features.
+Usage::
+
+    $ tools/mirror_mdn_features.py [--api API] [--data DATA]
+                                   [--user USER] [--password PASSWORD]
+
+* ``--api API`` `(optional)`: Set the base URL of the API
+  (default: ``http://localhost:8000``)
+* ``--user USER``: Set the username to use for requests (default is prompt for
+  username)
+* ``--password PASSWORD``: Set the password to use for requests (default is
+  prompt for username)
+* ``--data DATA``: Set the data folder for caching MDN page JSON
+
+
 run_integration_tests.sh
 ------------------------
 Run a local API server with known data, make requests against it, and look for

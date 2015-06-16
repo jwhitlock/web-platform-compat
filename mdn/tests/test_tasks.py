@@ -69,10 +69,6 @@ class TestStartCrawlTask(TestCase):
 
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_ERROR, fp.status)
-        expected = [
-            '<pre>Failed to download %s: META ERROR</pre>' % meta.url()
-        ]
-        self.assertEqual(expected, fp.data['meta']['scrape']['errors'])
 
 
 class TestFetchMetaTask(TestCase):
@@ -85,15 +81,17 @@ class TestFetchMetaTask(TestCase):
             'mdn.tasks.fetch_all_translations.delay')
         self.mocked_fetch_all = self.patcher_fetch_all.start()
         self.mocked_fetch_all.side_effect = Exception('Not Called')
+
         self.patcher_get = mock.patch('mdn.tasks.requests.get')
         self.mocked_get = self.patcher_get.start()
-        self.mocked_get.return_value = mock.Mock(
-            spec_set=['status_code', 'json', 'text', 'raise_for_status'])
+        self.mocked_get.return_value = mock.Mock(spec_set=[
+            'status_code', 'json', 'text', 'raise_for_status', 'url'])
         self.response = self.mocked_get.return_value
         self.response.status_code = 200
         self.response.json.side_effect = Exception('Not Called')
         self.response.text = ""
         self.response.raise_for_status.side_effect = Exception('Not Called')
+        self.response.url = self.fp.url + "$json"
 
     def tearDown(self):
         self.patcher_fetch_all.stop()
@@ -101,13 +99,11 @@ class TestFetchMetaTask(TestCase):
 
     def test_good_call(self):
         data = {
-            'locale': 'en-US',
+            'locale': 'en-US', 'title': 'display',
             'url': '/en-US/docs/Web/CSS/display',
             'translations': [{
-                'locale': 'es',
-                'url': '/es/docs/Web/CSS/display',
-            }],
-        }
+                'locale': 'es', 'title': 'display',
+                'url': '/es/docs/Web/CSS/display'}]}
         self.response.json.side_effect = None
         self.response.json.return_value = data
         self.mocked_fetch_all.side_effect = None
@@ -115,7 +111,7 @@ class TestFetchMetaTask(TestCase):
         fetch_meta(self.fp.id)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_PAGES, fp.status)
-        self.assertEqual([], fp.data['meta']['scrape']['errors'])
+        self.assertEqual([], fp.data['meta']['scrape']['issues'])
         meta = fp.meta()
         self.assertEqual(meta.STATUS_FETCHED, meta.status)
         self.assertEqual(data, meta.data())
@@ -129,30 +125,40 @@ class TestFetchMetaTask(TestCase):
         self.assertRaises(RuntimeError, fetch_meta, self.fp.id)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_ERROR, fp.status)
-        expected_msg = "Status 404, Content:\nNot Found"
-        expected = [
-            '<pre>Failed to download %s$json: %s</pre>' % (
-                fp.url, expected_msg)]
-        self.assertEqual(expected, fp.data['meta']['scrape']['errors'])
         meta = fp.meta()
+        issues = [[
+            'failed_download', 0, 0,
+            {'url': meta.url(), 'status': 404, 'content': 'Not Found'}, None]]
+        self.assertEqual(issues, fp.data['meta']['scrape']['issues'])
         self.assertEqual(meta.STATUS_ERROR, meta.status)
-        self.assertEqual(expected_msg, meta.raw)
+        self.assertEqual('Status 404, Content:\nNot Found', meta.raw)
 
     def test_not_json(self):
         self.response.json.side_effect = ValueError('Not JSON')
-        self.response.text = "I'm not JSON"
+        text = "I'm not JSON"
+        self.response.text = text
 
         self.assertRaises(ValueError, fetch_meta, self.fp.id)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_ERROR, fp.status)
-        expected_msg = "Response is not JSON:\nI'm not JSON"
-        expected = [
-            '<pre>Failed to download %s$json: %s</pre>' % (
-                fp.url, expected_msg.replace("'", "&#39;"))]
-        self.assertEqual(expected, fp.data['meta']['scrape']['errors'])
+        issues = [[
+            'bad_json', 0, 0,
+            {'url': fp.url + '$json', 'content': text}, None]]
+        self.assertEqual(issues, fp.data['meta']['scrape']['issues'])
         meta = fp.meta()
         self.assertEqual(meta.STATUS_ERROR, meta.status)
-        self.assertEqual(expected_msg, meta.raw)
+        self.assertEqual("Response is not JSON:\n" + text, meta.raw)
+
+    @mock.patch('mdn.tasks.fetch_meta.delay')
+    def test_redirect(self, mocked_delay):
+        self.response.text = '<html>Some page</html>'
+        new_url = self.fp.url + '/'
+        self.response.url = new_url
+        fetch_meta(self.fp.id)
+        fp = FeaturePage.objects.get(id=self.fp.id)
+        self.assertEqual(fp.STATUS_META, fp.status)
+        self.assertEqual(new_url, fp.url)
+        mocked_delay.assertCalledOnce(self.fp.id)
 
 
 class TestFetchAllTranslationsTask(TestCase):
@@ -164,13 +170,11 @@ class TestFetchAllTranslationsTask(TestCase):
         meta = self.fp.meta()
         meta.status = meta.STATUS_FETCHED
         meta.raw = dumps({
-            'locale': 'en-US',
+            'locale': 'en-US', 'title': 'display',
             'url': '/en-US/docs/Web/CSS/display',
             'translations': [{
-                'locale': 'es',
-                'url': '/es/docs/Web/CSS/display',
-            }],
-        })
+                'locale': 'es', 'title': 'display',
+                'url': '/es/docs/Web/CSS/display'}]})
         meta.save()
 
         self.patcher_fetch_trans = mock.patch(
@@ -214,7 +218,7 @@ class TestFetchAllTranslationsTask(TestCase):
         self.assertEqual(fp.STATUS_PARSING, fp.status)
         self.mocked_parse_page.assertCalledOnce(self.fp.id)
 
-    def test_fetch_one_error(self):
+    def test_fetch_one_issue(self):
         t = self.fp.translations()[-1]
         t.status = t.STATUS_ERROR
         t.raw = "Status 500, Content:\nServer Error"
@@ -223,9 +227,6 @@ class TestFetchAllTranslationsTask(TestCase):
         fetch_all_translations(self.fp.id)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_ERROR, fp.status)
-        expected = [
-            "<pre>Failed to download %s: %s</pre>" % (t.url(), t.raw)]
-        self.assertEqual(expected, fp.data['meta']['scrape']['errors'])
 
 
 class TestFetchTranslationTask(TestCase):
@@ -237,13 +238,11 @@ class TestFetchTranslationTask(TestCase):
         meta = self.fp.meta()
         meta.status = meta.STATUS_FETCHED
         meta.raw = dumps({
-            'locale': 'en-US',
+            'locale': 'en-US', 'title': 'display',
             'url': '/en-US/docs/Web/CSS/display',
             'translations': [{
-                'locale': 'es',
-                'url': '/es/docs/Web/CSS/display',
-            }],
-        })
+                'locale': 'es', 'title': 'display',
+                'url': '/es/docs/Web/CSS/display'}]})
         meta.save()
         self.fp.translatedcontent_set.create(locale='en-US')
         self.fp.translatedcontent_set.create(locale='es')
@@ -303,21 +302,22 @@ class TestFetchTranslationTask(TestCase):
 
     def test_not_found(self):
         self.response.status_code = 404
-        self.response.text = 'Not Found'
-        self.response.raise_for_status.side_effect = RuntimeError('Was Called')
+        content = 'Not Found'
+        self.response.text = content
+        self.response.raise_for_status.side_effect = Exception('Not Called')
+        self.mocked_fetch_all.side_effect = None
 
-        self.assertRaises(RuntimeError, fetch_translation, self.fp.id, 'es')
+        fetch_translation(self.fp.id, 'es')
         fp = FeaturePage.objects.get(id=self.fp.id)
-        self.assertEqual(fp.STATUS_ERROR, fp.status)
+        self.assertEqual(fp.STATUS_PAGES, fp.status)
         trans = fp.translatedcontent_set.get(locale='es')
         self.assertEqual(trans.STATUS_ERROR, trans.status)
-        expected_msg = "Status 404, Content:\nNot Found"
-        self.assertEqual(expected_msg, trans.raw)
-        expected = [
-            '<pre>Failed to download %s: %s</pre>' % (
-                trans.url(), expected_msg)
-        ]
-        self.assertEqual(expected, fp.data['meta']['scrape']['errors'])
+        self.assertEqual(content, trans.raw)
+        url = trans.url() + '?raw'
+        issue = [[
+            'failed_download', 0, 0,
+            {'url': url, 'status': 404, 'content': content}, None]]
+        self.assertEqual(issue, fp.data['meta']['scrape']['issues'])
 
 
 class TestParsePageTask(TestCase):
@@ -338,6 +338,6 @@ class TestParsePageTask(TestCase):
         self.assertRaises(ValueError, parse_page, fp.id)
         mock_scrape.assertCalledOnce(fp.id)
         fp = FeaturePage.objects.get(id=fp.id)
-        errors = fp.data['meta']['scrape']['errors']
-        self.assertEqual(1, len(errors))
-        self.assertEqual('<pre>Traceback ', errors[0][:15])
+        issues = fp.data['meta']['scrape']['issues']
+        self.assertEqual(1, len(issues))
+        self.assertEqual('exception', issues[0][0])

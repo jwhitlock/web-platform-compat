@@ -218,55 +218,16 @@ class Client(object):
 
 if __name__ == "__main__":
     from math import log10, trunc
-    import argparse
-    import sys
+    from common import ToolParser
 
-    description = 'Demo client with resource count'
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        '-a', '--api',
-        help='Base URL of the API (default: http://localhost:8000)',
-        default="http://localhost:8000")
-    parser.add_argument(
-        '-v', '--verbose', action="store_true",
-        help='Print extra debug information')
-    parser.add_argument(
-        '-q', '--quiet', action="store_true",
-        help='Only print warnings')
-    parser.add_argument(
-        '--all-data', action="store_true",
-        help='Import all the data, rather than a subset')
+    parser = ToolParser(
+        description='Demo client with resource count', include=['api'],
+        logger=logger)
+
     args = parser.parse_args()
-
-    # Setup logging
-    verbose = args.verbose
-    quiet = args.quiet
-    console = logging.StreamHandler(sys.stderr)
-    formatter = logging.Formatter('%(levelname)s - %(message)s')
-    logger_name = 'tools'
-    fmat = '%(levelname)s - %(message)s'
-    if quiet:
-        level = logging.WARNING
-    elif verbose:
-        level = logging.DEBUG
-        logger_name = ''
-        fmat = '%(name)s - %(levelname)s - %(message)s'
-    else:
-        level = logging.INFO
-    formatter = logging.Formatter(fmat)
-    console.setLevel(level)
-    console.setFormatter(formatter)
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-    logger.addHandler(console)
-
-    # Parse arguments
     api = args.api
-    if api.endswith('/'):
-        api = api[:-1]
     logger.info("Counting resources on %s" % api)
 
-    # Get counts
     client = Client(api)
     resources = [
         'browsers', 'versions', 'features', 'supports', 'specifications',

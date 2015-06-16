@@ -313,8 +313,9 @@ The **features** representation includes:
     - **id** *(server selected)* - Database ID
     - **slug** *(write-once)* - Unique, human-friendly slug
     - **mdn_uri** *(optional, localized)* - The URI of the language-specific
-      MDN page that this feature was first scraped from.  May be used in UX or
-      for debugging import scripts.
+      MDN page that this feature was first scraped from.  If the path contains
+      unicode, it should be percent-encoded as in `RFC 3987`_. May be used in
+      UX or for debugging import scripts.
     - **experimental** - True if a feature is considered experimental, such as
       being non-standard or part of an non-ratified spec.
     - **standardized** - True if a feature is described in a standards-track
@@ -556,5 +557,6 @@ A sample response is:
 .. _non-linguistic: http://www.w3.org/International/questions/qa-no-language#nonlinguistic
 .. _`ISO 8601`: http://en.wikipedia.org/wiki/ISO_8601
 .. _MDN: https://developer.mozilla.org
+.. _RFC 3987: http://tools.ietf.org/html/rfc3987.html#section-3.1
 .. _SpecName: https://developer.mozilla.org/en-US/docs/Template:SpecName
 .. _Spec2: https://developer.mozilla.org/en-US/docs/Template:Spec2

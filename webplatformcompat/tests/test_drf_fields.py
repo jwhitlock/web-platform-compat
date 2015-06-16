@@ -79,6 +79,12 @@ class TestTranslatedTextField(SharedTranslatedTextFieldTests, TestCase):
         self.assertRaises(
             ValidationError, self.ttf.to_internal_value, bad_json)
 
+    def test_to_internal_value_string_true(self):
+        self.assertEqual('false', self.ttf.to_internal_value('false'))
+
+    def test_to_internal_value_list(self):
+        self.assertEqual('["list"]', self.ttf.to_internal_value('["list"]'))
+
 
 class TestCanonTranslatedTextField(SharedTranslatedTextFieldTests, TestCase):
 
@@ -100,6 +106,13 @@ class TestCanonTranslatedTextField(SharedTranslatedTextFieldTests, TestCase):
         bad_json = "{'quotes': 'wrong ones'}"
         expected = {"zxx": "{'quotes': 'wrong ones'}"}
         self.assertEqual(expected, self.ttf.to_internal_value(bad_json))
+
+    def test_to_internal_value_string_true(self):
+        self.assertEqual({'zxx': 'false'}, self.ttf.to_internal_value('false'))
+
+    def test_to_internal_value_list(self):
+        self.assertEqual(
+            {'zxx': '["list"]'}, self.ttf.to_internal_value('["list"]'))
 
 
 class SharedOptionalCharFieldTests(object):

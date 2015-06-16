@@ -104,7 +104,7 @@ class Resource(object):
         self._collection = collection
 
         assert hasattr(self, '_resource_type'), "Must set _resource_type"
-        assert hasattr(self, '_id_data'), "Must set _unique index"
+        assert hasattr(self, '_id_data'), "Must set _id_data"
         assert tuple(sorted(self._id_data)) == tuple(self._id_data), \
             "_id_data must be sorted"
 
@@ -222,7 +222,18 @@ class Resource(object):
         data = OrderedDict()
         for field in self._writeable_property_fields:
             if field in self._data:
-                data[field] = self._data[field]
+                raw_value = self._data[field]
+                if hasattr(raw_value, 'keys') and 'en' in raw_value:
+                    # Sort languages
+                    value = OrderedDict()
+                    value['en'] = raw_value['en']
+                    for lang in sorted(raw_value.keys()):
+                        if lang != 'en':
+                            value[lang] = raw_value[lang]
+                else:
+                    value = raw_value
+
+                data[field] = value
         for field, attr in self._writeable_link_fields.items():
             is_sorted = attr[1] == Resource.SORTED
             if not with_sorted and is_sorted:
@@ -328,13 +339,13 @@ class Section(Resource):
         'history': ('historical_sections', True),
         'history_current': ('historical_sections', False),
     }
-    _id_data = ('number_en', 'specification.mdn_key')
+    _id_data = ('specification.mdn_key', 'subpath_en')
 
     @property
-    def number_en(self):
-        if self.number is None:
+    def subpath_en(self):
+        if self.subpath is None:
             return None
-        return self.number.get('en', None)
+        return self.subpath.get('en', None)
 
 
 class Maturity(Resource):
@@ -450,6 +461,23 @@ class Collection(object):
             self.add(resource)
         done_count = len(self._repository.get(resource_type, []))
         return done_count - original_count
+
+    def load_collection(self, from_collection):
+        """Load data from another collection.
+
+        This is useful for loading an original collection, altering the
+        resources, and then syncing the changes back to the original
+        collection.
+        """
+        assert not self.client, "Don't set client when using load_collection."
+        assert not self._repository, "Can't load with existing resources"
+        for data_id, resource in from_collection.get_all_by_data_id().items():
+            json_api = resource.to_json_api()
+            if resource.id:
+                json_api[resource._resource_type]['id'] = resource.id.id
+            new_resource = type(resource)()
+            new_resource.from_json_api(json_api)
+            self.add(new_resource)
 
     def override_ids_to_match(self, sync_collection):
         """Change IDs to match another collection."""
@@ -682,9 +710,8 @@ class CollectionChangeset(object):
 
         # Summarize new resources
         for item in self.changes['new'].values():
-            resource_type = item._resource_type
             rep = self.format_item(item)
-            out.append("New %s:\n%s" % (resource_type, rep))
+            out.append("New:\n%s" % rep)
 
         # Summarize deleted resources
         for item in self.changes['deleted'].values():

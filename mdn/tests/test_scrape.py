@@ -6,8 +6,8 @@ from json import dumps
 
 from mdn.models import FeaturePage
 from mdn.scrape import (
-    date_to_iso, end_of_line, page_grammar, range_error_to_html, scrape_page,
-    scrape_feature_page, slugify, PageVisitor, ScrapedViewFeature)
+    date_to_iso, end_of_line, page_grammar, scrape_page, scrape_feature_page,
+    slugify, PageVisitor, ScrapedViewFeature)
 from webplatformcompat.models import (
     Browser, Feature, Maturity, Section, Specification, Support, Version)
 from webplatformcompat.tests.base import TestCase
@@ -120,33 +120,53 @@ class TestGrammar(TestCase):
         expected_tag = '<tr style="vertical-align: top;">'
         self.assert_spec_row(spec_row, expected_tag)
 
-    def assert_specname_td(self, specname_td, expected_tag):
+    def assert_specname_td(self, specname_td, expected_tag, expected_text):
         parsed = page_grammar['specname_td'].parse(specname_td)
         tr = parsed.children[0]
+        specname_text = parsed.children[2]
         self.assertEqual(expected_tag, tr.text)
+        self.assertEqual(expected_text, specname_text.text)
 
     def test_specname_td_standard(self):
-        specname_td = """<td>{{SpecName('CSS3 Backgrounds', '#the-background-size',
-            'background-size')}}</td>"""
+        specname_td = (
+            "<td>{{SpecName('CSS3 Backgrounds', '#the-background-size',"
+            " 'background-size')}}</td>")
         expected_tag = '<td>'
-        self.assert_specname_td(specname_td, expected_tag)
+        expected_text = (
+            "{{SpecName('CSS3 Backgrounds', '#the-background-size',"
+            " 'background-size')}}")
+        self.assert_specname_td(specname_td, expected_tag, expected_text)
 
     def test_specname_td_styled(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
-        specname_td = """<td style="vertical-align: top;">{{ SpecName('CSS2.1',
-            "cascade.html#value-def-inherit", "inherit") }}</td>"""
+        specname_td = (
+            "<td style=\"vertical-align: top;\">{{ SpecName('CSS2.1',"
+            " \"cascade.html#value-def-inherit\", \"inherit\") }}</td>")
         expected_tag = '<td style="vertical-align: top;">'
-        self.assert_specname_td(specname_td, expected_tag)
+        expected_text = (
+            "{{ SpecName('CSS2.1', \"cascade.html#value-def-inherit\","
+            " \"inherit\") }}")
+        self.assert_specname_td(specname_td, expected_tag, expected_text)
 
-    def assert_spec2_td(self, spec2_td, expected_tag):
+    def test_specname_td_ES1_legacy(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/this
+        specname_td = "<td>ECMAScript 1st Edition.</td>"
+        expected_tag = '<td>'
+        expected_text = "ECMAScript 1st Edition."
+        self.assert_specname_td(specname_td, expected_tag, expected_text)
+
+    def assert_spec2_td(self, spec2_td, expected_tag, expected_text):
         parsed = page_grammar['spec2_td'].parse(spec2_td)
         tr = parsed.children[0]
+        spec2_text = parsed.children[2]
         self.assertEqual(expected_tag, tr.text)
+        self.assertEqual(expected_text, spec2_text.text)
 
     def test_spec2_td_standard(self):
         spec2_td = "<td>{{Spec2('CSS3 Backgrounds')}}</td>"
         expected_tag = '<td>'
-        self.assert_spec2_td(spec2_td, expected_tag)
+        expected_text = "{{Spec2('CSS3 Backgrounds')}}"
+        self.assert_spec2_td(spec2_td, expected_tag, expected_text)
 
     def test_spec2_td_styled(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/inherit
@@ -154,7 +174,15 @@ class TestGrammar(TestCase):
             {{ Spec2("CSS2.1") }}
         </td>"""
         expected_tag = '<td style="vertical-align: top;">'
-        self.assert_spec2_td(spec2_td, expected_tag)
+        expected_text = '{{ Spec2("CSS2.1") }}\n        '
+        self.assert_spec2_td(spec2_td, expected_tag, expected_text)
+
+    def test_spec2_td_text(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/this
+        spec2_td = "<td>Standard</td>"
+        expected_tag = '<td>'
+        expected_text = 'Standard'
+        self.assert_spec2_td(spec2_td, expected_tag, expected_text)
 
     def assert_specdesc_td(self, specdesc_td, expected_tag, expected_desc):
         parsed = page_grammar['specdesc_td'].parse(specdesc_td)
@@ -214,6 +242,11 @@ class TestGrammar(TestCase):
         self.assert_compat_headers(
             headers, expected_feature, expected_browsers)
 
+    def test_compat_footnotes(self):
+        footnotes = '<p>[2] A footnote</p>'
+        parsed = page_grammar['compat_footnotes'].parse(footnotes)
+        self.assertEqual(footnotes, parsed.text)
+
     def assert_cell_version(self, text, version, eng_version=None):
         match = page_grammar['cell_version'].parse(text).match.groupdict()
         expected = {'version': version, 'eng_version': eng_version}
@@ -270,39 +303,46 @@ class ScrapeTestCase(TestCase):
 </table>
 """ % sample_spec_row
 
-    sample_page = """\
-<div>{{CSSREF}}</div>
-<h2 id="Summary">Summary</h2>
-<p>This represents all the other page content</p>
-<p>{{cssbox("background-size")}}</p>
-%s
+    sample_compat_section = """\
 <h2 id="Browser_compatibility">Browser compatibility</h2>
 <div>{{CompatibilityTable}}</div>
 <div id="compat-desktop">
  <table class="compat-table">
   <tbody>
-   <tr>
-     <th>Feature</th><th>Chrome</th>
-     <th>Firefox (Gecko)</th></tr>
-   <tr>
-     <td>Basic support</td><td>1.0</td>
-     <td>{{CompatGeckoDesktop("1")}}</td>
-   </tr>
+   <tr><th>Feature</th><th>Firefox (Gecko)</th></tr>
+   <tr><td>Basic support</td><td>{{CompatGeckoDesktop("1")}}</td></tr>
   </tbody>
  </table>
 </div>
-<h2 id="See_also">See also</h2>
-<ul>
- <li>{{CSS_Reference:Position}}</li>
-</ul>""" % sample_spec_section
+"""
+
     _instance_specs = {
         (Maturity, 'CR'): {'name': '{"en": "Candidate Recommendation"}'},
+        (Maturity, 'WD'): {'name': '{"en": "Working Draft"}'},
+        (Maturity, 'Standard'): {'name': '{"en": "Standard"}'},
         (Specification, 'css3_backgrounds'): {
             '_req': {'maturity': (Maturity, 'CR')},
             'mdn_key': 'CSS3 Backgrounds',
             'name': (
                 '{"en": "CSS Backgrounds and Borders Module Level&nbsp;3"}'),
             'uri': '{"en": "http://dev.w3.org/csswg/css3-background/"}'},
+        (Specification, 'css3_ui'): {
+            '_req': {'maturity': (Maturity, 'WD')},
+            'mdn_key': 'CSS3 UI',
+            'name': '{"en": "CSS Basic User Interface Module Level&nbsp;3"}',
+            'uri': '{"en": "http://dev.w3.org/csswg/css3-ui/"}'},
+        (Specification, 'web_audio_api'): {
+            '_req': {'maturity': (Maturity, 'WD')},
+            'mdn_key': 'Web Audio API',
+            'name': '{"en": "Web Audio API"}',
+            'uri': '{"en": "http://webaudio.github.io/web-audio-api/"}'},
+        (Specification, 'es1'): {
+            '_req': {'maturity': (Maturity, 'Standard')},
+            'mdn_key': 'ES1',
+            'name': '{"en": "ECMAScript 1st Edition (ECMA-262)"}',
+            'uri': ('{"en": "http://www.ecma-international.org/publications/'
+                    'files/ECMA-ST-ARCH/ECMA-262,%201st%20edition,'
+                    '%20June%201997.pdf"}')},
         (Section, 'background-size'): {
             '_req': {'specification': (Specification, 'css3_backgrounds')},
             'subpath': '{"en": "#the-background-size"}'},
@@ -371,17 +411,15 @@ class TestPageVisitor(ScrapeTestCase):
         parsed = page_grammar['doc'].parse(doc)
         doc_parts = self.visitor.visit(parsed)
         expected = {
-            'locale': 'en', 'specs': [], 'issues': [], 'errors': [],
-            'compat': [], 'footnotes': None}
+            'locale': 'en', 'specs': [], 'issues': [], 'compat': [],
+            'footnotes': None}
         self.assertEqual(expected, doc_parts)
         self.assertEqual([], self.visitor.issues)
-        self.assertEqual([], self.visitor.errors)
 
-    def assert_last_section(self, last_section, errors):
+    def assert_last_section(self, last_section, issues):
         parsed = page_grammar['last_section'].parse(last_section)
         self.visitor.visit(parsed)
-        self.assertEqual([], self.visitor.issues)
-        self.assertEqual(errors, self.visitor.errors)
+        self.assertEqual(issues, self.visitor.issues)
 
     def test_last_section_ignored(self):
         last_section = (
@@ -393,36 +431,16 @@ class TestPageVisitor(ScrapeTestCase):
         last_section = (
             "<h2 id=\"specifications\">Specifications</h2>\n"
             "<p><em>TODO:</em> Specs go here</p>")
-        errors = [
-            (44, 79,
-             "Section <h2>Specifications</h2> was not parsed. The parser"
-             " failed on rule \"spec_table\", but the real cause may be"
-             " unexpected content after this position. Definition:",
-             'spec_table = "<table class="standard-table">" _ spec_head'
-             ' _ spec_body _ "</table>" _')]
-        self.assert_last_section(last_section, errors)
-
-    def test_last_section_invalid_after_other_errors(self):
-        self.visitor.errors = [(0, 0, 'An existing error')]
-        last_section = (
-            "<h2 id=\"specifications\">Specifications</h2>\n"
-            "<p><em>TODO:</em> Specs go here</p>")
-        errors = [
-            (0, 0, 'An existing error'),
-            (44, 79,
-             "Section <h2>Specifications</h2> was not parsed. The parser"
-             " failed on rule \"spec_table\", but the real cause is"
-             " probably earlier issues. Definition:",
-             'spec_table = "<table class="standard-table">" _ spec_head'
-             ' _ spec_body _ "</table>" _')]
-        self.assert_last_section(last_section, errors)
+        issues = [(
+            'section_skipped', 44, 79,
+            {'title': 'Specifications', 'rule_name': 'spec_table',
+             'rule': ('spec_table = "<table class="standard-table">" _'
+                      ' spec_head _ spec_body _ "</table>" _')})]
+        self.assert_last_section(last_section, issues)
 
     def test_last_section_valid_specifications(self):
-        errors = [
-            (0, 65,
-             "Section Specifications not parsed, probably due to earlier"
-             " errors.")]
-        self.assert_last_section(self.sample_spec_section, errors)
+        issues = [('section_missed', 0, 65, {'title': 'Specifications'})]
+        self.assert_last_section(self.sample_spec_section, issues)
 
     def assert_spec_h2(self, spec_h2, expected_issues):
         parsed = page_grammar['spec_h2'].parse(spec_h2)
@@ -444,21 +462,17 @@ class TestPageVisitor(ScrapeTestCase):
         self.assert_spec_h2(
             '<h2 id="Browser_compatibility" name="Browser_compatibility">'
             'Specifications</h2>',
-            [(4, 31,
-              ('In Specifications section, expected <h2 id="Specifications">,'
-               ' actual id="Browser_compatibility"')),
-             (31, 59,
-              ('In Specifications section, expected <h2'
-               ' name="Specifications"> or no name attribute, actual'
-               ' name="Browser_compatibility"'))])
+            [('spec_h2_id', 4, 31, {'h2_id': 'Browser_compatibility'}),
+             ('spec_h2_name', 31, 59, {'h2_name': 'Browser_compatibility'})])
 
-    def assert_spec_row(self, spec_table, expected_specs, errors):
+    def assert_spec_row(self, spec_table, expected_specs, issues):
         parsed = page_grammar['spec_row'].parse(spec_table)
         self.visitor.visit(parsed)
         self.assertEqual(expected_specs, self.visitor.specs)
-        self.assertEqual(errors, self.visitor.errors)
+        self.assertEqual(issues, self.visitor.issues)
 
     def test_spec_row_mismatch(self):
+        spec = self.get_instance(Specification, 'css3_ui')
         spec_row = '''\
 <tr>
   <td>{{ SpecName('CSS3 UI', '#cursor', 'cursor') }}</td>
@@ -474,12 +488,11 @@ class TestPageVisitor(ScrapeTestCase):
             'section.name': 'cursor',
             'specification.mdn_key': 'CSS3 UI',
             'section.id': None,
-            'specification.id': None}]
-        errors = [
-            (7, 62, 'Unknown Specification "CSS3 UI"'),
-            (0, 199,
-             'SpecName(CSS3 Basic UI, ...) does not match Spec2(CSS3 UI)')]
-        self.assert_spec_row(spec_row, expected_specs, errors)
+            'specification.id': spec.id}]
+        issues = [
+            ('spec_mismatch', 0, 199,
+             {'spec2_key': 'CSS3 Basic UI', 'specname_key': 'CSS3 UI'})]
+        self.assert_spec_row(spec_row, expected_specs, issues)
 
     def test_spec_row_specname_commas_in_link(self):
         # https://developer.mozilla.org/en-US/docs/Web/HTML/Element
@@ -503,11 +516,12 @@ class TestPageVisitor(ScrapeTestCase):
             'specification.mdn_key': 'HTML WHATWG',
             'section.id': None,
             'specification.id': None}]
-        errors = [(7, 179, 'Unknown Specification "HTML WHATWG"')]
-        self.assert_spec_row(spec_row, expected_specs, errors)
+        issues = [('unknown_spec', 11, 174, {'key': 'HTML WHATWG'})]
+        self.assert_spec_row(spec_row, expected_specs, issues)
 
     def test_spec_row_no_thead(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/AudioContext
+        spec = self.get_instance(Specification, 'web_audio_api')
         spec_row = '''\
 <tr>
   <td>{{SpecName('Web Audio API', '#the-audiocontext-interface',\
@@ -521,9 +535,8 @@ class TestPageVisitor(ScrapeTestCase):
             'section.name': 'AudioContext',
             'specification.mdn_key': 'Web Audio API',
             'section.id': None,
-            'specification.id': None}]
-        errors = [(7, 92, 'Unknown Specification "Web Audio API"')]
-        self.assert_spec_row(spec_row, expected_specs, errors)
+            'specification.id': spec.id}]
+        self.assert_spec_row(spec_row, expected_specs, [])
 
     def test_spec_row_known_spec(self):
         spec = self.get_instance(Specification, 'css3_backgrounds')
@@ -549,10 +562,34 @@ class TestPageVisitor(ScrapeTestCase):
             'specification.id': spec.id}]
         self.assert_spec_row(self.sample_spec_row, expected_specs, [])
 
-    def assert_specname_td(self, specname_td, expected):
+    def test_spec_row_es1(self):
+        # en-US/docs/Web/JavaScript/Reference/Operators/this
+        es1 = self.get_instance(Specification, 'es1')
+        spec_row = """\
+<tr>
+  <td>ECMAScript 1st Edition.</td>
+  <td>Standard</td>
+  <td>Initial definition.</td>
+</tr>"""
+        expected_specs = [{
+            'section.note': 'Initial definition.',
+            'section.subpath': '',
+            'section.name': '',
+            'specification.mdn_key': 'ES1',
+            'section.id': None,
+            'specification.id': es1.id}]
+        issues = [
+            ('specname_converted', 11, 34,
+             {'key': 'ES1', 'original': 'ECMAScript 1st Edition.'}),
+            ('spec2_converted', 46, 54,
+             {'key': 'ES1', 'original': 'Standard'})]
+        self.assert_spec_row(spec_row, expected_specs, issues)
+
+    def assert_specname_td(self, specname_td, expected, issues):
         parsed = page_grammar['specname_td'].parse(specname_td)
         specname = self.visitor.visit(parsed)
         self.assertEqual(expected, specname)
+        self.assertEqual(issues, self.visitor.issues)
 
     def test_specname_td_3_arg(self):
         # Common usage of SpecName
@@ -560,35 +597,159 @@ class TestPageVisitor(ScrapeTestCase):
         specname_td = (
             '<td>{{SpecName("CSS3 Backgrounds", "#subpath", "Name")}}</td>')
         expected = ('CSS3 Backgrounds', spec.id, "#subpath", "Name")
-        self.assert_specname_td(specname_td, expected)
+        issues = []
+        self.assert_specname_td(specname_td, expected, issues)
 
     def test_specname_td_1_arg(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent
         specname_td = '<td>{{SpecName("Device Orientation")}}</td>'
         expected = ("Device Orientation", None, '', '')
-        self.assert_specname_td(specname_td, expected)
+        issues = [('unknown_spec', 4, 38, {'key': 'Device Orientation'})]
+        self.assert_specname_td(specname_td, expected, issues)
 
-    def assert_compat_section(self, compat_section, compat, footnotes, errors):
+    def test_specname_td_empty_key(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/MIDIConnectionEvent
+        specname_td = "<td>{{SpecName('', '#midiconnection')}}</td>"
+        expected = ('', None, '#midiconnection', '')
+        issues = [('specname_blank_key', 4, 39, {})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def test_specname_td_ES1_legacy(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/this
+        specname_td = "<td>ECMAScript 1st Edition.</td>"
+        expected = ('ES1', None, '', '')
+        issues = [
+            ('specname_converted', 4, 27,
+             {'original': 'ECMAScript 1st Edition.', 'key': 'ES1'}),
+            ('unknown_spec', 4, 27, {'key': 'ES1'})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def test_specname_td_ES3_legacy(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/function
+        specname_td = "<td> ECMAScript 3rd Edition. </td>"
+        expected = ('ES3', None, '', '')
+        issues = [
+            ('specname_converted', 5, 29,
+             {'original': 'ECMAScript 3rd Edition.', 'key': 'ES3'}),
+            ('unknown_spec', 5, 29, {'key': 'ES3'})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def test_specname_td_other(self):
+        specname_td = "<td> Another Spec.</td>"
+        expected = ('', None, '', '')
+        issues = [
+            ('specname_not_kumascript', 5, 18, {'original': 'Another Spec.'})]
+        self.assert_specname_td(specname_td, expected, issues)
+
+    def assert_spec2_td(self, spec2_td, expected, issues):
+        parsed = page_grammar['spec2_td'].parse(spec2_td)
+        spec2 = self.visitor.visit(parsed)
+        self.assertEqual(expected, spec2)
+        self.assertEqual(self.visitor.issues, issues)
+
+    def test_spec2_td_standard(self):
+        spec2_td = '<td>{{Spec2("File API")}}</td>'
+        expected = 'File API'
+        self.assert_spec2_td(spec2_td, expected, [])
+
+    def test_spec2_td_empty(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/MIDIInput
+        spec2_td = '<td>{{Spec2()}}</td>'
+        expected = ''
+        issues = [(
+            'spec2_arg_count', 4, 15,
+            {'name': 'Spec2', 'args': [], 'scope': 'spec2',
+             'kumascript': '{{Spec2}}'})]
+        self.assert_spec2_td(spec2_td, expected, issues)
+
+    def test_spec2_td_specname(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/tabIndex
+        spec2_td = "<td>{{SpecName('HTML WHATWG')}}</td>"
+        expected = 'HTML WHATWG'
+        issues = [(
+            'spec2_wrong_kumascript', 4, 31,
+            {'name': 'SpecName', 'args': ["HTML WHATWG"], 'scope': 'spec2',
+             'kumascript': '{{SpecName(HTML WHATWG)}}'})]
+        self.assert_spec2_td(spec2_td, expected, issues)
+
+    def test_spec2_td_text_name(self):
+        # /en-US/docs/Web/JavaScript/Reference/Operators/this
+        spec2_td = "<td>Standard</td>"
+        item = {'type': 'text', 'content': 'Standard', 'start': 4, 'end': 12}
+        self.assert_spec2_td(spec2_td, item, [])
+
+    def assert_specdec_td(self, specdesc_td, expected, issues):
+        parsed = page_grammar['specdesc_td'].parse(specdesc_td)
+        specdesc = self.visitor.visit(parsed)
+        self.assertEqual(expected, specdesc)
+        self.assertEqual(self.visitor.issues, issues)
+
+    def test_specdesc_td_text(self):
+        specdesc_td = "<td>This is text.</td>"
+        expected = "This is text."
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_code(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/display
+        specdesc_td = (
+            "<td>Added the table model values and"
+            " <code>inline-block</code>.</td>")
+        expected = (
+            "Added the table model values and <code>inline-block</code>.")
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_kumascript(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
+        specdesc_td = (
+            '<td>Add the {{ xref_csslength() }} value and allows it to be'
+            ' applied to element with a {{ cssxref("display") }} type of'
+            ' <code>table-cell</code>.</td>')
+        expected = (
+            'Add the <code>&lt;length&gt;</code> value and allows it to be'
+            ' applied to element with a <code>display</code> type of'
+            ' <code>table-cell</code>.')
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_kumascript_spec2(self):
+        # https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data
+        specdesc_td = "<td>No change from {{Spec2('HTML5 W3C')}}</td>"
+        expected = "No change from specification HTML5 W3C"
+        issues = [
+            ('specdesc_spec2_invalid', 19, 41,
+             {'name': 'Spec2', 'args': ['HTML5 W3C'], 'scope': 'specdesc',
+              'kumascript': '{{Spec2(HTML5 W3C)}}'})]
+        self.assert_specdec_td(specdesc_td, expected, issues)
+
+    def test_specdesc_td_kumascript_experimental_inline(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/position_value
+        specdesc_td = (
+            '<td>Defines <code>&lt;position&gt;</code> explicitly and extends'
+            ' it to support offsets from any edge. {{ experimental_inline() }}'
+            '</td>')
+        expected = (
+            'Defines <code>&lt;position&gt;</code> explicitly and extends'
+            ' it to support offsets from any edge.')
+        self.assert_specdec_td(specdesc_td, expected, [])
+
+    def test_specdesc_td_spec2(self):
+        # https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data
+        specdesc_td = "<td>No change from {{Spec2('HTML5 W3C')}}</td>"
+        expected = "No change from specification HTML5 W3C"
+        issues = [
+            ('specdesc_spec2_invalid', 19, 41,
+             {'name': 'Spec2', 'args': ['HTML5 W3C'], 'scope': 'specdesc',
+              'kumascript': '{{Spec2(HTML5 W3C)}}'})]
+        self.assert_specdec_td(specdesc_td, expected, issues)
+
+    def assert_compat_section(self, compat_section, compat, footnotes, issues):
         parsed = page_grammar['compat_section'].parse(compat_section)
         self.visitor.visit(parsed)
         self.assertEqual(compat, self.visitor.compat)
         self.assertEqual(footnotes, self.visitor.footnotes)
-        self.assertEqual([], self.visitor.issues)
-        self.assertEqual(errors, self.visitor.errors)
+        self.assertEqual(issues, self.visitor.issues)
 
     def test_compat_section_minimal(self):
-        compat_section = """\
-<h2 id="Browser_compatibility">Browser compatibility</h2>
-<div>{{CompatibilityTable}}</div>
-<div id="compat-desktop">
- <table class="compat-table">
-  <tbody>
-   <tr><th>Feature</th><th>Firefox (Gecko)</th></tr>
-   <tr><td>Basic support</td><td>{{CompatGeckoDesktop("1")}}</td></tr>
-  </tbody>
- </table>
-</div>
-"""
+        compat_section = self.sample_compat_section
         expected_compat = [{
             'name': u'desktop',
             'browsers': [{
@@ -604,8 +765,8 @@ class TestPageVisitor(ScrapeTestCase):
                 'feature': '_basic support',
                 'id': '__basic support-_Firefox-1.0',
                 'support': 'yes', 'version': '_Firefox-1.0'}]}]
-        errors = [(185, 200, 'Unknown Browser "Firefox (Gecko)"')]
-        self.assert_compat_section(compat_section, expected_compat, {}, errors)
+        issues = [('unknown_browser', 185, 200, {'name': 'Firefox (Gecko)'})]
+        self.assert_compat_section(compat_section, expected_compat, {}, issues)
 
     def test_compat_section_footnote(self):
         compat_section = """\
@@ -636,8 +797,8 @@ class TestPageVisitor(ScrapeTestCase):
                 'support': 'yes', 'version': '_Chrome-1.0',
                 'footnote': 'This is a footnote.',
                 'footnote_id': ('1', 239, 242)}]}]
-        errors = [(185, 191, 'Unknown Browser "Chrome"')]
-        self.assert_compat_section(compat_section, expected_compat, {}, errors)
+        issues = [('unknown_browser', 185, 191, {'name': 'Chrome'})]
+        self.assert_compat_section(compat_section, expected_compat, {}, issues)
 
     def test_compat_section_footnote_mismatch(self):
         compat_section = """\
@@ -667,32 +828,31 @@ class TestPageVisitor(ScrapeTestCase):
                 'id': '__basic support-_Chrome-3.0',
                 'support': 'yes', 'version': '_Chrome-3.0',
                 'footnote_id': ('1', 239, 242)}]}]
-        footnotes = {'2': ('Oops, footnote ID is wrong.', 281, 320)}
-        errors = [
-            (185, 191, 'Unknown Browser "Chrome"'),
-            (239, 242, 'Footnote [1] not found'),
-            (281, 320, 'Footnote [2] not used')]
+        footnotes = {'2': ('Oops, footnote ID is wrong.', 281, 319)}
+        issues = [
+            ('unknown_browser', 185, 191, {'name': 'Chrome'}),
+            ('footnote_missing', 239, 242, {'footnote_id': '1'}),
+            ('footnote_unused', 281, 319, {'footnote_id': '2'})]
         self.assert_compat_section(
-            compat_section, expected_compat, footnotes, errors)
+            compat_section, expected_compat, footnotes, issues)
 
-    def assert_compat_headers(self, compat_headers, expected, issues, errors):
+    def assert_compat_headers(self, compat_headers, expected, issues):
         parsed = page_grammar['compat_headers'].parse(compat_headers)
         headers = self.visitor.visit(parsed)
         self.assertEqual(expected, headers)
         self.assertEqual(issues, self.visitor.issues)
-        self.assertEqual(errors, self.visitor.errors)
 
     def test_compat_headers_unknown_browser(self):
         compat_headers = "<tr><th>Feature</th><th>Firefox</th></tr>"
         expected = [{'slug': '_Firefox', 'name': 'Firefox', 'id': "_Firefox"}]
-        errors = [(24, 31, 'Unknown Browser "Firefox"')]
-        self.assert_compat_headers(compat_headers, expected, [], errors)
+        issues = [('unknown_browser', 24, 31, {'name': 'Firefox'})]
+        self.assert_compat_headers(compat_headers, expected, issues)
 
     def test_compat_headers_known_browser(self):
         firefox = self.get_instance(Browser, 'firefox')
         compat_headers = "<tr><th>Feature</th><th>Firefox</th></tr>"
         expected = [{'slug': 'firefox', 'name': 'Firefox', 'id': firefox.id}]
-        self.assert_compat_headers(compat_headers, expected, [], [])
+        self.assert_compat_headers(compat_headers, expected, [])
 
     def test_compat_headers_strong(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
@@ -701,7 +861,7 @@ class TestPageVisitor(ScrapeTestCase):
             "<tr><th><strong>Feature</strong></th>"
             "<th><strong>Firefox</strong></th></tr>")
         expected = [{'slug': 'firefox', 'name': 'Firefox', 'id': firefox.id}]
-        self.assert_compat_headers(compat_headers, expected, [], [])
+        self.assert_compat_headers(compat_headers, expected, [])
 
     def test_compat_headers_wrong_first_column_header(self):
         # All known pages use "Feature" for first column, but be ready
@@ -710,8 +870,9 @@ class TestPageVisitor(ScrapeTestCase):
             "<tr><th><strong>Features</strong></th>"
             "<th><strong>Firefox</strong></th></tr>")
         expected = [{'slug': 'firefox', 'name': 'Firefox', 'id': firefox.id}]
-        issues = [(16, 24, 'Expected header "Feature"')]
-        self.assert_compat_headers(compat_headers, expected, issues, [])
+        issues = [(
+            'feature_header', 16, 24, {'header': 'Features'})]
+        self.assert_compat_headers(compat_headers, expected, issues)
 
     def test_compat_headers_with_colspan(self):
         # https://developer.mozilla.org/en-US/Web/CSS/background-size
@@ -724,8 +885,22 @@ class TestPageVisitor(ScrapeTestCase):
             'id': '_Safari (WebKit)',
             'colspan': '3'
         }]
-        errors = [(36, 51, 'Unknown Browser "Safari (WebKit)"')]
-        self.assert_compat_headers(compat_headers, expected, [], errors)
+        issues = [('unknown_browser', 36, 51, {'name': 'Safari (WebKit)'})]
+        self.assert_compat_headers(compat_headers, expected, issues)
+
+    def test_compat_headers_with_line_height(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/Navigator/serviceWorker
+        chrome = self.get_instance(Browser, 'chrome')
+        compat_headers = (
+            '<tr><th style="line-height: 16px;">Feature</th>'
+            '<th style="line-height: 16px;">Chrome</th></tr>')
+        expected = [{'slug': 'chrome', 'name': 'Chrome', 'id': chrome.id}]
+        issues = [
+            ('unexpected_attribute', 51, 77,
+             {'node_type': 'th', 'ident': 'style',
+              'value': 'line-height: 16px;',
+              'expected': 'the attribute colspan'})]
+        self.assert_compat_headers(compat_headers, expected, issues)
 
     def assert_compat_row_cell(self, row_cell, expected_cell, issues):
         parsed = page_grammar['compat_row_cell'].parse(row_cell)
@@ -735,60 +910,67 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_row_cell_feature_with_rowspan(self):
         row_cell = '<td rowspan="2">Some Feature</td>'
-        expected_cell = [
-            {'type': 'td', 'rowspan': '2', 'start': 0, 'end': 16},
-            {'type': 'text', 'content': 'Some Feature', 'start': 16,
-             'end': 28}]
+        expected_cell = {
+            'type': 'td', 'start': 0, 'end': 33, 'rowspan': '2', 'content': {
+                'type': 'text', 'start': 16, 'end': 28,
+                'content': 'Some Feature'}}
         self.assert_compat_row_cell(row_cell, expected_cell, [])
 
     def test_compat_row_cell_feature_with_unknown_attr(self):
         row_cell = '<td class="freaky">Freaky Feature</td>'
-        expected_cell = [
-            {'type': 'td', 'start': 0, 'end': 19},
-            {'type': 'text', 'content': 'Freaky Feature', 'start': 19,
-             'end': 33}]
-        issues = [(4, 18, 'Unexpected attribute <td class="freaky">')]
+        expected_cell = {
+            'type': 'td', 'start': 0, 'end': 38, 'content': {
+                'type': 'text', 'start': 19, 'end': 33,
+                'content': 'Freaky Feature'}}
+        issues = [(
+            'unexpected_attribute', 4, 18,
+            {'node_type': 'td', 'ident': 'class', 'value': 'freaky',
+             'expected': 'the attributes rowspan or colspan'})]
         self.assert_compat_row_cell(row_cell, expected_cell, issues)
 
-    def test_compat_row_cell_break(self):
+    def test_compat_row_break(self):
         row_cell = '<td>Multi-line<br/>feature</td>'
-        expected_cell = [
-            {'type': 'td', 'start': 0, 'end': 4},
-            {'type': 'text', 'content': 'Multi-line', 'start': 4, 'end': 14},
-            {'type': 'break', 'start': 14, 'end': 19},
-            {'type': 'text', 'content': 'feature', 'start': 19, 'end': 26},
-        ]
+        expected_cell = {
+            'type': 'td', 'start': 0, 'end': 31, 'content': {
+                'type': 'html_block', 'start': 4, 'end': 26, 'content': [
+                    {'type': 'text', 'start': 4, 'end': 14,
+                     'content': 'Multi-line'},
+                    {'type': 'break', 'start': 14, 'end': 19},
+                    {'type': 'text', 'start': 19, 'end': 26,
+                     'content': 'feature'},
+                ]}}
         self.assert_compat_row_cell(row_cell, expected_cell, [])
 
     def test_compat_row_cell_kumascript(self):
         row_cell = '<td>EXP {{experimental_inline}} FEATURE</td>'
-        expected_cell = [
-            {'type': 'td', 'start': 0, 'end': 4},
-            {'type': 'text', 'content': 'EXP', 'start': 4, 'end': 8},
-            {'type': 'kumascript', 'name': 'experimental_inline', 'args': [],
-             'start': 8, 'end': 32},
-            {'type': 'text', 'content': 'FEATURE', 'start': 32, 'end': 39},
-        ]
+        expected_cell = {
+            'type': 'td', 'start': 0, 'end': 44, 'content': {
+                'type': 'text_block', 'start': 4, 'end': 39, 'content': [
+                    {'type': 'text', 'start': 4, 'end': 8, 'content': 'EXP '},
+                    {'type': 'kumascript', 'start': 8, 'end': 32,
+                     'name': 'experimental_inline', 'args': []},
+                    {'type': 'text', 'start': 32, 'end': 39,
+                     'content': 'FEATURE'}]}}
         self.assert_compat_row_cell(row_cell, expected_cell, [])
 
-    def test_compat_row_cell_code_block(self):
+    def test_compat_row_code_block(self):
         row_cell = '<td><code>canonical</code></td>'
-        expected_cell = [
-            {'type': 'td', 'start': 0, 'end': 4},
-            {'type': 'code_block', 'content': 'canonical', 'start': 4,
-             'end': 26},
-        ]
+        expected_cell = {
+            'type': 'td', 'start': 0, 'end': 31, 'content': {
+                'type': 'code', 'start': 4, 'end': 26, 'attributes': {},
+                'content': {
+                    'type': 'text', 'start': 10, 'end': 19,
+                    'content': 'canonical'}}}
         self.assert_compat_row_cell(row_cell, expected_cell, [])
 
     def assert_cell_to_feature(
-            self, contents, expected_feature, issues, errors):
+            self, contents, expected_feature, issues):
         row_cell = "<td>%s</td>" % contents
         parsed = page_grammar['compat_row_cell'].parse(row_cell)
         cell = self.visitor.visit(parsed)
         feature = self.visitor.cell_to_feature(cell)
         self.assertEqual(expected_feature, feature)
         self.assertEqual(issues, self.visitor.issues)
-        self.assertEqual(errors, self.visitor.errors)
 
     def test_cell_to_feature_remove_whitespace(self):
         cell = (
@@ -799,7 +981,7 @@ class TestPageVisitor(ScrapeTestCase):
             'name': 'Support for <code>contain</code> and <code>cover</code>',
             'slug': 'web-css-background-size_support_for_contain_and_co',
         }
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_code_sequence(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/display
@@ -812,7 +994,7 @@ class TestPageVisitor(ScrapeTestCase):
                 '<code>none</code>, <code>inline</code> and'
                 ' <code>block</code>'),
             'slug': 'web-css-background-size_none_inline_and_block'}
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_canonical(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/display
@@ -820,7 +1002,7 @@ class TestPageVisitor(ScrapeTestCase):
         expected_feature = {
             'id': '_list-item', 'name': 'list-item', 'canonical': True,
             'slug': 'web-css-background-size_list-item'}
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_canonical_match(self):
         feature = self.create(
@@ -831,14 +1013,14 @@ class TestPageVisitor(ScrapeTestCase):
             'id': feature.id, 'name': 'list-item', 'slug': 'slug-list-item',
             'canonical': True,
         }
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_ks_experimental(self):
         cell = '<code>grid</code> {{experimental_inline}}'
         expected_feature = {
             'id': '_grid', 'name': 'grid', 'canonical': True,
             'experimental': True, 'slug': 'web-css-background-size_grid'}
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_ks_non_standard_inline(self):
         # https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent
@@ -847,7 +1029,7 @@ class TestPageVisitor(ScrapeTestCase):
             'id': '_initanimationevent()', 'name': 'initAnimationEvent()',
             'canonical': True, 'standardized': False,
             'slug': 'web-css-background-size_initanimationevent_'}
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_ks_deprecated_inline(self):
         cell = '<code>initAnimationEvent()</code> {{deprecated_inline}}'
@@ -855,39 +1037,46 @@ class TestPageVisitor(ScrapeTestCase):
             'id': '_initanimationevent()', 'name': 'initAnimationEvent()',
             'canonical': True, 'obsolete': True,
             'slug': 'web-css-background-size_initanimationevent_'}
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_ks_htmlelement(self):
         cell = '{{ HTMLElement("progress") }}'
         expected_feature = {
-            'id': '_&lt;progress&gt;', 'name': '&lt;progress&gt;',
+            'id': '_progress', 'name': '&lt;progress&gt;',
             'canonical': True,
-            'slug': 'web-css-background-size_lt_progress_gt_',
+            'slug': 'web-css-background-size_progress',
         }
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_ks_domxref(self):
         cell = '{{domxref("DeviceProximityEvent")}}'
         expected_feature = {
             'id': '_deviceproximityevent', 'name': 'DeviceProximityEvent',
             'slug': 'web-css-background-size_deviceproximityevent',
+            'canonical': True
         }
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_unknown_kumascript(self):
         cell = 'feature foo {{bar}}'
         expected_feature = {
             'id': '_feature foo', 'name': 'feature foo',
             'slug': 'web-css-background-size_feature_foo'}
-        errors = [(16, 23, 'Unknown kumascript function bar')]
-        self.assert_cell_to_feature(cell, expected_feature, [], errors)
+        issues = [
+            ('unknown_kumascript', 16, 23,
+             {'name': 'bar', 'args': [], 'kumascript': '{{bar}}',
+              'scope': 'feature'})]
+        self.assert_cell_to_feature(cell, expected_feature, issues)
 
     def test_cell_to_feature_unknown_kumascript_with_args(self):
         cell = 'foo {{bar("baz")}}'
         expected_feature = {
             'id': '_foo', 'name': 'foo', 'slug': 'web-css-background-size_foo'}
-        errors = [(8, 22, 'Unknown kumascript function bar(baz)')]
-        self.assert_cell_to_feature(cell, expected_feature, [], errors)
+        issues = [
+            ('unknown_kumascript', 8, 22,
+             {'name': 'bar', 'args': ['baz'], 'kumascript': '{{bar(baz)}}',
+              'scope': 'feature'})]
+        self.assert_cell_to_feature(cell, expected_feature, issues)
 
     def test_cell_to_feature_nonascii_name(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant
@@ -896,7 +1085,7 @@ class TestPageVisitor(ScrapeTestCase):
             'id': '_\xdf \u2192 ss',
             'name': '<code>\xdf</code> \u2192 <code>SS</code>',
             'slug': 'web-css-background-size_ss'}
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
 
     def test_cell_to_feature_footnote(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/text-align
@@ -905,8 +1094,8 @@ class TestPageVisitor(ScrapeTestCase):
             'id': '_block alignment values', 'name': 'Block alignment values',
             'standardized': False,
             'slug': 'web-css-background-size_block_alignment_values'}
-        errors = [(27, 31, "Footnotes are not allowed on features")]
-        self.assert_cell_to_feature(cell, expected_feature, [], errors)
+        issues = [('footnote_feature', 27, 30, {})]
+        self.assert_cell_to_feature(cell, expected_feature, issues)
 
     def test_cell_to_feature_digit(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/transform
@@ -915,15 +1104,38 @@ class TestPageVisitor(ScrapeTestCase):
             'id': '_3d support', 'name': '3D Support',
             'slug': 'web-css-background-size_3d_support'
         }
-        self.assert_cell_to_feature(cell, expected_feature, [], [])
+        self.assert_cell_to_feature(cell, expected_feature, [])
+
+    def test_cell_to_feature_link(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/EventSource
+        cell = ('<a href="/En/HTTP_access_control">'
+                'Cross-Origin Resource Sharing</a><br>')
+        expected_feature = {
+            'id': '_cross-origin resource sharing',
+            'name': 'Cross-Origin Resource Sharing',
+            'slug': 'web-css-background-size_cross-origin_resource_shar'
+        }
+        issues = [('tag_dropped', 4, 71, {'tag': 'a', 'scope': 'feature'})]
+        self.assert_cell_to_feature(cell, expected_feature, issues)
+
+    def test_cell_to_feature_p(self):
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/const
+        cell = ('<p>Reassignment fails</p>')
+        expected_feature = {
+            'id': '_reassignment fails',
+            'name': 'Reassignment fails',
+            'slug': 'web-css-background-size_reassignment_fails'
+        }
+        issues = [('tag_dropped', 4, 29, {'tag': 'p', 'scope': 'feature'})]
+        self.assert_cell_to_feature(cell, expected_feature, issues)
 
     def test_cell_to_feature_unknown_item(self):
-        bad_cell = [{'type': 'td'}, {'type': 'other'}]
+        bad_cell = {'type': 'td', 'content': {'type': 'other'}}
         self.assertRaises(ValueError, self.visitor.cell_to_feature, bad_cell)
 
     def assert_cell_to_support_full(
             self, row_cell, feature_rep, browser_rep, expected_versions,
-            expected_supports, issues, errors):
+            expected_supports, issues):
         """Complete test of cell_to_support."""
         parsed = page_grammar['compat_row_cell'].parse(row_cell)
         cell = self.visitor.visit(parsed)
@@ -932,7 +1144,6 @@ class TestPageVisitor(ScrapeTestCase):
         self.assertEqual(expected_versions, versions)
         self.assertEqual(expected_supports, supports)
         self.assertEqual(issues, self.visitor.issues)
-        self.assertEqual(errors, self.visitor.errors)
 
     def get_feature_rep(self, feature):
         """Create the visitor representation of a feature"""
@@ -961,7 +1172,7 @@ class TestPageVisitor(ScrapeTestCase):
             'support': "yes", 'version': version.id, 'feature': feature.id}]
         self.assert_cell_to_support_full(
             row_cell, feature_rep, browser_rep, expected_versions,
-            expected_supports, [], [])
+            expected_supports, [])
 
     def test_cell_to_support_unknown_version(self):
         browser = self.get_instance(Browser, 'firefox')
@@ -974,13 +1185,13 @@ class TestPageVisitor(ScrapeTestCase):
         expected_supports = [{
             'id': '__feature-_Firefox-1.0', 'support': "yes",
             'version': '_Firefox-1.0', 'feature': '_feature'}]
-        errors = [
-            (4, 7,
-             'Unknown version "1.0" for browser "Firefox" (id %d, slug "%s")'
-             % (browser.id, 'firefox'))]
+        issues = [
+            ('unknown_version', 4, 7,
+             {'version': '1.0', 'browser_id': browser.id,
+              'browser_name': 'Firefox', 'browser_slug': 'firefox'})]
         self.assert_cell_to_support_full(
             row_cell, feature_rep, browser_rep, expected_versions,
-            expected_supports, [], errors)
+            expected_supports, issues)
 
     def test_cell_to_support_matched_support(self):
         version = self.get_instance(Version, ('firefox', '1.0'))
@@ -1000,7 +1211,7 @@ class TestPageVisitor(ScrapeTestCase):
             'feature': feature.id}]
         self.assert_cell_to_support_full(
             row_cell, feature_rep, browser_rep, expected_versions,
-            expected_supports, [], [])
+            expected_supports, [])
 
     def test_compat_row_cell_support_compatversionunknown_vmatch(self):
         version = self.get_instance(Version, ('firefox', ''))
@@ -1018,11 +1229,11 @@ class TestPageVisitor(ScrapeTestCase):
             'version': version.id, 'feature': feature.id, 'support': "yes"}]
         self.assert_cell_to_support_full(
             row_cell, feature_rep, browser_rep, expected_versions,
-            expected_supports, [], [])
+            expected_supports, [])
 
     def assert_cell_to_support(
             self, contents, expected_versions=[], expected_supports=[],
-            issues=[], errors=[]):
+            issues=[]):
         """Test cell_to_support with helpful defaults."""
         row_cell = "<td>%s</td>" % contents
         feature_rep = {'id': '_feature', 'name': 'feature', 'slug': 'fslug'}
@@ -1042,7 +1253,7 @@ class TestPageVisitor(ScrapeTestCase):
             es['feature'] = feature_rep['id']
         self.assert_cell_to_support_full(
             row_cell, feature_rep, browser_rep,
-            expected_versions, expected_supports, issues, errors)
+            expected_versions, expected_supports, issues)
 
     def test_cell_to_support_version(self):
         self.assert_cell_to_support(
@@ -1075,12 +1286,12 @@ class TestPageVisitor(ScrapeTestCase):
     def test_cell_to_support_compatgeckodesktop_bad_text(self):
         self.assert_cell_to_support(
             '{{CompatGeckoDesktop("Yep")}}',
-            errors=[(4, 33, 'Unknown Gecko version "Yep"')])
+            issues=[('compatgeckodesktop_unknown', 4, 33, {'version': 'Yep'})])
 
     def test_cell_to_support_compatgeckodesktop_bad_num(self):
         self.assert_cell_to_support(
             '{{CompatGeckoDesktop("1.1")}}',
-            errors=[(4, 33, 'Unknown Gecko version "1.1"')])
+            issues=[('compatgeckodesktop_unknown', 4, 33, {'version': '1.1'})])
 
     def test_cell_to_support_compatgeckofxos_7(self):
         self.assert_cell_to_support(
@@ -1113,19 +1324,19 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_cell_to_support_compatgeckofxos_bad_gecko(self):
         self.assert_cell_to_support(
-            '{{CompatGeckoFxOS("9999999")}}',
-            errors=[(4, 34, 'Unknown Gecko version "9999999"')])
+            '{{CompatGeckoFxOS("999999")}}',
+            issues=[('compatgeckofxos_unknown', 4, 33, {'version': '999999'})])
 
     def test_cell_to_support_compatgeckofxos_bad_text(self):
         self.assert_cell_to_support(
             '{{CompatGeckoFxOS("Yep")}}',
-            errors=[(4, 30, 'Unknown Gecko version "Yep"')])
+            issues=[('compatgeckofxos_unknown', 4, 30, {'version': 'Yep'})])
 
     def test_cell_to_support_compatgeckofxos_bad_version(self):
         self.assert_cell_to_support(
             '{{CompatGeckoFxOS("18","5.0")}}',
-            errors=[(4, 35, (
-                'Override "5.0" is invalid for Gecko version "18"'))])
+            issues=[('compatgeckofxos_override', 4, 35,
+                     {'override': '5.0', 'version': '18'})])
 
     def test_cell_to_support_compatgeckomobile_1(self):
         self.assert_cell_to_support(
@@ -1148,19 +1359,24 @@ class TestPageVisitor(ScrapeTestCase):
             [{'version': '3.0'}], [{'support': 'yes'}])
 
     def test_cell_to_support_unknown_kumascript(self):
-        self.assert_cell_to_support(
-            '{{UnknownKuma}}',
-            errors=[(4, 19, "Unknown kumascript function UnknownKuma")])
+        issues = [(
+            'unknown_kumascript', 4, 19,
+            {'name': 'UnknownKuma', 'args': [], 'scope': 'compatibility cell',
+             'kumascript': "{{UnknownKuma}}"})]
+        self.assert_cell_to_support('{{UnknownKuma}}', issues=issues)
 
     def test_cell_to_support_unknown_kumascript_args(self):
-        self.assert_cell_to_support(
-            '{{UnknownKuma("foo")}}',
-            errors=[(4, 26, 'Unknown kumascript function UnknownKuma(foo)')])
+        issues = [(
+            'unknown_kumascript', 4, 26,
+            {'name': 'UnknownKuma', 'args': ['foo'],
+             'scope': 'compatibility cell',
+             'kumascript': "{{UnknownKuma(foo)}}"})]
+        self.assert_cell_to_support('{{UnknownKuma("foo")}}', issues=issues)
 
     def test_cell_to_support_nested_p(self):
         self.assert_cell_to_support(
             '<p><p>4.0</p></p>',
-            errors=[(7, 10, 'Nested <p> tags not supported')])
+            issues=[('nested_p', 7, 17, {})])
 
     def test_cell_to_support_with_prefix_and_break(self):
         self.assert_cell_to_support(
@@ -1180,7 +1396,7 @@ class TestPageVisitor(ScrapeTestCase):
             '18<br>\n(behind a pref) [1]',
             [{'version': '18.0'}],
             [{'support': 'yes', 'footnote_id': ('1', 27, 30)}],
-            errors=[(11, 27, 'Unknown support text "(behind a pref)"')])
+            issues=[('inline_text', 11, 27, {'text': '(behind a pref)'})])
 
     def test_cell_to_support_removed_in_gecko(self):
         self.assert_cell_to_support(
@@ -1198,15 +1414,16 @@ class TestPageVisitor(ScrapeTestCase):
         self.assert_cell_to_support(
             '32 (unprefixed)',
             [{'version': '32.0'}], [{'support': 'yes'}],
-            errors=[(7, 19, 'Unknown support text "(unprefixed)"')])
+            issues=[('inline_text', 7, 19, {'text': '(unprefixed)'})])
 
     def test_cell_to_support_code_block(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/order
         self.assert_cell_to_support(
             '32 with alt name <code>foobar</code>',
             [{'version': '32.0'}], [{'support': 'yes'}],
-            errors=[(7, 21, 'Unknown support text "with alt name"'),
-                    (21, 40, 'Unknown support text <code>foobar</code>')])
+            issues=[
+                ('inline_text', 7, 21, {'text': 'with alt name'}),
+                ('inline_text', 21, 40, {'text': '<code>foobar</code>'})])
 
     def test_cell_to_support_spaces(self):
         self.assert_cell_to_support('  ')
@@ -1224,7 +1441,8 @@ class TestPageVisitor(ScrapeTestCase):
             '{{ CompatGeckoDesktop("17") }} [1][2]',
             [{'version': '17.0'}],
             [{'support': 'yes', 'footnote_id': ('1', 35, 38)}],
-            errors=[(38, 41, 'Only one footnote allowed.')])
+            issues=[('footnote_multiple', 38, 41,
+                     {'prev_footnote_id': '1', 'footnote_id': '2'})])
 
     def test_cell_to_support_double_footnote_link_sup(self):
         # https://developer.mozilla.org/en-US/docs/Web/CSS/flex
@@ -1232,8 +1450,9 @@ class TestPageVisitor(ScrapeTestCase):
             '{{CompatGeckoDesktop("20.0")}} '
             '<sup><a href="#bc2">[2]</a><a href="#bc3">[3]</a></sup>',
             [{'version': '20.0'}],
-            [{'support': 'yes', 'footnote_id': ('2', 35, 62)}],
-            errors=[(62, 90, 'Only one footnote allowed.')])
+            [{'support': 'yes', 'footnote_id': ('2', 55, 58)}],
+            issues=[('footnote_multiple', 77, 80,
+                    {'prev_footnote_id': '2', 'footnote_id': '3'})])
 
     def test_cell_to_support_star_footnote(self):
         self.assert_cell_to_support(
@@ -1249,17 +1468,16 @@ class TestPageVisitor(ScrapeTestCase):
     def test_cell_to_support_unknown_item(self):
         feature = {'id': '_feature', 'name': 'feature', 'slug': 'feature_slug'}
         browser = {'id': '_browser', 'name': 'Browser', 'slug': 'browser'}
-        bad_cell = [{'type': 'td'}, {'type': 'other'}]
+        bad_cell = {'type': 'td', 'content': {'type': 'other'}}
         self.assertRaises(
             ValueError, self.visitor.cell_to_support, bad_cell, feature,
             browser)
 
-    def assert_compat_body(self, compat_body, expected, errors):
+    def assert_compat_body(self, compat_body, expected, issues):
         parsed = page_grammar['compat_body'].parse(compat_body)
         body = self.visitor.visit(parsed)
         self.assertEqual(expected, body)
-        self.assertEqual([], self.visitor.issues)
-        self.assertEqual(errors, self.visitor.errors)
+        self.assertEqual(issues, self.visitor.issues)
 
     def test_compat_body_success(self):
         chrome_10 = self.get_instance(Version, ('chrome', '1.0'))
@@ -1307,15 +1525,14 @@ class TestPageVisitor(ScrapeTestCase):
                 'support': 'yes', 'version': chrome_10.id}],
             'versions': [{
                 'browser': chrome.id, 'id': chrome_10.id, 'version': '1.0'}]}
-        self.assert_compat_body(
-            compat_body, expected, [(158, 181, u'Extra cell in table')])
+        issues = [('extra_cell', 158, 186, {})]
+        self.assert_compat_body(compat_body, expected, issues)
 
-    def assert_compat_footnotes(self, compat_footnotes, expected, errors):
+    def assert_compat_footnotes(self, compat_footnotes, expected, issues):
         parsed = page_grammar['compat_footnotes'].parse(compat_footnotes)
         footnotes = self.visitor.visit(parsed)
         self.assertEqual(expected, footnotes)
-        self.assertEqual([], self.visitor.issues)
-        self.assertEqual(errors, self.visitor.errors)
+        self.assertEqual(issues, self.visitor.issues)
 
     def test_compat_footnotes_empty(self):
         footnotes = '\n'
@@ -1346,17 +1563,21 @@ class TestPageVisitor(ScrapeTestCase):
     def test_compat_footnotes_unknown_kumascriptscript(self):
         footnotes = (
             "<p>[1] Footnote {{UnknownKuma}} but the beat continues.</p>")
-        expected = {'1': ('Footnote  but the beat continues.', 0, 59)}
-        errors = [(15, 30, "Unknown footnote kumascript function UnknownKuma")]
-        self.assert_compat_footnotes(footnotes, expected, errors)
+        expected = {'1': ('Footnote but the beat continues.', 0, 59)}
+        issues = [(
+            'unknown_kumascript', 16, 32,
+            {'name': 'UnknownKuma', 'args': [], 'scope': 'footnote',
+             'kumascript': '{{UnknownKuma}}'})]
+        self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_unknown_kumascriptscript_with_args(self):
         footnotes = '<p>[1] Footnote {{UnknownKuma("arg")}}</p>'
-        expected = {'1': ('Footnote ', 0, 42)}
-        errors = [
-            (15, 37,
-             'Unknown footnote kumascript function UnknownKuma("arg")')]
-        self.assert_compat_footnotes(footnotes, expected, errors)
+        expected = {'1': ('Footnote', 0, 42)}
+        issues = [(
+            'unknown_kumascript', 16, 38,
+            {'name': 'UnknownKuma', 'args': ['arg'], 'scope': 'footnote',
+             'kumascript': '{{UnknownKuma(arg)}}'})]
+        self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_pre_section(self):
         footnotes = '<p>[1] Here\'s some code:</p><pre>foo = bar</pre>'
@@ -1365,6 +1586,7 @@ class TestPageVisitor(ScrapeTestCase):
         self.assert_compat_footnotes(footnotes, expected, [])
 
     def test_compat_footnotes_pre_with_attrs_section(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/white-space
         footnotes = (
             '<p>[1] Here\'s some code:</p>\n'
             '<pre class="brush:css">\n'
@@ -1372,10 +1594,14 @@ class TestPageVisitor(ScrapeTestCase):
             '</pre>')
         expected = {
             '1': (
-                "<p>Here's some code:</p>\n<pre class=\"brush:css\">\n"
+                "<p>Here's some code:</p>\n<pre>\n"
                 ".foo {background-image: url(bg-image.png);}\n</pre>",
                 0, 103)}
-        self.assert_compat_footnotes(footnotes, expected, [])
+        issues = [
+            ('unexpected_attribute', 34, 51,
+             {'ident': 'class', 'node_type': 'pre', 'value': 'brush:css',
+              'expected': 'no attributes'})]
+        self.assert_compat_footnotes(footnotes, expected, issues)
 
     def test_compat_footnotes_asterisk(self):
         footnotes = "<p>[*] A footnote</p>"
@@ -1384,16 +1610,139 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_compat_footnotes_bad_footnote(self):
         footnotes = "<p>A footnote.</p>"
-        errors = [(0, 18, 'No ID in footnote.')]
-        self.assert_compat_footnotes(footnotes, {}, errors)
+        issues = [('footnote_no_id', 0, 18, {})]
+        self.assert_compat_footnotes(footnotes, {}, issues)
 
-    def assert_kumascript(self, text, name, args, errors=None):
+    def test_compat_footnotes_bad_footnote_unknown_kumascript(self):
+        # https://developer.mozilla.org/en-US/docs/Web/SVG/Element/color-profile
+        footnotes = '<p>{{SVGRef}}</p>'
+        issues = [
+            ('unknown_kumascript', 3, 13,
+             {'name': 'SVGRef', 'args': [], 'kumascript': '{{SVGRef}}',
+              'scope': u'footnote'})]
+        self.assert_compat_footnotes(footnotes, {}, issues)
+
+    def test_compat_footnotes_empty_paragraph_no_footnotes(self):
+        footnotes = ('<p>  </p>\n')
+        self.assert_compat_footnotes(footnotes, {}, [])
+
+    def test_compat_footnotes_empty_paragraph_invalid_footnote(self):
+        footnotes = (
+            '<p> </p>\n'
+            '<p>Invalid footnote.</p>\n'
+            '<p>  </p>')
+        issues = [('footnote_no_id', 9, 33, {})]
+        self.assert_compat_footnotes(footnotes, {}, issues)
+        self.assertEqual(footnotes[9:33], '<p>Invalid footnote.</p>')
+
+    def test_compat_footnotes_empty_paragraphs_trimmed(self):
+        footnote = (
+            '<p> </p>\n'
+            '<p>[1] Valid footnote.</p>'
+            '<p>   </p>'
+            '<p>Continues footnote 1.</p>')
+        expected = {
+            '1': (
+                '<p>Valid footnote.</p>\n<p>Continues footnote 1.</p>',
+                9, 73)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
+    def test_compat_footnotes_code(self):
+        footnote = (
+            '<p>[1] From Firefox 31 to 35, <code>will-change</code>'
+            ' was available...</p>')
+        expected = {
+            '1': (
+                'From Firefox 31 to 35, <code>will-change</code>'
+                ' was available...', 0, 75)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
+    def test_compat_footnotes_span(self):
+        # https://developer.mozilla.org/en-US/docs/Web/Events/DOMContentLoaded
+        footnote = (
+            '<p>[1]<span style="font-size: 14px; line-height: 18px;">'
+            'Bubbling for this event is supported by at least Gecko 1.9.2,'
+            ' Chrome 6, and Safari 4.</span></p>')
+        expected = {
+            '1': ('Bubbling for this event is supported by at least Gecko'
+                  ' 1.9.2, Chrome 6, and Safari 4.', 0, 152)}
+        issues = [
+            ('span_dropped', 6, 148, {})]
+        self.assert_compat_footnotes(footnote, expected, issues)
+
+    def test_compat_footnotes_a(self):
+        # https://developer.mozilla.org/en-US/docs/Web/SVG/SVG_as_an_Image
+        footnote = (
+            '<p>[1] Compatibility data from'
+            '<a href="http://caniuse.com" title="http://caniuse.com">'
+            'caniuse.com</a>.</p>')
+        expected = {
+            '1': ('Compatibility data from <a href="http://caniuse.com">'
+                  'caniuse.com</a>.', 0, 106)}
+        issues = [
+            ('unexpected_attribute', 59, 85,
+             {'node_type': 'a', 'ident': 'title',
+              'value': 'http://caniuse.com',
+              'expected': u'the attribute href'})]
+        self.assert_compat_footnotes(footnote, expected, issues)
+
+    def test_compat_footnotes_a_without_href(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/VRFieldOfViewReadOnly/downDegrees
+        footnote = '<p>[1] Use <a>about:config</a></p>'
+        expected = {'1': ('Use <a>about:config</a>', 0, 34)}
+        issues = [
+            ('missing_attribute', 11, 30, {'node_type': 'a', 'ident': 'href'})]
+        self.assert_compat_footnotes(footnote, expected, issues)
+
+    def test_compat_footnotes_br_start(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/VRFieldOfViewReadOnly/downDegrees
+        footnote = "<p><br>\n[1] To find information on Chrome's WebVR...</p>"
+        expected = {'1': ("To find information on Chrome's WebVR...", 0, 56)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
+    def test_compat_footnotes_br_end(self):
+        # https://developer.mozilla.org/en-US/docs/Web/Events/wheel
+        footnote = "<p>[1] Here's a footnote. <br></p>"
+        expected = {'1': ("Here's a footnote.", 0, 34)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
+    def test_compat_footnotes_br_footnotes(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/URLUtils/hash
+        footnote = "<p>[1] Footnote 1.<br>[2] Footnote 2.</p>"
+        expected = {'1': ("Footnote 1. <br/> Footnote 2.", 0, 41)}
+        issues = [('second_footnote', 22, 25, {'original': '1', 'new': '2'})]
+        self.assert_compat_footnotes(footnote, expected, issues)
+
+    def test_compat_footnotes_version(self):
+        # https://developer.mozilla.org/en-US/docs/Web/Events/focusin
+        link = (
+            '<a href="https://bugzilla.mozilla.org/show_bug.cgi?id=687787">'
+            '687787</a>')  # 687787 triggers the compat cell version pattern
+        footnote = '<p>[1] See bug {}.</p>'.format(link)
+        expected = {'1': ('See bug {}.'.format(link), 0, 92)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
+    def test_compat_footnotes_removed(self):
+        # https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style
+        footnote = "<p>[1] Removed in Chrome 35+</p>"
+        expected = {'1': ('Removed in Chrome 35+', 0, 32)}
+        self.assert_compat_footnotes(footnote, expected, [])
+
+    def test_compat_h3(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/MozContact/key
+        h3 = '<h3 id="Gecko Gecko">Gecko Note</h3>\n<p>A note</p>'
+        parsed = page_grammar['compat_h3'].parse(h3)
+        self.visitor.visit(parsed)
+        expected = [('skipped_h3', 0, 36, {'h3': 'Gecko Note'})]
+        self.assertEqual(expected, self.visitor.issues)
+
+    def assert_kumascript(self, text, name, args, issues=None):
         parsed = page_grammar['kumascript'].parse(text)
         expected = {
             'type': 'kumascript', 'name': name, 'args': args,
             'start': 0, 'end': len(text)}
         self.assertEqual(expected, self.visitor.visit(parsed))
-        self.assertEqual(errors or [], self.visitor.errors)
+        self.assertEqual(issues or [], self.visitor.issues)
 
     def test_kumascript_no_parens(self):
         self.assert_kumascript('{{CompatNo}}', 'CompatNo', [])
@@ -1425,7 +1774,6 @@ class TestPageVisitor(ScrapeTestCase):
         parsed = page_grammar['th_elem'].parse(th)
         self.assertEqual(expected, self.visitor.visit(parsed))
         self.assertEqual([], self.visitor.issues)
-        self.assertEqual([], self.visitor.errors)
 
     def test_th_elem_simple(self):
         th = '<th>Simple</th>'
@@ -1477,6 +1825,107 @@ class TestPageVisitor(ScrapeTestCase):
 
     def test_unquote_unbalanced(self):
         self.assertRaises(ValueError, self.visitor.unquote, "'Mixed\"")
+
+    def test_unquote_quote_plus_text(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/@viewport/max-zoom
+        text = '"max-zoom" descriptor'
+        self.assertEqual(text, self.visitor.unquote(text))
+
+    def assert_kumascript_to_html(
+            self, kumascript, expected_text, scope='specdesc', issues=None):
+        parsed = page_grammar['kumascript'].parse('{{' + kumascript + '}}')
+        item = self.visitor.visit(parsed)
+        text = self.visitor.kumascript_to_html(item, scope)
+        self.assertEqual(expected_text, text)
+        self.assertEqual(self.visitor.issues, issues or [])
+
+    def test_kumascript_to_html_xref_csslength(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
+        self.assert_kumascript_to_html(
+            'xref_csslength()', '<code>&lt;length&gt;</code>')
+
+    def test_kumascript_to_html_xref_csspercentage(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/position_value
+        self.assert_kumascript_to_html(
+            'xref_csspercentage()', '<code>&lt;percentage&gt;</code>')
+
+    def test_kumascript_to_html_xref_cssstring(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/attr
+        self.assert_kumascript_to_html(
+            'xref_cssstring()', '<code>&lt;string&gt;</code>')
+
+    def test_kumascript_to_html_xref_cssimage(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-image
+        self.assert_kumascript_to_html(
+            'xref_cssimage()', '<code>&lt;image&gt;</code>')
+
+    def test_kumascript_to_html_xref_csscolorvalue(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/background-color
+        self.assert_kumascript_to_html(
+            'xref_csscolorvalue()', '<code>&lt;color&gt;</code>')
+
+    def test_kumascript_to_html_xref_cssvisual(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/break-after
+        self.assert_kumascript_to_html('xref_cssvisual', '<code>visual</code>')
+
+    def test_kumascript_to_html_cssxref(self):
+        # https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align
+        self.assert_kumascript_to_html(
+            'cssxref("display")', '<code>display</code>')
+
+    def test_kumascript_to_html_domxref_1arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/CharacterData
+        self.assert_kumascript_to_html(
+            'domxref("ChildNode")', '<code>ChildNode</code>')
+
+    def test_kumascript_to_html_domxref_2arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/initCustomEvent
+        self.assert_kumascript_to_html(
+            'domxref("CustomEvent.CustomEvent", "CustomEvent()")',
+            '<code>CustomEvent()</code>')
+
+    def test_kumascript_to_html_htmlelement(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/HTMLIsIndexElement
+        self.assert_kumascript_to_html(
+            'HTMLElement("isindex")', '<code>&lt;isindex&gt;</code>')
+
+    def test_kumascript_to_html_htmlelement_with_space(self):
+        # https://developer.mozilla.org/en-US/docs/Template:HTMLElement
+        self.assert_kumascript_to_html(
+            'HTMLElement("is index")', '<code>is index</code>')
+
+    def test_kumascript_to_html_jsxref_1arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array
+        self.assert_kumascript_to_html(
+            'jsxref("Array.isArray")', '<code>Array.isArray</code>')
+
+    def test_kumascript_to_html_jsxref_2arg(self):
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/toString
+        self.assert_kumascript_to_html(
+            'jsxref("Global_Objects/null", "null")', '<code>null</code>')
+
+    def test_kumascript_to_html_specname(self):
+        # https://developer.mozilla.org/en-US/docs/Web/API/AbstractWorker
+        self.assert_kumascript_to_html(
+            'SpecName("Web Workers")', 'specification Web Workers')
+
+    def test_kumascript_to_html_unknown_kumascript(self):
+        issues = [
+            ('unknown_kumascript', 0, 23,
+             {'name': 'Unknown', 'args': ['textarea'],
+              'scope': 'specdesc',
+              'kumascript': '{{Unknown(textarea)}}'})]
+        self.assert_kumascript_to_html(
+            'Unknown("textarea")', None, issues=issues)
+
+    def assert_join_content(self, content_bits, expected_text):
+        text = self.visitor.join_content(content_bits)
+        self.assertEqual(expected_text, text)
+
+    def test_join_content_simple(self):
+        content_bits = ['Works', 'like', 'join.']
+        expected_text = 'Works like join.'
+        self.assert_join_content(content_bits, expected_text)
 
     def assert_browser_lookup(self, name, browser_id, fixed_name, slug):
         lookup = self.visitor.browser_id_name_and_slug(name)
@@ -1540,42 +1989,44 @@ class TestScrape(ScrapeTestCase):
     def setUp(self):
         self.feature = self.get_instance(Feature, 'web-css-background-size')
 
-    def assertScrape(
-            self, page, locale='en', specs=None, compat=None, footnotes=None,
-            issues=None, errors=None):
+    def assertScrape(self, page, specs, issues):
         actual = scrape_page(page, self.feature)
-        self.assertEqual(actual['locale'], locale)
-        self.assertDataEqual(actual['specs'], specs or [])
-        self.assertDataEqual(actual['compat'], compat or [])
-        self.assertDataEqual(actual['footnotes'], footnotes)
-        self.assertDataEqual(actual['issues'], issues or [])
-        self.assertDataEqual(actual['errors'], errors or [])
+        self.assertEqual(actual['locale'], 'en')
+        self.assertDataEqual(actual['specs'], specs)
+        self.assertDataEqual(actual['compat'], [])
+        self.assertDataEqual(actual['footnotes'], None)
+        self.assertDataEqual(actual['issues'], issues)
 
     def test_empty(self):
         page = ""
-        errors = ["No <h2> found in page"]
-        self.assertScrape(page, errors=errors)
+        self.assertScrape(page, [], [])
+
+    def test_not_compat_page(self):
+        page = "<h3>I'm not a compat page</h3>"
+        self.assertScrape(page, [], [])
 
     def test_incomplete_parse_error(self):
-        page = "<h2>Incomplete</h2><p>Incomplete</p>"
-        errors = [
-            (0, 36,
-             'Unable to finish parsing MDN page, starting at this position.')]
-        self.assertScrape(page, errors=errors)
+        page = "<h2>Specifications</h2><p>Incomplete</p>"
+        self.assertScrape(page, [], [('halt_import', 0, 40, {})])
 
     def test_spec_only(self):
         """Test with a only a Specification section."""
+        spec = self.get_instance(Specification, 'css3_backgrounds')
         page = self.sample_spec_section
         specs = [{
             'specification.mdn_key': 'CSS3 Backgrounds',
-            'specification.id': None,
+            'specification.id': spec.id,
             'section.subpath': '#the-background-size',
             'section.name': 'background-size',
             'section.note': '',
             'section.id': None,
         }]
-        errors = [(251, 335, 'Unknown Specification "CSS3 Backgrounds"')]
-        self.assertScrape(page, specs=specs, errors=errors)
+        self.assertScrape(page, specs, [])
+
+    def test_doc_parse_error(self):
+        # https://developer.mozilla.org/en-US/docs/Navigation_timing
+        page = self.sample_compat_section.replace('h2', 'h3')
+        self.assertScrape(page, [], [('doc_parse_error', 0, 57, {})])
 
 
 class FeaturePageTestCase(ScrapeTestCase):
@@ -1587,11 +2038,11 @@ class FeaturePageTestCase(ScrapeTestCase):
             url=url, feature=self.feature, status=FeaturePage.STATUS_PARSING)
         meta = self.page.meta()
         meta.raw = dumps({
-            'locale': 'en-US',
-            'url': path,
+            'locale': 'en-US', 'url': path, 'title': 'background-size',
             'translations': [{
                 'locale': 'fr',
-                'url': path.replace('en-US', 'fr')
+                'url': path.replace('en-US', 'fr'),
+                'title': 'background-size',
             }]})
         meta.status = meta.STATUS_FETCHED
         meta.save()
@@ -1616,7 +2067,7 @@ class FeaturePageTestCase(ScrapeTestCase):
                            'Web/CSS/background-size'),
                     'fr': ('https://developer.mozilla.org/fr/docs/'
                            'Web/CSS/background-size')},
-                'name': {'zxx': 'background-size'},
+                'name': 'background-size',
                 'obsolete': False,
                 'slug': 'web-css-background-size',
                 'stable': True,
@@ -1640,8 +2091,8 @@ class FeaturePageTestCase(ScrapeTestCase):
                     'tabs': []
                 },
                 'scrape': {
-                    'errors': [],
                     'phase': 'Starting Import',
+                    'issues': [],
                     'raw': scraped_data}}}
 
 
@@ -1765,6 +2216,21 @@ class TestScrapedViewFeature(FeaturePageTestCase):
         feature_content = view.load_feature(feature.id)
         expected = {
             'id': str(feature.id), 'name': {'en': 'Basic support'},
+            'slug': feature.slug, 'mdn_uri': None, 'obsolete': False,
+            'stable': True, 'standardized': True, 'experimental': False,
+            'links': {
+                'children': [], 'parent': str(self.feature.id),
+                'sections': [], 'supports': []}}
+        self.assertDataEqual(expected, feature_content)
+
+    def test_load_feature_canonical_name(self):
+        feature = self.create(
+            Feature, slug='web-css-background-size_list-item',
+            name={'zxx': 'list-item'}, parent=self.feature)
+        view = ScrapedViewFeature(self.page, self.empty_scrape())
+        feature_content = view.load_feature(feature.id)
+        expected = {
+            'id': str(feature.id), 'name': 'list-item',
             'slug': feature.slug, 'mdn_uri': None, 'obsolete': False,
             'stable': True, 'standardized': True, 'experimental': False,
             'links': {
@@ -2017,13 +2483,13 @@ class TestScrapeFeaturePage(FeaturePageTestCase):
             translation.save()
 
     def test_empty_page(self):
-        self.set_content('')
+        self.set_content('  ')
         scrape_feature_page(self.page)
         fp = FeaturePage.objects.get(id=self.page.id)
-        self.assertEqual(fp.STATUS_PARSED, fp.status)
-        expected_error = ['<pre>No &lt;h2&gt; found in page</pre>']
-        self.assertEqual(expected_error, fp.data['meta']['scrape']['errors'])
-        self.assertTrue(fp.has_issues)
+        self.assertEqual(fp.STATUS_NO_DATA, fp.status)
+        self.assertEqual(
+            [], fp.data['meta']['scrape']['raw']['issues'])
+        self.assertFalse(fp.has_issues)
 
     def test_parse_issue(self):
         bad_page = '''\
@@ -2035,66 +2501,15 @@ class TestScrapeFeaturePage(FeaturePageTestCase):
         scrape_feature_page(self.page)
         fp = FeaturePage.objects.get(id=self.page.id)
         self.assertEqual(fp.STATUS_PARSED, fp.status)
-        expected_error = [range_error_to_html(
-            bad_page, 93, 108,
-            'Section <h2>Specifications</h2> was not parsed. The parser'
-            ' failed on rule "spec_table", but the real cause may be'
-            ' unexpected content after this position. Definition:',
-            'spec_table = "<table class="standard-table">" _ spec_head'
-            ' _ spec_body _ "</table>" _')]
-        self.assertEqual(expected_error, fp.data['meta']['scrape']['errors'])
+        expected_issues = [[
+            'section_skipped', 93, 108,
+            {'rule_name': 'spec_table', 'title': 'Specifications',
+             'rule': ('spec_table = "<table class="standard-table">"'
+                      ' _ spec_head _ spec_body _ "</table>" _')}]]
+        self.assertEqual(
+            expected_issues,
+            fp.data['meta']['scrape']['raw']['issues'])
         self.assertTrue(fp.has_issues)
-
-
-class TestRangeErrorToHtml(ScrapeTestCase):
-    def test_no_rule(self):
-        html = range_error_to_html(
-            self.sample_page, 902, 986,
-            'Unknown Specification "CSS3 Backgrounds"')
-        expected = """\
-<div><p>Unknown Specification &quot;CSS3 Backgrounds&quot;</p><p>Context:\
-<pre>32      &lt;td&gt;{{CompatGeckoDesktop(&quot;1&quot;)}}&lt;/td&gt;
-33    &lt;/tr&gt;
-34   &lt;/tbody&gt;
-**        ^^^
-35  &lt;/table&gt;
-** ^^^^^^^^^
-36 &lt;/div&gt;
-** ^^^^^^
-37 &lt;h2 id=&quot;See_also&quot;&gt;See also&lt;/h2&gt;
-** ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-38 &lt;ul&gt;
-** ^^^^
-39  &lt;li&gt;{{CSS_Reference:Position}}&lt;/li&gt;
-** ^^^^^^^^^^^^^^^^^^^^^^^^^^          \n\
-</pre></p></div>"""
-        self.assertEqual(expected, html)
-
-    def test_rule(self):
-        html = range_error_to_html(
-            self.sample_page, 902, 986,
-            'Unknown Specification "CSS3 Backgrounds"',
-            'me = "awesome"')
-        expected = """\
-<div><p>Unknown Specification &quot;CSS3 Backgrounds&quot;</p>\
-<p><code>me = &quot;awesome&quot;</code></p>\
-<p>Context:<pre>32      &lt;td&gt;{{CompatGeckoDesktop(&quot;1&quot;)}}\
-&lt;/td&gt;
-33    &lt;/tr&gt;
-34   &lt;/tbody&gt;
-**        ^^^
-35  &lt;/table&gt;
-** ^^^^^^^^^
-36 &lt;/div&gt;
-** ^^^^^^
-37 &lt;h2 id=&quot;See_also&quot;&gt;See also&lt;/h2&gt;
-** ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-38 &lt;ul&gt;
-** ^^^^
-39  &lt;li&gt;{{CSS_Reference:Position}}&lt;/li&gt;
-** ^^^^^^^^^^^^^^^^^^^^^^^^^^          \n\
-</pre></p></div>"""
-        self.assertEqual(expected, html)
 
 
 class TestSlugify(TestCase):
