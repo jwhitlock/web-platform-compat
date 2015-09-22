@@ -83,4 +83,4 @@ git+git://github.com/erikrose/parsimonious@20863d86a#egg=parsimonious
 requests==2.7.0
 oauthlib==1.0.3
 requests-oauthlib==0.5.0
-django-allauth==0.20.0
+django-allauth==0.23.0

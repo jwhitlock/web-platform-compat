@@ -6,7 +6,7 @@ This file is loaded by jingo and must be named helpers.py
 from allauth.account.utils import user_display
 from allauth.socialaccount import providers
 from allauth.socialaccount.templatetags.socialaccount import \
-    get_social_accounts
+    get_social_accounts, get_providers
 
 from jinja2 import contextfunction
 from jingo import register
@@ -56,3 +56,4 @@ def provider_login_url(
 
 register.function(user_display)
 register.function(get_social_accounts)
+register.function(get_providers)
