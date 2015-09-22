@@ -9,7 +9,7 @@ Jinja2==2.8
 jingo==0.7.1
 
 # Django REST Framework.
-djangorestframework==3.1.3
+djangorestframework==3.2.4
 Markdown==2.6.2
 django-filter==0.11.0
 

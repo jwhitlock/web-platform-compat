@@ -153,11 +153,6 @@ class FeatureSerializer(HistoricalModelSerializer):
             'sections', 'supports', 'parent', 'children',
             'history_current', 'history')
         read_only_fields = ('supports',)
-        extra_kwargs = {
-            'sections': {
-                'default': []
-            }
-        }
 
 
 class MaturitySerializer(HistoricalModelSerializer):

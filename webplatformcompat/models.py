@@ -83,7 +83,8 @@ class Feature(MPTTModel):
     parent = TreeForeignKey(
         'self', help_text="Feature set that contains this feature",
         null=True, blank=True, related_name='children')
-    sections = SortedManyToManyField('Section', related_name='features')
+    sections = SortedManyToManyField(
+        'Section', related_name='features', blank=True)
     objects = CachingManager()
     # history = HistoricalFeatureRecords()  # Registered below
 

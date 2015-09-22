@@ -88,8 +88,8 @@ class FeatureViewSet(ModelViewSet):
 
     def filter_queryset(self, queryset):
         qs = super(FeatureViewSet, self).filter_queryset(queryset)
-        if 'parent' in self.request.QUERY_PARAMS:
-            filter_value = self.request.QUERY_PARAMS['parent']
+        if 'parent' in self.request.query_params:
+            filter_value = self.request.query_params['parent']
             if not filter_value:
                 qs = qs.filter(parent=None)
         return qs
