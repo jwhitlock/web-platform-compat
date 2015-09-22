@@ -15,7 +15,7 @@ django-filter==0.11.0
 
 # Django extensions
 six==1.9.0
-django-extensions==1.5.5
+django-extensions==1.5.7
 
 # JSON API interfaces for Django REST Framework
 git+git://github.com/jwhitlock/drf-json-api@v0.1d#egg=drf-json-api
