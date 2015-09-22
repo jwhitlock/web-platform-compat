@@ -59,7 +59,7 @@ class TestProvidersMediaJS(TestCase):
         self.mocked_get_list.return_value = [mock_provider]
         actual = providers_media_js(self.context)
         self.assertEqual(fake_js, actual)
-        mock_provider.media_js.assertCalledOnce(self.context['request'])
+        mock_provider.media_js.assert_called_once_with(self.context['request'])
 
 
 class TestProviderLoginUrl(TestCase):

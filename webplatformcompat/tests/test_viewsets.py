@@ -213,10 +213,11 @@ class TestGenericViewset(APITestCase):
         })
         url = reverse('browser-detail', kwargs={'pk': browser.pk})
         url += '?changeset=%s' % changeset.pk
+        mock_update.reset_mock()
         response = self.client.put(
             url, data=data, content_type="application/vnd.api+json")
         self.assertEqual(200, response.status_code, response.data)
-        mock_update.assertNotCalled()
+        mock_update.assert_not_called()
 
     def test_put_as_json(self):
         """If content is application/json, put is full put"""
@@ -274,7 +275,7 @@ class TestGenericViewset(APITestCase):
         response = self.client.delete(url)
         self.assertEqual(204, response.status_code, response.content)
         self.assertFalse(Browser.objects.filter(pk=browser.pk).exists())
-        mock_update.assertNotCalled()
+        mock_update.assert_not_called()
 
 
 class TestFeatureViewSet(APITestCase):

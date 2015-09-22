@@ -139,7 +139,7 @@ class TestFeaturePageCreateView(TestCase):
         self.assertEqual(feature_page.feature_id, self.feature.id)
         expected = 'http://testserver' + feature_page.get_absolute_url()
         self.assertEqual(expected, response["LOCATION"])
-        mock_task.assertCalledOnce(feature_page.id)
+        mock_task.assert_called_once_with(feature_page.id)
 
 
 class TestFeaturePageDetailView(TestCase):
@@ -242,7 +242,7 @@ class TestFeaturePageReParseView(TestCase):
         response = self.client.post(self.url)
         dest_url = reverse('feature_page_detail', kwargs={'pk': self.fp.pk})
         self.assertRedirects(response, dest_url)
-        mocked_parse.assertCalledOnce(self.fp.pk)
+        mocked_parse.assert_called_once_with(self.fp.pk)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_PARSING, fp.status)
 
@@ -267,7 +267,7 @@ class TestFeaturePageResetView(TestCase):
         response = self.client.post(self.url)
         dest_url = reverse('feature_page_detail', kwargs={'pk': self.fp.pk})
         self.assertRedirects(response, dest_url)
-        mocked_crawl.assertCalledOnce(self.fp.pk)
+        mocked_crawl.assert_called_once_with(self.fp.pk)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_STARTING, fp.status)
 
