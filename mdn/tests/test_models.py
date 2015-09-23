@@ -257,11 +257,13 @@ Enjoy.
 
 class TestPageMetaModel(TestCase):
     def setUp(self):
-        fp = FeaturePage(
+        feature = self.create(Feature)
+        fp = FeaturePage.objects.create(
+            feature=feature,
             url="https://developer.mozilla.org/en-US/docs/Web/CSS/display",
-            feature_id=666,
             status=FeaturePage.STATUS_PARSED)
-        self.meta = PageMeta(page=fp, path="/de/docs/Web/CSS/display")
+        self.meta = PageMeta.objects.create(
+            page=fp, path="/de/docs/Web/CSS/display")
 
     def test_str(self):
         expected = u'/de/docs/Web/CSS/display retrieved 0\xa0minutes ago'

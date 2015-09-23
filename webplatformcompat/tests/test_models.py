@@ -32,12 +32,12 @@ class TestManager(TestCase):
 
     def test_create(self):
         browser = Browser.objects.create()
-        self.mocked_update_cache.assertCalledOnce(
-            'Browser', browser.id, browser)
+        self.mocked_update_cache.assert_called_once_with(
+            'Browser', browser.id, browser, False)
 
     def test_create_delay(self):
         Browser.objects.create(_delay_cache=True)
-        self.mocked_update_cache.assertNotCalled()
+        self.mocked_update_cache.assert_not_called()
 
 
 class TestBrowser(unittest.TestCase):
@@ -116,31 +116,33 @@ class TestSaveSignal(unittest.TestCase):
 
     def test_raw(self):
         post_save_update_cache(Browser, self.browser, created=True, raw=True)
-        self.mocked_update_cache.assertNotCalled()
+        self.mocked_update_cache.assert_not_called()
 
     def test_create(self):
         post_save_update_cache(Browser, self.browser, created=True, raw=False)
-        self.mocked_update_cache.assertCalledOnce('Browser', 666, self.browser)
+        self.mocked_update_cache.assert_called_once_with(
+            'Browser', 666, self.browser, False)
 
     def test_create_delayed(self):
         self.browser._delay_cache = True
         post_save_update_cache(Browser, self.browser, created=True, raw=False)
-        self.mocked_update_cache.assertNotCalled()
+        self.mocked_update_cache.assert_not_called()
 
 
 class TestM2MChangedSignal(TestCase):
     def setUp(self):
-        self.patcher = mock.patch(
+        patcher = mock.patch(
             'webplatformcompat.tasks.update_cache_for_instance')
         self.login_user()
-        self.mocked_update_cache = self.patcher.start()
+        self.mocked_update_cache = patcher.start()
+        self.addCleanup(patcher.stop)
         self.maturity = self.create(Maturity, slug='foo')
         self.specification = self.create(Specification, maturity=self.maturity)
         self.section = self.create(Section, specification=self.specification)
         self.feature = self.create(Feature)
+        self.mocked_update_cache.reset_mock()
 
     def tearDown(self):
-        self.patcher.stop()
         self.section.delete()
         self.specification.delete()
         self.maturity.delete()
@@ -148,42 +150,48 @@ class TestM2MChangedSignal(TestCase):
 
     def test_add_section_to_feature(self):
         self.feature.sections.add(self.section)
-        self.mocked_update_cache.assertCalledOnce(
-            'Feature', self.feature.pk, self.feature)
+        self.mocked_update_cache.assert_has_calls([
+            mock.call('Feature', self.feature.pk, self.feature, False),
+            mock.call('Section', self.section.pk, self.section, False)])
+        self.assertEqual(self.mocked_update_cache.call_count, 2)
 
     def test_add_section_to_feature_delayed(self):
         self.feature._delay_cache = True
         self.feature.sections.add(self.section)
-        self.mocked_update_cache.assertNotCalled()
+        self.mocked_update_cache.assert_not_called()
 
     def test_add_feature_to_section(self):
         self.section.features.add(self.feature)
-        self.mocked_update_cache.assertCalledOnce(
-            'Feature', self.feature.pk, self.feature)
+        self.mocked_update_cache.assert_has_calls([
+            mock.call('Feature', self.feature.pk, self.feature, False),
+            mock.call('Section', self.section.pk, self.section, False)])
+        self.assertEqual(self.mocked_update_cache.call_count, 2)
 
     def test_clear_features_from_section(self):
+        self.section.features.add(self.feature)
+        self.mocked_update_cache.reset_mock()
         self.section.features.clear()
-        self.mocked_update_cache.assertCalledOnce(
-            'Feature', self.feature.pk, self.feature)
+        self.mocked_update_cache.assert_called_once_with(
+            'Section', self.section.pk, self.section, False)
 
 
 class TestDeleteSignal(TestCase):
     def setUp(self):
-        self.patcher = mock.patch(
+        patcher = mock.patch(
             'webplatformcompat.tasks.update_cache_for_instance')
         self.login_user()
-        self.mocked_update_cache = self.patcher.start()
+        self.mocked_update_cache = patcher.start()
+        self.addCleanup(patcher.stop)
         self.maturity = self.create(Maturity, slug='foo')
-
-    def tearDown(self):
-        self.patcher.stop()
+        self.mocked_update_cache.reset_mock()
 
     def test_delete(self):
+        pk = self.maturity.pk
         self.maturity.delete()
-        self.mocked_update_cache.assertCalledOnce(
-            'Maturity', self.maturity.pk, self.maturity)
+        self.mocked_update_cache.assert_called_once_with(
+            'Maturity', pk, self.maturity, False)
 
     def test_delete_delayed(self):
         self.maturity._delay_cache = True
         self.maturity.delete()
-        self.mocked_update_cache.assertNotCalled()
+        self.mocked_update_cache.assert_not_called()

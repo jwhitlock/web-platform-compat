@@ -38,7 +38,7 @@ class TestStartCrawlTask(TestCase):
 
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_META, fp.status)
-        self.mocked_fetch_meta.assertCalledOnce(fp.id)
+        self.mocked_fetch_meta.assert_called_once_with(fp.id)
 
     def test_meta_fetching(self):
         meta = self.fp.meta()
@@ -58,7 +58,7 @@ class TestStartCrawlTask(TestCase):
 
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_PAGES, fp.status)
-        self.mocked_fetch_all.assertCalledOnce(fp.id)
+        self.mocked_fetch_all.assert_called_once_with(fp.id)
 
     def test_meta_error(self):
         meta = self.fp.meta()
@@ -115,7 +115,7 @@ class TestFetchMetaTask(TestCase):
         meta = fp.meta()
         self.assertEqual(meta.STATUS_FETCHED, meta.status)
         self.assertEqual(data, meta.data())
-        self.mocked_fetch_all.assertCalledOnce(self.fp.id)
+        self.mocked_fetch_all.assert_called_once_with(self.fp.id)
 
     def test_not_found(self):
         self.response.status_code = 404
@@ -158,7 +158,7 @@ class TestFetchMetaTask(TestCase):
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_META, fp.status)
         self.assertEqual(new_url, fp.url)
-        mocked_delay.assertCalledOnce(self.fp.id)
+        mocked_delay.assert_called_once_with(self.fp.id)
 
     def test_redirect_to_zone(self):
         data = {
@@ -180,7 +180,7 @@ class TestFetchMetaTask(TestCase):
         meta = fp.meta()
         self.assertEqual(meta.STATUS_FETCHED, meta.status)
         self.assertEqual(data, meta.data())
-        self.mocked_fetch_all.assertCalledOnce(self.fp.id)
+        self.mocked_fetch_all.assert_called_once_with(self.fp.id)
 
 
 class TestFetchAllTranslationsTask(TestCase):
@@ -217,8 +217,9 @@ class TestFetchAllTranslationsTask(TestCase):
         fetch_all_translations(self.fp.id)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_PAGES, fp.status)
-        self.mocked_fetch_trans.assertCalledOnce(self.fp.id, 'en-US')
-        self.mocked_fetch_trans.assertCalledOnce(self.fp.id, 'es')
+        self.mocked_fetch_trans.assert_any_call(self.fp.id, 'en-US')
+        self.mocked_fetch_trans.assert_any_call(self.fp.id, 'es')
+        self.assertEqual(2, self.mocked_fetch_trans.call_count)
 
     def test_fetch_all_in_progress(self):
         for t in self.fp.translations():
@@ -238,7 +239,7 @@ class TestFetchAllTranslationsTask(TestCase):
         fetch_all_translations(self.fp.id)
         fp = FeaturePage.objects.get(id=self.fp.id)
         self.assertEqual(fp.STATUS_PARSING, fp.status)
-        self.mocked_parse_page.assertCalledOnce(self.fp.id)
+        self.mocked_parse_page.assert_called_once_with(self.fp.id)
 
     def test_fetch_one_issue(self):
         t = self.fp.translations()[-1]
@@ -294,7 +295,7 @@ class TestFetchTranslationTask(TestCase):
         self.assertEqual(fp.STATUS_PAGES, fp.status)
         trans = fp.translatedcontent_set.get(locale='en-US')
         self.assertEqual(trans.STATUS_FETCHED, trans.status)
-        self.mocked_fetch_all.assertCalledOnce(self.fp.id)
+        self.mocked_fetch_all.assert_called_once_with(self.fp.id)
 
     def test_parsing(self):
         self.fp.status = self.fp.STATUS_PARSING
@@ -347,18 +348,20 @@ class TestParsePageTask(TestCase):
     @mock.patch('mdn.tasks.scrape_feature_page')
     def test_call(self, mock_scrape):
         fp = FeaturePage.objects.create(
-            feature_id=666, status=FeaturePage.STATUS_PARSING)
+            feature_id=666, status=FeaturePage.STATUS_PARSING,
+            url="https://developer.mozilla.org/en-US/_docs/hi")
         parse_page(fp.id)
-        mock_scrape.assertCalledOnce(fp.id)
+        mock_scrape.assert_called_once_with(fp)
 
     @mock.patch('mdn.tasks.scrape_feature_page')
     def test_exception(self, mock_scrape):
         mock_scrape.side_effect = ValueError("Unexpected error")
         feature = self.create(Feature, slug="the-slug")
         fp = FeaturePage.objects.create(
-            feature=feature, status=FeaturePage.STATUS_PARSING)
+            feature=feature, status=FeaturePage.STATUS_PARSING,
+            url="https://developer.mozilla.org/en-US/_docs/test")
         self.assertRaises(ValueError, parse_page, fp.id)
-        mock_scrape.assertCalledOnce(fp.id)
+        mock_scrape.assert_called_once_with(fp)
         fp = FeaturePage.objects.get(id=fp.id)
         issues = fp.data['meta']['scrape']['issues']
         self.assertEqual(1, len(issues))

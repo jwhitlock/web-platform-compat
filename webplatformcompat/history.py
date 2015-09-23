@@ -8,8 +8,6 @@ from django.conf import settings
 from django.db import models
 from django.http import HttpResponseBadRequest
 from django.utils.timezone import now
-from django_extensions.db.fields import (
-    CreationDateTimeField, ModificationDateTimeField)
 
 from simple_history.middleware import (
     HistoryRequestMiddleware as BaseHistoryRequestMiddleware)
@@ -48,8 +46,8 @@ class Changeset(models.Model):
         'supports', 'versions',
     ]
 
-    created = CreationDateTimeField()
-    modified = ModificationDateTimeField()
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(user_model, related_name="changesets")
     closed = models.BooleanField(
         help_text="Is the changeset closed to new changes?",

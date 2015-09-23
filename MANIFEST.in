@@ -1,5 +1,5 @@
 include LICENSE CONTRIBUTING.rst HISTORY.rst README.rst
-include Makefile .coveragerc manage.py
+include Makefile manage.py
 include requirements.txt requirements-dev.txt
 include Procfile app.json
 include env.dist
@@ -8,10 +8,9 @@ recursive-include bcauth *.py
 recursive-include bcauth/static *.css *.png
 recursive-include bcauth/templates *.jinja2 *.txt *.html
 recursive-include data README.txt
-recursive-include docs Makefile *.gv *.svg conf.py *.rst make.bat *.py *.sh doc_cases.json
+recursive-include docs Makefile *.gv *.svg conf.py *.rst make.bat *.py doc_cases.json
 recursive-include docs/raw *.txt *.json .keep
 recursive-include docs/resources *.json README.txt
-recursive-include tests *.py
 recursive-include tools *.py *.sh
 recursive-include mdn *.py
 recursive-include mdn/templates *.jinja2

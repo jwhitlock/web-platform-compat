@@ -8,13 +8,13 @@ from json import dumps, loads
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.six import text_type
 from django.utils.six.moves import zip
 from django.utils.six.moves.urllib_parse import urlparse
 from django.utils.timesince import timesince
-from django_extensions.db.fields import ModificationDateTimeField
 from django_extensions.db.fields.json import JSONField
 
 from webplatformcompat.models import Feature
@@ -69,8 +69,8 @@ class FeaturePage(models.Model):
     status = models.IntegerField(
         help_text="Status of MDN Parsing process",
         default=STATUS_STARTING, choices=STATUS_CHOICES)
-    modified = ModificationDateTimeField(
-        help_text="Last modification time", db_index=True)
+    modified = models.DateTimeField(
+        help_text="Last modification time", db_index=True, auto_now=True)
     raw_data = models.TextField(help_text="JSON-encoded parsed content")
 
     def __str__(self):
@@ -93,7 +93,7 @@ class FeaturePage(models.Model):
 
     def same_since(self):
         """Return a string indicating when the object was changes"""
-        return timesince(self.modified) + " ago"
+        return timesince(self.modified or timezone.now()) + " ago"
 
     def meta(self):
         """Get the page Meta section."""
@@ -378,8 +378,8 @@ class Content(models.Model):
     """The content of an MDN page."""
     page = models.ForeignKey(FeaturePage)
     path = models.CharField(help_text="Path of MDN page", max_length=1024)
-    crawled = ModificationDateTimeField(
-        help_text="Time when the content was retrieved")
+    crawled = models.DateTimeField(
+        help_text="Time when the content was retrieved", auto_now=True)
     raw = models.TextField(help_text="Raw content of the page")
     STATUS_STARTING = 0
     STATUS_FETCHING = 1
@@ -402,7 +402,8 @@ class Content(models.Model):
         return self.page.domain() + self.path
 
     def __str__(self):
-        return "%s retrieved %s ago" % (self.path, timesince(self.crawled))
+        return "%s retrieved %s ago" % (
+            self.path, timesince(self.crawled or timezone.now()))
 
 
 class PageMeta(Content):

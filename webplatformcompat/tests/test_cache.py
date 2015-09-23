@@ -67,8 +67,9 @@ class TestCache(TestCase):
 
     def test_changeset_v1_serializer(self):
         created = datetime(2014, 10, 29, 8, 57, 21, 806744, UTC)
-        changeset = self.create(Changeset, user=self.user, created=created)
-        Changeset.objects.filter(pk=changeset.pk).update(modified=created)
+        changeset = self.create(Changeset, user=self.user)
+        Changeset.objects.filter(pk=changeset.pk).update(
+            created=created, modified=created)
         changeset = Changeset.objects.get(pk=changeset.pk)
         out = self.cache.changeset_v1_serializer(changeset)
         expected = {

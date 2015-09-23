@@ -1,11 +1,12 @@
 {% extends "account/base.jinja2" %}
 {% from "socialaccount/snippets/provider_list.jinja2" import list %}
+{% set providers = get_providers() %}
 
 {% block head_title %}{{ _("Sign In") }}{% endblock %}
 {% block body_title %}{{ _("Sign In") }}{% endblock %}
 
 {% block content %}
-{% if socialaccount.providers  %}
+{% if providers %}
 <p>{% trans site_name=site.name %}Please sign in with one
 of your existing third party accounts. Or, <a href="{{ signup_url }}">sign up</a>
 for a {{site_name}} account and sign in below:{% endtrans %}</p>
@@ -13,7 +14,7 @@ for a {{site_name}} account and sign in below:{% endtrans %}</p>
 <div class="socialaccount_ballot">
 
   <ul class="socialaccount_providers">
-    {{ list(request, socialaccount.providers, process='login') }}
+    {{ list(request, providers, process='login') }}
   </ul>
 
   <div class="login-or">{{ _('or') }}</div>
@@ -40,7 +41,7 @@ for a {{site_name}} account and sign in below:{% endtrans %}</p>
 {% endblock %}
 
 {% block body_js_extra %}
-{% if socialaccount.providers  %}
+{% if providers  %}
 {{ providers_media_js() }}
 {% endif %}
 {% endblock %}
