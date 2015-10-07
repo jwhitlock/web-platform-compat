@@ -75,4 +75,4 @@ GitHub workflow
    (``$ git push origin new-issue-888888``)
 10. Issue pull request (Click Pull Request button)
 
-.. _`Get your environment setup`: installation.html
+.. _`Get your environment setup`: https://github.com/mdn/browsercompat/wiki/Installation
