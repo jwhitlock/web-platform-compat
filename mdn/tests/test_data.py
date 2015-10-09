@@ -3,7 +3,7 @@
 from __future__ import unicode_literals
 
 from mdn.data import Data
-from webplatformcompat.models import Browser, Feature, Support
+from webplatformcompat.models import Feature, Support
 from .base import TestCase
 
 
@@ -23,19 +23,7 @@ class TestLookupBrowserParams(TestDataBase):
             new_params = self.data.lookup_browser_params(raw_name)
         self.assertEqual(params, new_params)
 
-    def test_browser_params_new_pre_1128525(self):
-        self.create(Browser, slug="chrome", name='{"en": "Chrome"}')
-        self.create(Browser, slug="firefox", name='{"en": "Firefox"}')
-        self.assert_browser_params(
-            'Safari', None, '_Safari', 'Safari', '_Safari')
-
-    def test_browser_params_new_defaults_to_pre_1128525(self):
-        self.assert_browser_params(
-            'Safari', None, '_Safari', 'Safari', '_Safari')
-
-    def test_browser_params_new_post_1128525(self):
-        self.get_instance('Browser', 'chrome_desktop')
-        self.get_instance('Browser', 'firefox_desktop')
+    def test_browser_params_new_browser(self):
         self.assert_browser_params(
             'Safari', None, '_Safari for Desktop', 'Safari for Desktop',
             '_Safari for Desktop')
