@@ -603,21 +603,22 @@ class ViewFeatureExtraSerializer(ModelSerializer):
         TODO: Move this logic into the database, API
         """
         known_browsers = dict((
-            ('chrome', ('Desktop Browsers', 1)),
-            ('firefox', ('Desktop Browsers', 2)),
-            ('internet_explorer', ('Desktop Browsers', 3)),
-            ('opera', ('Desktop Browsers', 4)),
-            ('safari', ('Desktop Browsers', 5)),
-            ('android', ('Mobile Browsers', 6)),
-            ('chrome_for_android', ('Mobile Browsers', 7)),
-            ('chrome_mobile', ('Mobile Browsers', 8)),
-            ('firefox_mobile', ('Mobile Browsers', 9)),
-            ('ie_mobile', ('Mobile Browsers', 10)),
-            ('opera_mini', ('Mobile Browsers', 11)),
-            ('opera_mobile', ('Mobile Browsers', 12)),
-            ('safari_mobile', ('Mobile Browsers', 13)),
-            ('blackberry', ('Mobile Browsers', 14)),
-            ('firefox_os', ('Non-Browser Environments', 15)),
+            ('chrome_desktop', ('Desktop Browsers', 1)),
+            ('edge', ('Desktop Browsers', 2)),
+            ('firefox_desktop', ('Desktop Browsers', 3)),
+            ('ie_desktop', ('Desktop Browsers', 4)),
+            ('opera_desktop', ('Desktop Browsers', 5)),
+            ('safari_desktop', ('Desktop Browsers', 6)),
+            ('android', ('Mobile Browsers', 10)),
+            ('android_webview', ('Mobile Browsers', 11)),
+            ('blackberry', ('Mobile Browsers', 12)),
+            ('chrome_for_android', ('Mobile Browsers', 13)),
+            ('firefox_android', ('Mobile Browsers', 14)),
+            ('ie_mobile', ('Mobile Browsers', 15)),
+            ('opera_mini', ('Mobile Browsers', 16)),
+            ('opera_mobile', ('Mobile Browsers', 17)),
+            ('safari_ios', ('Mobile Browsers', 18)),
+            ('firefox_os', ('Non-Browser Environments', 20)),
         ))
         next_other = 16
         sections = [

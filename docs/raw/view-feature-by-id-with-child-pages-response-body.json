@@ -919,26 +919,26 @@
             "tabs": [
                 {
                     "name": {
-                        "en": "Desktop Browsers"
-                    },
-                    "browsers": [
-                        "3",
-                        "6",
-                        "10",
-                        "11",
-                        "14"
-                    ]
-                },
-                {
-                    "name": {
                         "en": "Mobile Browsers"
                     },
                     "browsers": [
                         "1",
+                        "2",
+                        "9"
+                    ]
+                },
+                {
+                    "name": {
+                        "en": "Non-Browser Environments"
+                    },
+                    "browsers": [
+                        "3",
+                        "6",
                         "7",
-                        "9",
-                        "15",
-                        "2"
+                        "10",
+                        "11",
+                        "14",
+                        "15"
                     ]
                 }
             ],
