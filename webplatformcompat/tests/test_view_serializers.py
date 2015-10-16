@@ -34,7 +34,8 @@ class TestViewFeatureViewSet(APITestCase):
 
     def setup_minimal(self):
         feature = self.create(Feature, slug='feature')
-        browser = self.create(Browser, slug='chrome', name={'en': 'Browser'})
+        browser = self.create(
+            Browser, slug='chrome_desktop', name={'en': 'Browser'})
         version = self.create(Version, browser=browser, status='current')
         support = self.create(Support, version=version, feature=feature)
         maturity = self.create(
@@ -92,7 +93,7 @@ class TestViewFeatureViewSet(APITestCase):
             "linked": {
                 "browsers": [{
                     "id": str(browser.pk),
-                    "slug": "chrome",
+                    "slug": "chrome_desktop",
                     "name": {"en": "Browser"},
                     "note": None,
                     "links": {

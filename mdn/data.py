@@ -24,17 +24,7 @@ class Data(object):
     BrowserParams = namedtuple(
         'BrowserParams', ['browser', 'browser_id', 'name', 'slug'])
 
-    # bug 1128525 changes names and slugs so that desktop isn't implied
-    pre_1128525_name_fixes = {
-        'Firefox (Gecko)': 'Firefox',
-        'Firefox Mobile (Gecko)': 'Firefox Mobile',
-        'Firefox OS (Gecko)': 'Firefox OS',
-        'Safari (WebKit)': 'Safari',
-        'Windows Phone': 'IE Mobile',
-        'IE Phone': 'IE Mobile',
-        'IE': 'Internet Explorer',
-    }
-    post_1128525_name_fixes = {
+    browser_name_fixes = {
         'Android': 'Android Browser',
         'BlackBerry': 'BlackBerry Browser',
         'Chrome': 'Chrome for Desktop',
@@ -66,19 +56,12 @@ class Data(object):
         * slug - A unique slug for this browser
         """
         # Load existing browser data
-        # Also, detect if names and slugs have been changed by bug 1128525
         if self.browser_data is None:
             self.browser_data = {}
             for browser in Browser.objects.all():
                 key = browser.name[locale]
-                if key == 'Firefox':
-                    self.browser_name_fixes = self.pre_1128525_name_fixes
-                if key == 'Firefox for Desktop':
-                    self.browser_name_fixes = self.post_1128525_name_fixes
                 self.browser_data[key] = self.BrowserParams(
                     browser, browser.pk, key, browser.slug)
-            if not hasattr(self, 'browser_name_fixes'):
-                self.browser_name_fixes = self.pre_1128525_name_fixes
 
         # Expand to full name, handle common alternate names
         full_name = self.browser_name_fixes.get(name, name)
