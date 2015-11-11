@@ -313,6 +313,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'webplatformcompat.pagination.Pagination',
     'PAGE_SIZE': 10,
+    'DEFAULT_VERSIONING_CLASS': (
+        'rest_framework.versioning.NamespaceVersioning'),
 }
 
 # Django nose

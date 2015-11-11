@@ -42,7 +42,7 @@
             <li{% if request.path.startswith(url('about')) %} class="active"{% endif %}>
               <a href="{{url('about')}}">About</a></li>
             <li{% if request.path.startswith(url('api_root')) %} class="active"{% endif %}>
-              <a href="{{url('api-root')}}">API</a></li>
+              <a href="{{url('v1:api-root')}}">API</a></li>
             <li{% if request.path.startswith(url('browse')) %} class="active"{% endif %}>
               <a href="{{url('browse')}}">Browse</a></li>
             <li{% if request.path.startswith(url('feature_page_list')) %} class="active"{% endif %}>

@@ -21,7 +21,7 @@ webplatformcompat_urlpatterns = patterns(
         namespace='rest_framework')),
     url(r'^api/$', RedirectView.as_view(url='/api/v1/', permanent=False),
         name='api_root'),
-    url(r'^api/v1/', include(router.urls)),
+    url(r'^api/v1/', include(router.urls, namespace='v1')),
     url(r'^importer$', RedirectView.as_view(
         url='/importer/', permanent=False)),
     url(r'^importer/', include(mdn_urlpatterns)),

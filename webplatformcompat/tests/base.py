@@ -12,13 +12,14 @@ from webplatformcompat.history import Changeset
 class TestMixin(object):
     """Useful methods for testing"""
     maxDiff = None
+    namespace = 'v1'
 
     def tearDown(self):
         cache.clear()
 
     def api_reverse(self, viewname, **kwargs):
-        """Create a path to an API view"""
-        return reverse(viewname, kwargs=kwargs)
+        """Create a path to a namespaced API view."""
+        return reverse("%s:%s" % (self.namespace, viewname), kwargs=kwargs)
 
     def login_user(self, groups=None):
         """Create and login a user, saving to self.user.

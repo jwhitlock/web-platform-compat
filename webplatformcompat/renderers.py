@@ -1,8 +1,10 @@
 from collections import OrderedDict
 from json import loads
 
+from django.core.urlresolvers import get_resolver
 from django.template import loader, Context
 from django.utils import encoding, translation
+from django.utils.six.moves.urllib.parse import urlparse, urlunparse
 
 from rest_framework.relations import ManyRelatedField
 from rest_framework.renderers import TemplateHTMLRenderer
@@ -222,6 +224,17 @@ class JsonApiRenderer(BaseJsonApiRender):
             return getattr(resource.serializer, 'fields', None)
         else:
             return super(JsonApiRenderer, self).fields_from_resource(resource)
+
+    def url_to_template(self, view_name, request, template_name):
+        prefix, resolver = get_resolver(None).namespace_dict['v1']
+        info = resolver.reverse_dict[view_name]
+        path_template = info[0][0][0]
+        id_field = info[0][0][1][0]
+        path = prefix + path_template % {id_field: '{%s}' % template_name}
+        parsed_url = urlparse(request.build_absolute_uri())
+        return urlunparse(
+            [parsed_url.scheme, parsed_url.netloc, path, '', '', '']
+        )
 
 
 class JsonApiTemplateHTMLRenderer(TemplateHTMLRenderer):
