@@ -12,14 +12,13 @@ from webplatformcompat.history import Changeset
 class TestMixin(object):
     """Useful methods for testing"""
     maxDiff = None
-    baseUrl = 'http://testserver'
 
     def tearDown(self):
         cache.clear()
 
-    def reverse(self, viewname, **kwargs):
-        """Create a full URL for a view"""
-        return self.baseUrl + reverse(viewname, kwargs=kwargs)
+    def api_reverse(self, viewname, **kwargs):
+        """Create a path to an API view"""
+        return reverse(viewname, kwargs=kwargs)
 
     def login_user(self, groups=None):
         """Create and login a user, saving to self.user.

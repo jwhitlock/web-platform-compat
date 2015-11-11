@@ -13,35 +13,44 @@ class TestViews(TestCase):
         response = self.client.get('')
         self.assertEqual(response.status_code, 200)
 
+    def full_api_reverse(self, viewname):
+        """Create a full URL for a namespaced API view."""
+        return 'http://testserver' + self.api_reverse(viewname)
+
     def test_api_root(self):
-        response = self.client.get(reverse('api-root'))
+        response = self.client.get(self.api_reverse('api-root'))
         expected = {
             'resources': {
-                'browsers': self.reverse('browser-list'),
-                'features': self.reverse('feature-list'),
-                'maturities': self.reverse('maturity-list'),
-                'specifications': self.reverse('specification-list'),
-                'sections': self.reverse('section-list'),
-                'supports': self.reverse('support-list'),
-                'versions': self.reverse('version-list'),
+                'browsers': self.full_api_reverse('browser-list'),
+                'features': self.full_api_reverse('feature-list'),
+                'maturities': self.full_api_reverse('maturity-list'),
+                'specifications': self.full_api_reverse('specification-list'),
+                'sections': self.full_api_reverse('section-list'),
+                'supports': self.full_api_reverse('support-list'),
+                'versions': self.full_api_reverse('version-list'),
             },
             'change_control': {
-                'changesets': self.reverse('changeset-list'),
-                'users': self.reverse('user-list'),
+                'changesets': self.full_api_reverse('changeset-list'),
+                'users': self.full_api_reverse('user-list'),
             },
             'history': {
-                'historical_browsers': self.reverse('historicalbrowser-list'),
-                'historical_features': self.reverse('historicalfeature-list'),
-                'historical_maturities': self.reverse(
+                'historical_browsers': self.full_api_reverse(
+                    'historicalbrowser-list'),
+                'historical_features': self.full_api_reverse(
+                    'historicalfeature-list'),
+                'historical_maturities': self.full_api_reverse(
                     'historicalmaturity-list'),
-                'historical_sections': self.reverse('historicalsection-list'),
-                'historical_specifications': self.reverse(
+                'historical_sections': self.full_api_reverse(
+                    'historicalsection-list'),
+                'historical_specifications': self.full_api_reverse(
                     'historicalspecification-list'),
-                'historical_supports': self.reverse('historicalsupport-list'),
-                'historical_versions': self.reverse('historicalversion-list'),
+                'historical_supports': self.full_api_reverse(
+                    'historicalsupport-list'),
+                'historical_versions': self.full_api_reverse(
+                    'historicalversion-list'),
             },
             'views': {
-                'view_features': self.reverse('viewfeatures-list')
+                'view_features': self.full_api_reverse('viewfeatures-list')
             },
         }
         actual = loads(response.content.decode('utf-8'))

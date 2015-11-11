@@ -5,7 +5,6 @@
 from json import loads
 
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
 
 from webplatformcompat.history import Changeset
 from webplatformcompat.models import Browser
@@ -19,7 +18,7 @@ class TestHistoryChangesetRequestMiddleware(APITestCase):
     def test_post_with_changeset(self):
         self.login_user()
         changeset = Changeset.objects.create(user=self.user)
-        url = reverse('browser-list') + '?changeset=%s' % changeset.id
+        url = self.api_reverse('browser-list') + '?changeset=%s' % changeset.id
         data = {'slug': 'firefox', 'name': '{"en": "Firefox"}'}
         response = self.client.post(url, data)
         self.assertEqual(201, response.status_code, response.data)
@@ -31,7 +30,7 @@ class TestHistoryChangesetRequestMiddleware(APITestCase):
         self.login_user()
         other = User.objects.create(username='other')
         changeset = Changeset.objects.create(user=other)
-        url = reverse('browser-list') + '?changeset=%s' % changeset.id
+        url = self.api_reverse('browser-list') + '?changeset=%s' % changeset.id
         data = {'slug': 'firefox', 'name': '{"en": "Firefox"}'}
         response = self.client.post(
             url, data, content_type="application/vnd.api+json")
@@ -47,7 +46,7 @@ class TestHistoryChangesetRequestMiddleware(APITestCase):
     def test_post_with_closed_changeset(self):
         self.login_user()
         changeset = Changeset.objects.create(user=self.user, closed=True)
-        url = reverse('browser-list') + '?changeset=%s' % changeset.id
+        url = self.api_reverse('browser-list') + '?changeset=%s' % changeset.id
         data = {'slug': 'firefox', 'name': '{"en": "Firefox"}'}
         response = self.client.post(
             url, data, content_type="application/vnd.api+json")
@@ -60,7 +59,7 @@ class TestHistoryChangesetRequestMiddleware(APITestCase):
     def test_post_with_error_not_json_api(self):
         self.login_user()
         changeset = Changeset.objects.create(user=self.user, closed=True)
-        url = reverse('browser-list') + '?changeset=%s' % changeset.id
+        url = self.api_reverse('browser-list') + '?changeset=%s' % changeset.id
         data = {'slug': 'firefox', 'name': '{"en": "Firefox"}'}
         response = self.client.post(url, data)
         self.assertEqual(400, response.status_code)
