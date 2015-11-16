@@ -1,20 +1,20 @@
 # Requirements for production / heroku
 
 # Django
-Django==1.8.5  # rq.filter: >=1.8, <1.9
+Django==1.8.6  # rq.filter: >=1.8, <1.9
 
 # Better templates
 MarkupSafe==0.23
 Jinja2==2.8
 
 # Django REST Framework.
-djangorestframework==3.2.4
-Markdown==2.6.2
+djangorestframework==3.3.1
+Markdown==2.6.4
 django-filter==0.11.0
 
 # Django extensions
-six==1.9.0
-django-extensions==1.5.7
+six==1.10.0
+django-extensions==1.5.9
 
 # JSON API interfaces for Django REST Framework
 git+git://github.com/jwhitlock/drf-json-api@v0.1d#egg=drf-json-api
@@ -27,7 +27,7 @@ dj-database-url==0.3.0
 
 # Better test runner (included in settings)
 nose==1.3.7
-django-nose==1.4.1
+django-nose==1.4.2
 
 # Test Mocking, included in Python 3.3
 mock==1.3.0
@@ -43,7 +43,7 @@ static3==0.6.1
 dj-static==0.0.6
 
 # Timezone info
-pytz==2015.6
+pytz==2015.7
 
 # Fast Memcache connections, and tell Heroku to install C dependencies
 pylibmc==1.5.0
@@ -51,11 +51,11 @@ django-pylibmc==0.6.0
 django-pylibmc-sasl==0.2.4
 
 # Celery - async task management
-billiard==3.3.0.20
-amqp==1.4.6
+billiard==3.3.0.21
+amqp==1.4.7
 anyjson==0.3.3
-kombu==3.0.26
-celery==3.1.18
+kombu==3.0.29
+celery==3.1.19
 
 # Modified Preorder Tree Traversal
 django-mptt==0.7.4
@@ -79,12 +79,10 @@ git+git://github.com/erikrose/parsimonious@20863d86a#egg=parsimonious
 # Social loging support (Firefox Accounts)
 # python-openid >= 2.2.5  # Python 2.x - unused by app
 # python3-openid >= 3.0.1 # Python 3.x - unused by app
-requests==2.7.0
+requests==2.8.1
 oauthlib==1.0.3
 requests-oauthlib==0.5.0
-# django-allauth==0.23.0
-# Can't use Jinja2 for some views - bug #1133, merged to master
-git+git://github.com/pennersr/django-allauth@6393b45#egg=django-allauth
+django-allauth==0.24.1
 
 # Unicode-aware CSVs
 unicodecsv==0.14.1

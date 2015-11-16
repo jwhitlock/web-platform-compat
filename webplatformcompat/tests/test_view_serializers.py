@@ -9,7 +9,6 @@ This should wait until bug 1153288 (Reimplement DRF serializers and renderer)
 from __future__ import unicode_literals
 from json import dumps, loads
 
-from django.core.urlresolvers import reverse
 from django.test.utils import override_settings
 
 from webplatformcompat.history import Changeset
@@ -24,12 +23,14 @@ from .base import APITestCase, TestCase
 class TestViewFeatureViewSet(APITestCase):
     """Test /view_features/<feature_id>."""
 
+    baseUrl = 'http://testserver'
+
     def test_get_list(self):
         feature = self.create(Feature, slug='feature')
-        url = reverse('viewfeatures-list')
+        url = self.api_reverse('viewfeatures-list')
         response = self.client.get(url, HTTP_ACCEPT="application/vnd.api+json")
         self.assertEqual(200, response.status_code, response.data)
-        detail_url = self.reverse('viewfeatures-detail', pk=feature.pk)
+        detail_url = self.api_reverse('viewfeatures-detail', pk=feature.pk)
         self.assertContains(response, detail_url)
 
     def setup_minimal(self):
@@ -67,8 +68,7 @@ class TestViewFeatureViewSet(APITestCase):
         maturity = resources['maturity']
         version = resources['version']
         specification = resources['specification']
-        url = reverse(
-            'viewfeatures-detail', kwargs={'pk': feature.pk})
+        url = self.api_reverse('viewfeatures-detail', pk=feature.pk)
         response = self.client.get(url)
 
         expected_json = {
@@ -346,8 +346,7 @@ class TestViewFeatureViewSet(APITestCase):
         self.create(Feature, parent=feature, name='{"zxx": "canonical"}')
         self.changeset.closed = True
         self.changeset.save()
-        url = reverse(
-            'viewfeatures-detail', kwargs={'pk': feature.pk})
+        url = self.api_reverse('viewfeatures-detail', pk=feature.pk)
         response = self.client.get(url)
         actual_json = loads(response.content.decode('utf-8'))
         actual_langs = actual_json['meta']['compat_table']['languages']
@@ -373,7 +372,7 @@ class TestViewFeatureViewSet(APITestCase):
         self.changeset.closed = True
         self.changeset.save()
 
-        url = reverse('viewfeatures-detail', kwargs={'pk': feature.pk})
+        url = self.api_reverse('viewfeatures-detail', pk=feature.pk)
         response = self.client.get(url)
         actual_json = loads(response.content.decode('utf-8'))
         expected_supports = {
@@ -396,7 +395,7 @@ class TestViewFeatureViewSet(APITestCase):
     @override_settings(PAGINATE_VIEW_FEATURE=2)
     def test_large_feature_tree(self):
         feature = self.setup_feature_tree()
-        url = reverse('viewfeatures-detail', kwargs={'pk': feature.pk})
+        url = self.api_reverse('viewfeatures-detail', pk=feature.pk)
         response = self.client.get(url, {'child_pages': True})
         actual_json = loads(response.content.decode('utf-8'))
         expected_pagination = {
@@ -424,8 +423,8 @@ class TestViewFeatureViewSet(APITestCase):
     @override_settings(PAGINATE_VIEW_FEATURE=2)
     def test_large_feature_tree_html(self):
         feature = self.setup_feature_tree()
-        url = reverse(
-            'viewfeatures-detail', kwargs={'pk': feature.pk, 'format': 'html'})
+        url = self.api_reverse(
+            'viewfeatures-detail', pk=feature.pk, format='html')
         response = self.client.get(url, {'child_pages': True})
         next_url = self.baseUrl + url + "?child_pages=1&page=2"
         expected = '<a href="%s">next page</a>' % next_url
@@ -434,7 +433,7 @@ class TestViewFeatureViewSet(APITestCase):
     @override_settings(PAGINATE_VIEW_FEATURE=4)
     def test_just_right_feature_tree(self):
         feature = self.setup_feature_tree()
-        url = reverse('viewfeatures-detail', kwargs={'pk': feature.pk})
+        url = self.api_reverse('viewfeatures-detail', pk=feature.pk)
         response = self.client.get(url, {'child_pages': True})
         actual_json = loads(response.content.decode('utf-8'))
         expected_pagination = {
@@ -500,7 +499,7 @@ class TestViewFeatureViewSet(APITestCase):
         support['note'] = None
         s9 = self.create(Support, version=v9, feature=feature, **support)
 
-        url = reverse('viewfeatures-detail', kwargs={'pk': feature.pk})
+        url = self.api_reverse('viewfeatures-detail', pk=feature.pk)
         response = self.client.get(url)
         actual_json = loads(response.content.decode('utf-8'))
         expected_supports = {
@@ -521,13 +520,13 @@ class TestViewFeatureViewSet(APITestCase):
         self.changeset.closed = True
         self.changeset.save()
 
-        url = reverse('viewfeatures-detail', kwargs={'pk': 'feature'})
+        url = self.api_reverse('viewfeatures-detail', pk='feature')
         response = self.client.get(url)
         self.assertEqual(200, response.status_code)
         self.assertEqual(feature.id, response.data['id'])
 
     def test_slug_not_found(self):
-        url = reverse('viewfeatures-detail', kwargs={'pk': 'feature'})
+        url = self.api_reverse('viewfeatures-detail', pk='feature')
         response = self.client.get(url)
         self.assertEqual(404, response.status_code)
 
@@ -573,8 +572,7 @@ class TestViewFeatureUpdates(APITestCase):
             "mdn_key": self.spec.mdn_key, "name": self.spec.name,
             "uri": self.spec.uri,
             "links": {"maturity": str(self.maturity.id), "sections": []}}
-        self.url = reverse(
-            'viewfeatures-detail', kwargs={'pk': self.feature.pk})
+        self.url = self.api_reverse('viewfeatures-detail', pk=self.feature.pk)
 
     def json_api(self, feature_data=None, meta=None, **resources):
         base = {'features': {"id": str(self.feature.id)}}
@@ -755,7 +753,7 @@ class TestViewFeatureUpdates(APITestCase):
 
     def test_existing_changeset(self):
         response = self.client.post(
-            reverse('changeset-list'), dumps({}),
+            self.api_reverse('changeset-list'), dumps({}),
             content_type="application/vnd.api+json")
         self.assertEqual(201, response.status_code, response.content)
         response_json = loads(response.content.decode('utf-8'))
@@ -778,7 +776,7 @@ class TestViewFeatureUpdates(APITestCase):
 
         close = {'changesets': {'id': changeset_id, 'close': True}}
         response = self.client.post(
-            reverse('changeset-detail', kwargs={'pk': changeset_id}),
+            self.api_reverse('changeset-detail', pk=changeset_id),
             dumps(close), content_type="application/vnd.api+json")
 
     def test_invalid_subfeature(self):
@@ -989,11 +987,11 @@ class TestDjangoResourceClient(TestCase):
         self.client = DjangoResourceClient()
 
     def test_url_maturity_list(self):
-        expected = reverse('maturity-list')
+        expected = self.api_reverse('maturity-list')
         self.assertEqual(expected, self.client.url('maturities'))
 
     def test_url_feature_detail(self):
-        expected = reverse('feature-detail', kwargs={'pk': '55'})
+        expected = self.api_reverse('feature-detail', pk='55')
         self.assertEqual(expected, self.client.url('features', '55'))
 
     def test_open_changeset(self):

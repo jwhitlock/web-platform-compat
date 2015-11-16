@@ -6,7 +6,6 @@ from datetime import datetime
 from json import dumps, loads
 from pytz import UTC
 
-from django.core.urlresolvers import reverse
 import mock
 
 from webplatformcompat.history import Changeset
@@ -24,7 +23,7 @@ class TestGenericViewset(APITestCase):
             slug="firefox",
             name={"en": "Firefox"},
             note={"en": "Uses Gecko for its web browser engine"})
-        url = reverse('browser-detail', kwargs={'pk': browser.pk})
+        url = self.api_reverse('browser-detail', pk=browser.pk)
         response = self.client.get(url)
         history_pk = browser.history.get().pk
         expected_content = {
@@ -69,7 +68,7 @@ class TestGenericViewset(APITestCase):
             slug="firefox", name={"en": "Firefox"},
             note={"en": "Uses Gecko for its web browser engine"})
         chrome = self.create(Browser, slug="chrome", name={"en": "Chrome"})
-        response = self.client.get(reverse('browser-list'))
+        response = self.client.get(self.api_reverse('browser-list'))
         firefox_history_id = str(firefox.history.get().pk)
         chrome_history_id = str(chrome.history.get().pk)
         expected_content = {
@@ -131,7 +130,7 @@ class TestGenericViewset(APITestCase):
 
     def test_get_browsable_api(self):
         browser = self.create(Browser)
-        url = self.reverse('browser-list')
+        url = self.api_reverse('browser-list')
         response = self.client.get(url, HTTP_ACCEPT="text/html")
         history_pk = browser.history.get().pk
         expected_data = {
@@ -153,7 +152,7 @@ class TestGenericViewset(APITestCase):
     def test_post_minimal(self):
         self.login_user()
         data = {'slug': 'firefox', 'name': '{"en": "Firefox"}'}
-        response = self.client.post(reverse('browser-list'), data)
+        response = self.client.post(self.api_reverse('browser-list'), data)
         self.assertEqual(201, response.status_code, response.data)
         browser = Browser.objects.get()
         history_pk = browser.history.get().pk
@@ -180,7 +179,7 @@ class TestGenericViewset(APITestCase):
                 }
             }
         })
-        url = reverse('browser-detail', kwargs={'pk': browser.pk})
+        url = self.api_reverse('browser-detail', pk=browser.pk)
         mock_update.reset_mock()
         response = self.client.put(
             url, data=data, content_type="application/vnd.api+json")
@@ -210,7 +209,7 @@ class TestGenericViewset(APITestCase):
                 }
             }
         })
-        url = reverse('browser-detail', kwargs={'pk': browser.pk})
+        url = self.api_reverse('browser-detail', pk=browser.pk)
         url += '?changeset=%s' % changeset.pk
         mock_update.reset_mock()
         mock_update.side_effect = Exception("not called")
@@ -223,7 +222,7 @@ class TestGenericViewset(APITestCase):
         browser = self.create(
             Browser, slug='browser', name={'en': 'Old Name'})
         data = {'name': '{"en": "New Name"}'}
-        url = reverse('browser-detail', kwargs={'pk': browser.pk})
+        url = self.api_reverse('browser-detail', pk=browser.pk)
         response = self.client.put(url, data=data)
         self.assertEqual(200, response.status_code, response.data)
         histories = browser.history.all()
@@ -242,7 +241,7 @@ class TestGenericViewset(APITestCase):
     def test_delete(self, mock_update):
         self.login_user(groups=["change-resource", "delete-resource"])
         browser = self.create(Browser, slug='firesux', name={'en': 'Firesux'})
-        url = reverse('browser-detail', kwargs={'pk': browser.pk})
+        url = self.api_reverse('browser-detail', pk=browser.pk)
         mock_update.reset_mock()
         response = self.client.delete(url)
         self.assertEqual(204, response.status_code, response.content)
@@ -253,7 +252,7 @@ class TestGenericViewset(APITestCase):
         self.login_user()
         browser = self.create(
             Browser, slug='browser', name={'en': 'Old Name'})
-        url = reverse('browser-detail', kwargs={'pk': browser.pk})
+        url = self.api_reverse('browser-detail', pk=browser.pk)
         response = self.client.delete(url)
         self.assertEqual(403, response.status_code)
         expected_data = {
@@ -267,7 +266,7 @@ class TestGenericViewset(APITestCase):
         browser = self.create(
             Browser, slug="internet_exploder",
             name={'en': 'Internet Exploder'})
-        url = reverse('browser-detail', kwargs={'pk': browser.pk})
+        url = self.api_reverse('browser-detail', pk=browser.pk)
         url += "?changeset=%d" % self.changeset.id
         mock_update.reset_mock()
         mock_update.side_effect = Exception("not called")
@@ -308,36 +307,34 @@ class TestCascadeDelete(APITestCase):
         self.assertEqual(features, Feature.objects.count())
 
     def test_delete_browser(self):
-        url = reverse('browser-detail', kwargs={'pk': self.browser.pk})
+        url = self.api_reverse('browser-detail', pk=self.browser.pk)
         self.assert_counts_after_delete(
             url, browsers=0, versions=0, supports=0)
 
     def test_delete_version(self):
-        url = reverse('version-detail', kwargs={'pk': self.version.pk})
+        url = self.api_reverse('version-detail', pk=self.version.pk)
         self.assert_counts_after_delete(url, versions=0, supports=0)
 
     def test_delete_support(self):
-        url = reverse('support-detail', kwargs={'pk': self.support.pk})
+        url = self.api_reverse('support-detail', pk=self.support.pk)
         self.assert_counts_after_delete(url, supports=0)
 
     def test_delete_maturity(self):
-        url = reverse('maturity-detail', kwargs={'pk': self.maturity.pk})
+        url = self.api_reverse('maturity-detail', pk=self.maturity.pk)
         self.assert_counts_after_delete(
             url, maturities=0, specifications=0, sections=0)
 
     def test_delete_specification(self):
-        url = reverse(
-            'specification-detail', kwargs={'pk': self.specification.pk})
+        url = self.api_reverse(
+            'specification-detail', pk=self.specification.pk)
         self.assert_counts_after_delete(url, specifications=0, sections=0)
 
     def test_delete_section(self):
-        url = reverse(
-            'section-detail', kwargs={'pk': self.section.pk})
+        url = self.api_reverse('section-detail', pk=self.section.pk)
         self.assert_counts_after_delete(url, sections=0)
 
     def test_delete_feature(self):
-        url = reverse(
-            'feature-detail', kwargs={'pk': self.parent.pk})
+        url = self.api_reverse('feature-detail', pk=self.parent.pk)
         self.assert_counts_after_delete(url, features=0, supports=0)
 
 
@@ -349,7 +346,7 @@ class TestFeatureViewSet(APITestCase):
             Feature, slug='feature', parent=parent, name={'en': 'A Feature'})
         self.create(Feature, slug="other", name={'en': 'Other'})
         response = self.client.get(
-            reverse('feature-list'), {'slug': 'feature'})
+            self.api_reverse('feature-list'), {'slug': 'feature'})
         self.assertEqual(200, response.status_code, response.data)
         self.assertEqual(1, response.data['count'])
         self.assertEqual(feature.id, response.data['results'][0]['id'])
@@ -360,7 +357,7 @@ class TestFeatureViewSet(APITestCase):
             Feature, slug='feature', parent=parent, name={'en': 'A Feature'})
         self.create(Feature, slug="other", name={'en': 'Other'})
         response = self.client.get(
-            reverse('feature-list'), {'parent': str(parent.id)})
+            self.api_reverse('feature-list'), {'parent': str(parent.id)})
         self.assertEqual(200, response.status_code, response.data)
         self.assertEqual(1, response.data['count'])
         self.assertEqual(feature.id, response.data['results'][0]['id'])
@@ -370,7 +367,8 @@ class TestFeatureViewSet(APITestCase):
         self.create(
             Feature, slug='feature', parent=parent, name={'en': 'The Feature'})
         other = self.create(Feature, slug="other", name={'en': 'Other'})
-        response = self.client.get(reverse('feature-list'), {'parent': ''})
+        response = self.client.get(
+            self.api_reverse('feature-list'), {'parent': ''})
         self.assertEqual(200, response.status_code, response.data)
         self.assertEqual(2, response.data['count'])
         self.assertEqual(parent.id, response.data['results'][0]['id'])
@@ -384,7 +382,7 @@ class TestHistoricaViewset(APITestCase):
             Browser, slug='browser', name={'en': 'A Browser'},
             _history_date=datetime(2014, 8, 25, 20, 50, 38, 868903, UTC))
         history = browser.history.all()[0]
-        url = reverse('historicalbrowser-detail', kwargs={'pk': history.pk})
+        url = self.api_reverse('historicalbrowser-detail', pk=history.pk)
         response = self.client.get(
             url, HTTP_ACCEPT="application/vnd.api+json")
         self.assertEqual(200, response.status_code, response.data)

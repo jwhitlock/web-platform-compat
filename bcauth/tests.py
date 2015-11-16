@@ -11,16 +11,22 @@ from .helpers import providers_media_js, provider_login_url
 
 
 class TestViews(TestCase):
+    def full_reverse(self, viewname):
+        """Create a full URL for a view."""
+        return 'http://testserver' + reverse(viewname)
+
     def test_account_anon(self):
         response = self.client.get(reverse('account_base'))
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], self.reverse('account_login'))
+        self.assertEqual(
+            response['Location'], self.full_reverse('account_login'))
 
     def test_account_logged_in(self):
         self.login_user()
         response = self.client.get(reverse('account_base'))
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], self.reverse('account_profile'))
+        self.assertEqual(
+            response['Location'], self.full_reverse('account_profile'))
 
     def test_profile_anon(self):
         url = reverse('account_profile')
@@ -28,7 +34,7 @@ class TestViews(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(
             response['Location'],
-            self.reverse('account_login') + '?next=' + url)
+            self.full_reverse('account_login') + '?next=' + url)
 
     def test_profile_logged_in(self):
         user = self.login_user()

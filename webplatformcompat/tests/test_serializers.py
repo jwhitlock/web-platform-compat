@@ -4,8 +4,6 @@
 
 from json import dumps
 
-from django.core.urlresolvers import reverse
-
 from webplatformcompat.models import (
     Browser, Feature, Maturity, Section, Specification, Version)
 
@@ -39,7 +37,7 @@ class TestHistoricalModelSerializer(APITestCase):
     def setUp(self):
         self.browser = self.create(
             Browser, slug='browser', name={'en': 'Old Name'})
-        self.url = reverse('browser-detail', kwargs={'pk': self.browser.pk})
+        self.url = self.api_reverse('browser-detail', pk=self.browser.pk)
 
     def test_put_history_current(self):
         old_history_id = self.browser.history.latest('history_date').history_id
@@ -121,7 +119,7 @@ class TestBrowserSerializer(APITestCase):
             Browser, slug='browser', name={'en': 'Browser'})
         self.v1 = self.create(Version, browser=self.browser, version='1.0')
         self.v2 = self.create(Version, browser=self.browser, version='2.0')
-        self.url = reverse('browser-detail', kwargs={'pk': self.browser.pk})
+        self.url = self.api_reverse('browser-detail', pk=self.browser.pk)
 
     def test_versions_change_order(self):
         data = {
@@ -158,7 +156,7 @@ class TestFeatureSerializer(APITestCase):
         self.feature = self.create(Feature, slug='feature', parent=self.parent)
         self.child1 = self.create(Feature, slug='child1', parent=self.feature)
         self.child2 = self.create(Feature, slug='child2', parent=self.feature)
-        self.url = reverse('feature-detail', kwargs={'pk': self.feature.pk})
+        self.url = self.api_reverse('feature-detail', pk=self.feature.pk)
 
     def test_original_order(self):
         response = self.get_via_json_api(self.url)
@@ -244,7 +242,7 @@ class TestSpecificationSerializer(APITestCase):
             Section, specification=self.spec,
             name={'en': "The 'animation-iteration-count' property"},
             subpath={'en': "#animation-iteration-count"})
-        self.url = reverse('specification-detail', kwargs={'pk': self.spec.pk})
+        self.url = self.api_reverse('specification-detail', pk=self.spec.pk)
 
     def test_update_without_sections(self):
         data = {
@@ -312,7 +310,7 @@ class TestUserSerializer(APITestCase):
     """Test UserSerializer through the view."""
     def test_get(self):
         self.login_user()
-        url = reverse('user-detail', kwargs={'pk': self.user.pk})
+        url = self.api_reverse('user-detail', pk=self.user.pk)
         response = self.get_via_json_api(url)
         actual_data = response.data
         self.assertEqual(0, actual_data['agreement'])
@@ -325,7 +323,7 @@ class TestHistoricalFeatureSerializer(APITestCase):
         feature = self.create(
             Feature, slug="the_feature", name={"en": "The Feature"})
         history = feature.history.all()[0]
-        url = reverse('historicalfeature-detail', kwargs={'pk': history.pk})
+        url = self.api_reverse('historicalfeature-detail', pk=history.pk)
         response = self.get_via_json_api(url)
         actual_sections = response.data['features']['links']['sections']
         self.assertEqual([], actual_sections)
@@ -339,7 +337,7 @@ class TestHistoricalFeatureSerializer(APITestCase):
             Feature, slug="the_feature", name={"en": "The Feature"},
             parent=parent)
         history = feature.history.all()[0]
-        url = reverse('historicalfeature-detail', kwargs={'pk': history.pk})
+        url = self.api_reverse('historicalfeature-detail', pk=history.pk)
         response = self.get_via_json_api(url)
         expected_parent = str(parent.pk)
         actual_parent = response.data['features']['links']['parent']

@@ -81,6 +81,8 @@ class ViewFeatureListSerializer(FieldMapMixin, ModelSerializer):
 
 class DjangoResourceClient(object):
     """Implement tools.client.Client using Django native functions"""
+    namespace = 'v1'
+
     def url(self, resource_type, resource_id=None):
         """Use Django reverse to determine URL."""
         if resource_type == 'maturities':
@@ -89,9 +91,10 @@ class DjangoResourceClient(object):
             singular = resource_type[:-1]
         if resource_id:
             return reverse(
-                singular + '-detail', kwargs={'pk': resource_id})
+                self.namespace + ':' + singular + '-detail',
+                kwargs={'pk': resource_id})
         else:
-            return reverse(singular + '-list')
+            return reverse(self.namespace + ':' + singular + '-list')
 
     def open_changeset(self):
         """Skip opening changesets (opened at the request/view level)."""
