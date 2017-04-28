@@ -238,6 +238,10 @@ class Section(HistoryMixin, models.Model):
         blank=True)
     name = TranslatedField(
         help_text='Name of section, without section number')
+    # TODO Remove the line behold and uncomment the lines down this,
+    # once the PR is merged
+    # name = TranslatedField(
+    #    help_text='Name of section, without section number', blank=True)
     subpath = TranslatedField(
         help_text=(
             'A subpage (possible with an #anchor) to get to the subsection'
