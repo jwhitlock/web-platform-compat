@@ -55,6 +55,9 @@ data/
 # SQLite databases
 *.sqlite3
 
+# Vagrant stuff
+.vagrant/
+
 # Local environment overrides
 .env
 settings.ini
